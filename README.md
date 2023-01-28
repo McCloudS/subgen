@@ -20,20 +20,24 @@ Webhook URL: http://yourdockerip:8090
 Webhook Method: Post
 Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
 Data: Under Playback Start, JSON Headers will be blank, JSON Data will be:
-```{
+```json
+{
             "event":"played",
             "file":"{file}",
             "filename":"{filename}",
             "mediatype":"{media_type}"
-}```
+}
+```
 
 Similarly, under Recently Added: 
-```{
+```json
+{
             "event":"added",
             "file":"{file}",
             "filename":"{filename}",
             "mediatype":"{media_type}"
-}```
+}
+```
 It should look like:
 
 ![Alt text](WebhookSettings.png?raw=true "Webhook Settings")
