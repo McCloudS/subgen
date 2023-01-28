@@ -98,6 +98,7 @@ python3 -u subgen_nodocker.py
 * Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  
 * I made it and know nothing about formal deployment for python coding.  
 * There is no 'wrapper' for python for whisper.cpp at this point, so I'm just using subprocess.call
+* The Whisper.cpp/OpenAI model seems to fail in cases.  I've seen 1 or 2 instances where the subtitle will repeat the same line for several minutes.
 
 # What's next?  
 
