@@ -92,13 +92,14 @@ pip3 install webhook_listener
 python3 -u subgen_nodocker.py
 ```
 
-# What are the limitations?
+# What are the limitations/problems?
 
 * If Plex adds multiple shows (like a season pack), it will fail to process subtitles.  It is reliant on a SINGLE file to accurately work now.
 * Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  
 * I made it and know nothing about formal deployment for python coding.  
 * There is no 'wrapper' for python for whisper.cpp at this point, so I'm just using subprocess.call
 * The Whisper.cpp/OpenAI model seems to fail in cases.  I've seen 1 or 2 instances where the subtitle will repeat the same line for several minutes.
+* It's using trained AI models to transcribe, so it WILL mess up...but we find the transcription goofs amusing.  
 
 # What's next?  
 
