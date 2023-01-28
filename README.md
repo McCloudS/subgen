@@ -112,7 +112,7 @@ Optimizations I can think of off hand:
 * Move it to a different API/Webhook
 * There might be an OpenAI native CPU version now?  If so, it might be better since it's natively in python
 * Cleaner implementation in a different language.  Python isn't the best for this particular implementation, but I wanted to learn it
-* Whisper (.cpp) has the ability to translate a good chunk of languages into english.  I didn't explore this.
+* Whisper (.cpp) has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
 
 Will I update or maintain this?  Likely not.  I built this for my own use, and will fix and push issues that directly impact my own usage.  Unfortunately, I don't have the time or expertise to manage an active project like this.  
 
