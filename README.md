@@ -88,7 +88,7 @@ Example of instructions if you're on a Debian based linux:
 ```sh
 apt-get update && apt-get install -y ffmpeg git gcc python3
 pip3 install webhook_listener
-python3 -u subgen_nodocker.py medium False 4 1 True True AA True
+python3 -u subgen_nodocker.py
 ```
 
 # What are the limitations?
