@@ -19,21 +19,21 @@ Create the webhooks in Tautulli with the following settings:
 Webhook URL: http://yourdockerip:8090
 Webhook Method: Post
 Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
-Data: Under Playback Start, JSON Headers will be blank, JSON Data will be:"
-{
+Data: Under Playback Start, JSON Headers will be blank, JSON Data will be:
+```{
             "event":"played",
             "file":"{file}",
             "filename":"{filename}",
             "mediatype":"{media_type}"
-}"
+}```
 
-Similarly, under Recently Added: "
-{
+Similarly, under Recently Added: 
+```{
             "event":"added",
             "file":"{file}",
             "filename":"{filename}",
             "mediatype":"{media_type}"
-}"
+}```
 It should look like:
 
 ![Alt text](WebhookSettings.png?raw=true "Webhook Settings")
