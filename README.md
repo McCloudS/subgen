@@ -20,7 +20,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-You need a working Tautulli installation linked to your Plex.
+You need a working Tautulli installation linked to your Plex.   Can it be run without Docker?  Yes.  See below.
 
 Create the webhooks in Tautulli with the following settings:
 
@@ -79,6 +79,17 @@ NAMESUBLANG allows you to pick what it will name the subtitle.  Instead of using
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
 "${APPDATA}/subgen:/whisper.cpp" is just for storage of the cloned and compiled code, also the models are stored in the /whisper.cpp/models, so it will prevent redownloading them.  This volume isn't necessary, just a nicety.  
+
+## Running without Docker
+
+You might have to tweak the script a little bit, but this will work just fine without Docker.  As above, your paths still have to match Plex. 
+
+Example of instructions if you're on a Debian based linux:
+```sh
+apt-get update && apt-get install -y ffmpeg git gcc python3
+pip3 install webhook_listener
+python3 -u subgen.py medium False 4 1 True True AA True
+```
 
 # What are the limitations?
 
