@@ -10,6 +10,10 @@ This is a project I've had running for a bit, then cleaned up for 'release' whil
 
 This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server using a CPU.  It is currently reliant on Tautulli for webhooks from Plex.  Why? During my limited testing, Plex was VERY sporadically actually sending out their webhooks using their built-in functionality (https://support.plex.tv/articles/115002267687-webhooks).  Tautulli gave a little bit more functionality, and for my use case, didn't require doing a bunch of Plex API calls because their webhooks had all the functionality I needed.  This uses whisper.cpp which is an implementation of OpenAI's Whisper model to use CPUs (Do your own research!).  While CPUs obviously aren't super efficient at this, but my server sits idle 99% of the time, so this worked great for me.  
 
+# Why?
+
+Honestly, I built this for me, but saw the utility in other people maybe using it.  This works well for my use case.  Since having children, I'm either deaf or wanting to have everything quiet.  We watch EVERYTHING with subtitles now, and I feel like I can't even understand the show without them.  I use Bazaar to auto-download, and gap fill with Plex's built-in capability.  This is for everything else.  Some shows just won't have subtitles available for some reason or another, or in some cases on my H265 media, they are wildly out of sync. 
+
 # What can it do?
 
 * Create .srt subtitles when a SINGLE media file is added or played via Plex which triggers off of Tautulli webhooks.  
@@ -85,7 +89,13 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 # What's next?  
 
-Honestly, I built this for me, but saw the utility in other people maybe using it.  This works well for my use case.  Since having children, I'm either deaf or wanting to have everything quiet.  We watch EVERYTHING with subtitles now, and I feel like I can't even understand the show without them.  I use Bazaar to auto-download, and gap fill with Plex's built-in capability.  This is for everything else.  Some shows just won't have subtitles available for some reason or another, or in some cases on my H265 media, they are wildly out of sync.  I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazaar.  Bazaar tracks failed subtitle downloads, I originally wanted to utilize it's API, but decided on my current solution for simplicity.  
+I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazaar.  Bazaar tracks failed subtitle downloads, I originally wanted to utilize it's API, but decided on my current solution for simplicity.  
+
+Optimizations I can think of off hand:
+* Don't generate subtitles if there are internal subitles, since those are usually perfect
+* On played, use a faster model with speedup, since you might want those pretty quickly
+* Fix processing for when adding multiple files
+* Move it to a different API/Webhook
 
 # Additional reading:
 
