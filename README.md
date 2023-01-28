@@ -63,7 +63,11 @@ ARG UPDATEREPO True         pulls and merges whisper.cpp on every start
 
 NAMESUBLANG allows you to pick what it will name the subtitle.  Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex.  
 
+## Docker Volumes
+
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
+
+- "${APPDATA}/subgen:/whisper.cpp" is just for storage of the cloned and compiled code, also the models are stored in the /whisper.cpp model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety.  
 
 # What are the limitations?
 
