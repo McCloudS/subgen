@@ -82,7 +82,7 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 ## Running without Docker
 
-You might have to tweak the script a little bit, but this should work just fine without Docker.  As above, your paths still have to match Plex. 
+You might have to tweak the script a little bit, but will work just fine without Docker.  All docker variables will be edited directly in the subgen_nodocker.py file.  As mentioned above, your paths still have to match Plex. 
 
 Example of instructions if you're on a Debian based linux:
 ```sh
