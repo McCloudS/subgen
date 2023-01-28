@@ -96,6 +96,7 @@ Optimizations I can think of off hand:
 * On played, use a faster model with speedup, since you might want those pretty quickly
 * Fix processing for when adding multiple files
 * Move it to a different API/Webhook
+* There might be an OpenAI native CPU version now?  If so, it might be better since it's natively in python
 
 # Additional reading:
 
