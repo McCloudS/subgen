@@ -17,8 +17,11 @@ You need a working Tautulli installation linked to your Plex.  Repo for subgen i
 Create the webhooks in Tautulli with the following settings:
 
 Webhook URL: http://yourdockerip:8090
+
 Webhook Method: Post
+
 Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
+
 Data: Under Playback Start, JSON Headers will be blank, JSON Data will be:
 ```json
 {
