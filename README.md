@@ -2,6 +2,8 @@ Howdy all,
 
 This is a project I've had running for a bit, then cleaned up for 'release' while the kids were sleeping.  It's more of a POC, piece of crap, or a proof of concept.  This was also my first ever Python usage.
 
+# BLUF:  Someone else use this idea (not the code!) as a jumping off point.
+
 # What is this?
 
 This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server using a CPU.  It is currently reliant on Tautulli for webhooks from Plex.  Why? During my limited testing, Plex was VERY sporadically actually sending out their webhooks using their built-in functionality (https://support.plex.tv/articles/115002267687-webhooks).  Tautulli gave a little bit more functionality, and for my use case, didn't require doing a bunch of Plex API calls because their webhooks had all the functionality I needed.  This uses whisper.cpp which is an implementation of OpenAI's Whisper model to use CPUs (Do your own research!).  While CPUs obviously aren't super efficient at this, but my server sits idle 99% of the time, so this worked great for me.  
@@ -89,8 +91,6 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 * https://github.com/openai/whisper/discussions/454 (Whisper CPU implementation)
 * https://github.com/openai/whisper (Original OpenAI project)
 * https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes (2 letter subtitle codes)
-
-# BLUF:  Someone else use this idea (not the code!) as a jumping off point.
 
 # Credits:  
 * Whisper.cpp (https://github.com/ggerganov/whisper.cpp)
