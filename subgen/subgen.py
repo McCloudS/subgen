@@ -43,7 +43,6 @@ def process_post_request(request, *args, **kwargs):
     if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0): #glob nonsense checks if there exists a subgen file already and won't make a new one
         if os.getenv('WHISPER_SPEEDUP') == "True" :
             print("This is a speedup run!")
-            print(os.getenv('WHISPER_SPEEDUP'))
             finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(
                 filepath, filenamenoextension, whisper_model, namesublang)
         else:
