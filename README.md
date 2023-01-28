@@ -86,6 +86,7 @@ You might have to tweak the script a little bit, but this should work just fine 
 
 Example of instructions if you're on a Debian based linux:
 ```sh
+wget https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen_nodocker.py
 apt-get update && apt-get install -y ffmpeg git gcc python3
 pip3 install webhook_listener
 python3 -u subgen_nodocker.py
