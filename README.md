@@ -59,6 +59,8 @@ ARG UPDATEREPO True         pulls and merges whisper.cpp on every start
 
 NAMESUBLANG allows you to pick what it will name the subtitle.  Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex.  
 
+You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
+
 # What are the limitations?
 
 * If Plex adds multiple shows (like a season pack), it will fail to process subtitles.  It is reliant on a SINGLE file to accurately work now.
