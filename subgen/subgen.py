@@ -41,10 +41,13 @@ def process_post_request(request, *args, **kwargs):
     print("event: " + event)
 
     if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0): #glob nonsense checks if there exists a subgen file already and won't make a new one
-        if whisper_speedup:
+        if os.getenv('WHISPER_SPEEDUP') == "True" :
+            print("This is a speedup run!")
+            print(os.getenv('WHISPER_SPEEDUP'))
             finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(
                 filepath, filenamenoextension, whisper_model, namesublang)
         else:
+            print("No speedup")
             finalsubname = "{0}/{1}.subgen.{2}.{3}".format(
                 filepath, filenamenoextension, whisper_model, namesublang)
                 
@@ -84,7 +87,7 @@ if not os.path.isdir("/whisper.cpp"):
     os.mkdir("/whisper.cpp")
 os.chdir("/whisper.cpp")
 subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
-if updaterepo:
+if os.getenv('UPDATEREPO') == "True":
     print("Updating repo!")
     subprocess.call("git pull", shell=True)
 if os.path.isfile("/whisper.cpp/samples/jfk.wav"):
