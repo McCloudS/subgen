@@ -111,6 +111,8 @@ Optimizations I can think of off hand:
 * Move it to a different API/Webhook
 * There might be an OpenAI native CPU version now?  If so, it might be better since it's natively in python
 
+Will I update or maintain this?  Likely not.  I built this for my own use, and will fix and push issues that directly impact my own usage.  Unfortunately, I don't have the time or expertise to manage an active project like this.  
+
 # Additional reading:
 
 * https://github.com/ggerganov/whisper.cpp/issues/89 (Benchmarks)
