@@ -82,13 +82,13 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 ## Running without Docker
 
-You might have to tweak the script a little bit, but this will work just fine without Docker.  As above, your paths still have to match Plex. 
+You might have to tweak the script a little bit, but this should work just fine without Docker.  As above, your paths still have to match Plex. 
 
 Example of instructions if you're on a Debian based linux:
 ```sh
 apt-get update && apt-get install -y ffmpeg git gcc python3
 pip3 install webhook_listener
-python3 -u subgen.py medium False 4 1 True True AA True
+python3 -u subgen_nodocker.py medium False 4 1 True True AA True
 ```
 
 # What are the limitations?
