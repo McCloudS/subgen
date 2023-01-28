@@ -101,7 +101,7 @@ python3 -u subgen_nodocker.py
 
 # What's next?  
 
-I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazaar.  Bazaar tracks failed subtitle downloads, I originally wanted to utilize it's API, but decided on my current solution for simplicity.  
+I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazaar.  Bazaar tracks failed subtitle downloads, I originally wanted to utilize its API, but decided on my current solution for simplicity.  
 
 Optimizations I can think of off hand:
 * Don't generate subtitles if there are internal subitles, since those are usually perfect
