@@ -20,7 +20,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-You need a working Tautulli installation linked to your Plex.  Repo for subgen is @ https://github.com/McCloudS/subgen.  
+You need a working Tautulli installation linked to your Plex.
 
 Create the webhooks in Tautulli with the following settings:
 
