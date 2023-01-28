@@ -1,0 +1,26 @@
+#docker-compose.yml
+version: '2'
+  
+services:
+  subgen:
+    container_name: subgen
+    ports:
+      - "8090:8090"
+    build:
+      dockerfile: ./subgen/Dockerfile
+      context: .
+    environment:
+        - "WHISPER_MODEL=medium"
+        - "WHISPER_SPEEDUP=False"
+        - "WHISPER_THREADS=4"
+        - "WHISPER_PROCESSORS=1"
+        - "PROCADDEDMEDIA=True"
+        - "PROCMEDIAONPLAY=True"
+        - "NAMESUBLANG=aa"
+        - "UPDATEREPO=True"
+    volumes:
+       - "${TV}:/tv"
+       - "${MOVIES}:/movies"
+       - "${APPDATA}/subgen:/whisper.cpp"
+       
+       
