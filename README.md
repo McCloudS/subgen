@@ -20,7 +20,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-You need a working Tautulli installation linked to your Plex.   Can it be run without Docker?  Yes.  See below.
+You need a working Tautulli installation linked to your Plex.   Can it be run without Docker?  Yes.  [See below](https://github.com/McCloudS/subgen/blob/main/README.md#running-without-docker)
 
 Create the webhooks in Tautulli with the following settings:
 
