@@ -10,7 +10,7 @@ This is a half-assed attempt of transcribing subtitles (.srt) from your personal
 
 # What can it do?
 
-* Create .srt subtitles when a SINGLE media file is added or played via Plex which triggers off of Tautulli webgooks.  
+* Create .srt subtitles when a SINGLE media file is added or played via Plex which triggers off of Tautulli webhooks.  
 
 # How do I set it up?
 
