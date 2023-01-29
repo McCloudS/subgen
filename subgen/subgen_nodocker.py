@@ -39,7 +39,7 @@ def process_post_request(request, *args, **kwargs):
     print("file name with no extension: " + filenamenoextension)
     print("event: " + event)
 
-    if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0): #glob nonsense checks if there exists a subgen file already and won't make a new one
+    if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0) and not os.path.isfile("{}.output.wav".format(fullpath)): #glob nonsense checks if there exists a subgen file already and won't make a new one
         if whisper_speedup :
             print("This is a speedup run!")
             finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(
