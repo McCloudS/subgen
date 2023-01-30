@@ -58,7 +58,7 @@ It should look like:
 
 ![Alt text](WebhookSettings.png?raw=true "Webhook Settings")
 
-The following environment variables are optional in Docker-compose.  They will default to the values listed below.
+The following environment variables are optional in Docker.  They will default to the values listed below.
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | WHISPER_MODEL         | medium        | this can be tiny, base, small, medium, large                                                                                                                                             |
