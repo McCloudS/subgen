@@ -15,9 +15,10 @@ services:
         - "WHISPER_THREADS=4"
         - "WHISPER_PROCESSORS=1"
         - "PROCADDEDMEDIA=True"
-        - "PROCMEDIAONPLAY=True"
+        - "PROCMEDIAONPLAY=False"
         - "NAMESUBLANG=aa"
         - "UPDATEREPO=True"
+        - "SKIPIFINTERNALSUBLANG=eng"
     volumes:
        - "${TV}:/tv"
        - "${MOVIES}:/movies"
