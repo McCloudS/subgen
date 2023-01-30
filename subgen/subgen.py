@@ -7,7 +7,7 @@ import pathlib
 import webhook_listener
 import subprocess
 
-# parse our arguments from the Dockerfile
+# parse our arguments from environment variables
 whisper_model = os.getenv('WHISPER_MODEL') or "medium"
 whisper_speedup = bool(os.getenv('WHISPER_SPEEDUP'))
 whisper_threads = os.getenv('WHISPER_THREADS') or "4"
@@ -48,7 +48,6 @@ def process_post_request(request, *args, **kwargs):
     if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0) and not os.path.isfile("{}.output.wav".format(fullpath)) and not file_has_internal_sub: #glob nonsense checks if there exists a subgen file already and won't make a new one
         if whisper_speedup:
             print("This is a speedup run!")
-            print(os.getenv('WHISPER_SPEEDUP'))
             finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(
                 filepath, filenamenoextension, whisper_model, namesublang)
         else:
@@ -95,7 +94,7 @@ subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=Tr
 if updaterepo:
     print("Updating repo!")
     subprocess.call("git pull", shell=True)
-if os.path.isfile("/whisper.cpp/samples/jfk.wav"):
+if os.path.isfile("/whisper.cpp/samples/jfk.wav"): # delete the sample file, so it doesn't try transcribing it.  Saves us a couple seconds.
     print("Deleting sample file")
     os.remove("/whisper.cpp/samples/jfk.wav")
 subprocess.call("make " + whisper_model, shell=True)
