@@ -8,14 +8,15 @@ import webhook_listener
 import subprocess
 
 # parse our arguments from the Dockerfile
-whisper_model = sys.argv[1]
-whisper_speedup = sys.argv[2]
-whisper_threads = sys.argv[3]
-whisper_processors = sys.argv[4]
-procaddedmedia = sys.argv[5]
-procmediaonplay = sys.argv[6]
-namesublang = sys.argv[7]
-updaterepo = sys.argv[8]
+whisper_model = os.getenv('WHISPER_MODEL') or "medium"
+whisper_speedup = bool(os.getenv('WHISPER_SPEEDUP'))
+whisper_threads = os.getenv('WHISPER_THREADS') or "4"
+whisper_processors = os.getenv('WHISPER_PROCESSORS') or "1"
+procaddedmedia = bool(os.getenv('PROCADDEDMEDIA')) or True
+procmediaonplay = bool(os.getenv('PROCMEDIAONPLAY'))
+namesublang = os.getenv('NAMESUBLANG') or "aa"
+updaterepo = bool(os.getenv('UPDATEREPO')) or True
+skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG') or "eng"
 
 def process_post_request(request, *args, **kwargs):
     print("Received a webhook!")
@@ -39,10 +40,15 @@ def process_post_request(request, *args, **kwargs):
     print("extension: " + extension)
     print("file name with no extension: " + filenamenoextension)
     print("event: " + event)
+    
+    file_has_internal_sub = skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)) # skips generation if an internal sub exists
+    if file_has_internal_sub:
+        print("File already has an internal sub we want, skipping generation")
 
-    if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0) and not os.path.isfile("{}.output.wav".format(fullpath)): #glob nonsense checks if there exists a subgen file already and won't make a new one
-        if os.getenv('WHISPER_SPEEDUP') == "True" :
+    if ((procaddedmedia and event == "added") or (procmediaonplay and event == "played")) and (len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) == 0) and not os.path.isfile("{}.output.wav".format(fullpath)) and not file_has_internal_sub: #glob nonsense checks if there exists a subgen file already and won't make a new one
+        if whisper_speedup:
             print("This is a speedup run!")
+            print(os.getenv('WHISPER_SPEEDUP'))
             finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(
                 filepath, filenamenoextension, whisper_model, namesublang)
         else:
@@ -86,7 +92,7 @@ if not os.path.isdir("/whisper.cpp"):
     os.mkdir("/whisper.cpp")
 os.chdir("/whisper.cpp")
 subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
-if os.getenv('UPDATEREPO') == "True":
+if updaterepo:
     print("Updating repo!")
     subprocess.call("git pull", shell=True)
 if os.path.isfile("/whisper.cpp/samples/jfk.wav"):
