@@ -26,13 +26,6 @@ You can now pull the image directly from Dockerhub:
 ```
 docker pull mccloud/subgen
 ```
-Or, you can build from scratch:
-```
-git clone https://github.com/mcclouds/subgen
-cd subgen
-docker-compose build
-docker-compose up -d
-```
 
 Create the webhooks in Tautulli with the following settings:
 
