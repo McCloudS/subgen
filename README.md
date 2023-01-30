@@ -97,7 +97,6 @@ python3 -u subgen_nodocker.py
 I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazarr.  Bazarr tracks failed subtitle downloads, I originally wanted to utilize its API, but decided on my current solution for simplicity.  
 
 Optimizations I can think of off hand:
-* Don't generate subtitles if there are internal subitles, since those are usually perfect
 * On played, use a faster model with speedup, since you might want those pretty quickly
 * Fix processing for when adding multiple files
 * Move it to a different API/Webhook
