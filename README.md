@@ -73,11 +73,11 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 ## Running without Docker
 
-You might have to tweak the script a little bit, but will work just fine without Docker.  All docker variables will be edited directly in the subgen_nodocker.py file.  As mentioned above, your paths still have to match Plex. 
+You might have to tweak the script a little bit, but will work just fine without Docker.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 
 Example of instructions if you're on a Debian based linux:
 ```sh
-wget https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen_nodocker.py
+wget https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py
 apt-get update && apt-get install -y ffmpeg git gcc python3
 pip3 install webhook_listener
 python3 -u subgen_nodocker.py
