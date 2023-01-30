@@ -22,6 +22,18 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 You need a working Tautulli installation linked to your Plex.   Can it be run without Docker?  Yes.  [See below](https://github.com/McCloudS/subgen/blob/main/README.md#running-without-docker)
 
+You can now pull the image directly from Dockerhub:
+```
+docker pull mccloud/subgen
+```
+Or, you can build from scratch:
+```
+git clone https://github.com/mcclouds/subgen
+cd subgen
+docker-compose build
+docker-compose up -d
+```
+
 Create the webhooks in Tautulli with the following settings:
 
 Webhook URL: http://yourdockerip:8090
