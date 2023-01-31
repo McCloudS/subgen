@@ -1,5 +1,9 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6)
 
+Updates:
+
+31 Jan 2023 : Rewrote the script substantially to remove Tautulli and fix some variable handling.  For some reason my implementation requires the container to be in host mode.  My Plex was giving "401 Unauthorized" when attempt to query from docker subnets during API calls.
+
 Howdy all,
 
 This is a project I've had running for a bit, then cleaned up for 'release' while the kids were sleeping.  It's more of a POC, piece of crap, or a proof of concept.  This was also my first ever Python usage.
@@ -8,7 +12,7 @@ This is a project I've had running for a bit, then cleaned up for 'release' whil
 
 # What is this?
 
-This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server using a CPU.  It is currently reliant on Tautulli for webhooks from Plex.  Why? During my limited testing, Plex was VERY sporadically actually sending out their webhooks using their built-in functionality (https://support.plex.tv/articles/115002267687-webhooks).  Tautulli gave a little bit more functionality, and for my use case, didn't require doing a bunch of Plex API calls because their webhooks had all the functionality I needed.  This uses whisper.cpp which is an implementation of OpenAI's Whisper model to use CPUs (Do your own research!).  While CPUs obviously aren't super efficient at this, but my server sits idle 99% of the time, so this worked great for me.  
+This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server using a CPU.  It is currently reliant on webhooks from Plex.  Why? During my limited testing, Plex was VERY sporadically actually sending out their webhooks using their built-in functionality (https://support.plex.tv/articles/115002267687-webhooks).  This uses whisper.cpp which is an implementation of OpenAI's Whisper model to use CPUs (Do your own research!).  While CPUs obviously aren't super efficient at this, but my server sits idle 99% of the time, so this worked great for me.  
 
 # Why?
 
@@ -20,45 +24,18 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-You need a working Tautulli installation linked to your Plex.   Can it be run without Docker?  Yes.  [See below](https://github.com/McCloudS/subgen/blob/main/README.md#running-without-docker)
+Use the example docker-compose or build your own, just make sure you define PLEXTOKEN and PLEXSERVER at a minimum.  Can it be run without Docker?  Mostly.  [See below](https://github.com/McCloudS/subgen/blob/main/README.md#running-without-docker)
 
 You can now pull the image directly from Dockerhub:
 ```
 docker pull mccloud/subgen
 ```
 
-Create the webhooks in Tautulli with the following settings:
+Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/webhook see: https://support.plex.tv/articles/115002267687-webhooks/
 
-Webhook URL: http://yourdockerip:8090
+You can define the port via envrionment variables, but the endpoint "/webhook" is static.
 
-Webhook Method: Post
-
-Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
-
-Data: Under Playback Start, JSON Headers will be blank, JSON Data will be:
-```json
-{
-            "event":"played",
-            "file":"{file}",
-            "filename":"{filename}",
-            "mediatype":"{media_type}"
-}
-```
-
-Similarly, under Recently Added: 
-```json
-{
-            "event":"added",
-            "file":"{file}",
-            "filename":"{filename}",
-            "mediatype":"{media_type}"
-}
-```
-It should look like:
-
-![Alt text](WebhookSettings.png?raw=true "Webhook Settings")
-
-The following environment variables are optional in Docker.  They will default to the values listed below.
+The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER!
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | WHISPER_MODEL         | medium        | this can be tiny, base, small, medium, large                                                                                                                                             |
@@ -70,6 +47,9 @@ The following environment variables are optional in Docker.  They will default t
 | NAMESUBLANG           | aa            | allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list  in Plex. |
 | UPDATEREPO            | True          | pulls and merges whisper.cpp on every start                                                                                                                                              |
 | SKIPIFINTERNALSUBLANG | eng           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
+| PLEXSERVER | http://plex:32400 | This needs to be set to your local plex server address/port |
+| PlEXTOKEN | tokenhere | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
+| WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
 ## Docker Volumes
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
@@ -80,7 +60,7 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 You might have to tweak the script a little bit, but will work just fine without Docker.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 
-Example of instructions if you're on a Debian based linux:
+Example of instructions if you're on a Debian based linux once you set your environment variables:
 ```sh
 wget https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py
 apt-get update && apt-get install -y ffmpeg git gcc python3
@@ -104,7 +84,6 @@ I'm hoping someone that is much more skilled than I, to use this as a pushing of
 Optimizations I can think of off hand:
 * On played, use a faster model with speedup, since you might want those pretty quickly
 * Fix processing for when adding multiple files
-* Move it to a different API/Webhook
 * There might be an OpenAI native CPU version now?  If so, it might be better since it's natively in python
 * Cleaner implementation in a different language.  Python isn't the best for this particular implementation, but I wanted to learn it
 * Whisper (.cpp) has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
@@ -121,7 +100,5 @@ Will I update or maintain this?  Likely not.  I built this for my own use, and w
 
 # Credits:  
 * Whisper.cpp (https://github.com/ggerganov/whisper.cpp)
-* Webhook_listener (https://pypi.org/project/Webhook-Listener)
-* Tautulli (https://tautulli.com)
 * Google
 * ffmpeg
