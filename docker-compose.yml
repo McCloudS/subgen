@@ -1,25 +1,24 @@
 #docker-compose.yml
 version: '2'
   
-services:
   subgen:
-    image: mccloud/subgen
     container_name: subgen
-    ports:
-      - "8090:8090"
+    network_mode: host
+    image: mccloud/subgen
     environment:
-        - "WHISPER_MODEL=medium"
-        - "WHISPER_SPEEDUP=False"
-        - "WHISPER_THREADS=4"
-        - "WHISPER_PROCESSORS=1"
-        - "PROCADDEDMEDIA=True"
-        - "PROCMEDIAONPLAY=False"
-        - "NAMESUBLANG=aa"
-        - "UPDATEREPO=True"
-        - "SKIPIFINTERNALSUBLANG=eng"
+       - "WHISPER_MODEL=medium"
+       - "WHISPER_SPEEDUP=False"
+       - "WHISPER_THREADS=4"
+       - "WHISPER_PROCESSORS=1"
+       - "PROCADDEDMEDIA=True"
+       - "PROCMEDIAONPLAY=False"
+       - "NAMESUBLANG=aa"
+       - "UPDATEREPO=True"
+       - "SKIPIFINTERNALSUBLANG=eng"
+       - "PLEXTOKEN=plextoken"
+       - "PLEXSERVER=http://plexserver:32400"
+       - "WEBHOOKPORT=8090"
     volumes:
        - "${TV}:/tv"
        - "${MOVIES}:/movies"
        - "${APPDATA}/subgen:/whisper.cpp"
-       
-       
