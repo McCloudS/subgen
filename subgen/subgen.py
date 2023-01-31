@@ -8,15 +8,15 @@ import webhook_listener
 import subprocess
 
 # parse our arguments from environment variables
-whisper_model = os.getenv('WHISPER_MODEL') or "medium"
-whisper_speedup = bool(os.getenv('WHISPER_SPEEDUP'))
-whisper_threads = os.getenv('WHISPER_THREADS') or "4"
-whisper_processors = os.getenv('WHISPER_PROCESSORS') or "1"
-procaddedmedia = bool(os.getenv('PROCADDEDMEDIA')) or True
-procmediaonplay = bool(os.getenv('PROCMEDIAONPLAY'))
-namesublang = os.getenv('NAMESUBLANG') or "aa"
-updaterepo = bool(os.getenv('UPDATEREPO')) or True
-skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG') or "eng"
+whisper_model = locals().get(os.getenv('WHISPER_MODEL'), "medium")
+whisper_speedup = locals().get(os.getenv('WHISPER_SPEEDUP'), False)
+whisper_threads = locals().get(os.getenv('WHISPER_THREADS'), "4")
+whisper_processors = locals().get(os.getenv('WHISPER_PROCESSORS'), "1")
+procaddedmedia = locals().get(os.getenv('PROCADDEDMEDIA'), True)
+procmediaonplay = locals().get(os.getenv('PROCMEDIAONPLAY'), False)
+namesublang = locals().get(os.getenv('NAMESUBLANG'), "aa")
+updaterepo = locals().get(os.getenv('UPDATEREPO'), True)
+skipifinternalsublang = locals().get(os.getenv('SKIPIFINTERNALSUBLANG'), "eng")
 
 def process_post_request(request, *args, **kwargs):
     print("Received a webhook!")
