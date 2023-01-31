@@ -48,7 +48,7 @@ The following environment variables are available in Docker.  They will default 
 | UPDATEREPO            | True          | pulls and merges whisper.cpp on every start                                                                                                                                              |
 | SKIPIFINTERNALSUBLANG | eng           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
 | PLEXSERVER | http://plex:32400 | This needs to be set to your local plex server address/port |
-| PlEXTOKEN | tokenhere | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
+| PLEXTOKEN | tokenhere | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
 ## Docker Volumes
 
