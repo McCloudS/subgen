@@ -45,7 +45,7 @@ def receive_webhook():
     event = payload.get("event")
     metadata = payload.get("Metadata")
     
-    if (event == "media.add" and procaddedmedia) or (event == "media.play" and procmediaonplay):
+    if (event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay):
         
         
         print("Webhook received!")
