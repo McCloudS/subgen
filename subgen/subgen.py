@@ -10,11 +10,7 @@ from flask import Flask, request
 import xml.etree.ElementTree as ET
 
 def getenv(env, default):
-    value = os.getenv(env)
-    if value == None:
-        return default
-    else: 
-        return value
+    return os.getenv(env, default)
         
 def converttobool(in_bool):
     value = str(in_bool).lower()
