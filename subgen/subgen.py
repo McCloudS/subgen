@@ -10,11 +10,18 @@ from flask import Flask, request
 import xml.etree.ElementTree as ET
 
 def getenv(env, default):
-    return os.getenv(env, default)
+    value = os.getenv(env)
+    if value == None:
+        return default
+    else: 
+        return value
         
-def converttobool(input):
-    if input == 'True': return True
-    else: return False
+def converttobool(in_bool):
+    value = str(in_bool).lower()
+    if value in ('false', 'off', '0'):
+        return False
+    else:
+        return True
 
 # parse our arguments from environment variables
 plextoken = getenv('PLEXTOKEN', "tokenhere")
