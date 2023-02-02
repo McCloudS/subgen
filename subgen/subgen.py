@@ -39,6 +39,7 @@ def receive_webhook():
     else:
         payload = json.loads(request.form['payload'])
     event = payload.get("event")
+    if event != "library.new" and event != "added" and event != "media.play" and event != "played": return ""
     if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
 
         if event == "library.new" or event == "media.play": # these are the plex webhooks!
