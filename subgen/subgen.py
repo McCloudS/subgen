@@ -8,9 +8,6 @@ import requests
 import subprocess
 from flask import Flask, request
 import xml.etree.ElementTree as ET
-
-def getenv(env, default):
-    return os.getenv(env, default)
         
 def converttobool(in_bool):
     value = str(in_bool).lower()
@@ -20,39 +17,39 @@ def converttobool(in_bool):
         return True
 
 # parse our arguments from environment variables
-plextoken = getenv('PLEXTOKEN', "tokenhere")
-plexserver = getenv('PLEXSERVER', "http://plex:32400")
-whisper_model = getenv('WHISPER_MODEL', "medium")
-whisper_speedup = getenv('WHISPER_SPEEDUP', "False")
-whisper_speedup = converttobool(whisper_speedup)
-whisper_threads = getenv('WHISPER_THREADS', "4")
-whisper_processors = getenv('WHISPER_PROCESSORS', "1")
-procaddedmedia = getenv('PROCADDEDMEDIA', "True")
-procaddedmedia = converttobool(procaddedmedia)
-procmediaonplay = getenv('PROCMEDIAONPLAY', "False")
-procmediaonplay = converttobool(procmediaonplay)
-namesublang = getenv('NAMESUBLANG', "aa")
-updaterepo = getenv('UPDATEREPO', "True")
-updaterepo = converttobool(updaterepo)
-skipifinternalsublang = getenv('SKIPIFINTERNALSUBLANG', "eng")
-webhookport = getenv('WEBHOOKPORT', 8090)
+plextoken = os.getenv('PLEXTOKEN', "tokenhere")
+plexserver = os.getenv('PLEXSERVER', "http://plex:32400")
+whisper_model = os.getenv('WHISPER_MODEL', "medium")
+whisper_speedup = converttobool(os.getenv('WHISPER_SPEEDUP', "False"))
+whisper_threads = os.getenv('WHISPER_THREADS', "4")
+whisper_processors = os.getenv('WHISPER_PROCESSORS', "1")
+procaddedmedia = converttobool(os.getenv('PROCADDEDMEDIA', "True"))
+procmediaonplay = converttobool(os.getenv('PROCMEDIAONPLAY', "False"))
+namesublang = os.getenv('NAMESUBLANG', "aa")
+updaterepo = converttobool(os.getenv('UPDATEREPO', "True"))
+skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', "eng")
+webhookport = os.getenv('WEBHOOKPORT', 8090)
 
 app = Flask(__name__)
 
 @app.route("/webhook", methods=["POST"])
 def receive_webhook():
-    payload = json.loads(request.form['payload'])
+    if request.headers.get("source") == "Tautulli":
+        payload = request.json
+    else:
+        payload = json.loads(request.form['payload'])
     event = payload.get("event")
-    metadata = payload.get("Metadata")
-    
-    if (event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay):
+    if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
         
+        if event == "library.new" or event == "media.play": # these are the plex webhooks!
+            print("Plex webhook received!")
+            metadata = payload.get("Metadata")
+            ratingkey = metadata.get("ratingKey")
+            fullpath = get_file_name(ratingkey, plexserver, plextoken)
+        else:
+            print("Tautulli webhook received!")
+            fullpath = payload.get("file")
         
-        print("Webhook received!")
-
-        ratingkey = metadata.get("ratingKey")
-        fullpath = get_file_name(ratingkey, plexserver, plextoken)
-        print("Media ID: {}".format(metadata.get("ratingKey")))
         filename = pathlib.Path(fullpath).name
         filepath = os.path.dirname(fullpath)
         filenamenoextension = filename.replace(pathlib.Path(fullpath).suffix, "")
@@ -62,29 +59,29 @@ def receive_webhook():
         print("file name with no extension: " + filenamenoextension)
         print("event: " + event)
     
-        if skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)):
-            print("File already has an internal sub we want, skipping generation")
-            return "File already has an internal sub we want, skipping generation"
-        elif os.path.isfile("{}.output.wav".format(fullpath)):
-            print("WAV file already exists, we're assuming it's processing and skipping it")
-            return "WAV file already exists, we're assuming it's processing and skipping it"
-        elif len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) > 0:
-            print("We already have a subgen created for this file, skipping it")
-            return "We already have a subgen created for this file, skipping it"
-           
-        if whisper_speedup:
-            print("This is a speedup run!")
-            print(whisper_speedup)
-            finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
-        else:
-            print("No speedup")
-            finalsubname = "{0}/{1}.subgen.{2}.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
-                
-        gen_subtitles(fullpath, "{}.output.wav".format(fullpath), finalsubname)
-    
-        if os.path.isfile("{}.output.wav".format(fullpath)):
-            print("Deleting WAV workfile")
-            os.remove("{}.output.wav".format(fullpath))
+    if skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)):
+        print("File already has an internal sub we want, skipping generation")
+        return "File already has an internal sub we want, skipping generation"
+    elif os.path.isfile("{}.output.wav".format(fullpath)):
+        print("WAV file already exists, we're assuming it's processing and skipping it")
+        return "WAV file already exists, we're assuming it's processing and skipping it"
+    elif len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) > 0:
+        print("We already have a subgen created for this file, skipping it")
+        return "We already have a subgen created for this file, skipping it"
+       
+    if whisper_speedup:
+        print("This is a speedup run!")
+        print(whisper_speedup)
+        finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
+    else:
+        print("No speedup")
+        finalsubname = "{0}/{1}.subgen.{2}.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
+            
+    gen_subtitles(fullpath, "{}.output.wav".format(fullpath), finalsubname)
+  
+    if os.path.isfile("{}.output.wav".format(fullpath)):
+        print("Deleting WAV workfile")
+        os.remove("{}.output.wav".format(fullpath))
 
     return ""
 
@@ -127,22 +124,17 @@ def get_file_name(item_id, plexserver, plextoken):
     return
 
 
-if not os.path.isdir("/whisper.cpp"):
-    os.mkdir("/whisper.cpp")
-os.chdir("/whisper.cpp")
-subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
+#if not os.path.isdir("/whisper.cpp"):
+    #os.mkdir("/whisper.cpp")
+#os.chdir("/whisper.cpp")
+#subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
 if updaterepo:
     print("Updating repo!")
-    subprocess.call("git pull", shell=True)
+    #subprocess.call("git pull", shell=True)
 if os.path.isfile("/whisper.cpp/samples/jfk.wav"): # delete the sample file, so it doesn't try transcribing it.  Saves us a couple seconds.
     print("Deleting sample file")
-    os.remove("/whisper.cpp/samples/jfk.wav")
-subprocess.call("make " + whisper_model, shell=True)
+    #os.remove("/whisper.cpp/samples/jfk.wav")
+#subprocess.call("make " + whisper_model, shell=True)
 print("Starting webhook!")
 if __name__ == "__main__":
-    app.run(debug=False, host='0.0.0.0', port=int(webhookport))
-print("Webhook started")
-
-while True:
-    print("Still alive...")
-    time.sleep(300)
+    app.run(debug=True, host='0.0.0.0', port=int(webhookport))
