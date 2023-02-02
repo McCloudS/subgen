@@ -52,10 +52,7 @@ def receive_webhook():
 
         ratingkey = metadata.get("ratingKey")
         fullpath = get_file_name(ratingkey, plexserver, plextoken)
-        print(metadata.get("ratingKey"))
-        print(fullpath)
-        print(plexserver)
-        print(plextoken)
+        print("Media ID: {}".format(metadata.get("ratingKey")))
         filename = pathlib.Path(fullpath).name
         filepath = os.path.dirname(fullpath)
         filenamenoextension = filename.replace(pathlib.Path(fullpath).suffix, "")
