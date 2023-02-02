@@ -70,6 +70,8 @@ Data:
 }
 ```
 
+## Variables
+
 You can define the port via environment variables, but the endpoint "/webhook" is static.
 
 The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER!
