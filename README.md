@@ -2,6 +2,8 @@
 
 Updates:
 
+2 Feb 2023: Added Tautullu webhooks back in.  Didn't realize Plex webhooks was PlexPass only.  See below for instructions to add it back in.
+
 31 Jan 2023 : Rewrote the script substantially to remove Tautulli and fix some variable handling.  For some reason my implementation requires the container to be in host mode.  My Plex was giving "401 Unauthorized" when attempt to query from docker subnets during API calls.
 
 Howdy all,
@@ -31,7 +33,42 @@ You can now pull the image directly from Dockerhub:
 docker pull mccloud/subgen
 ```
 
+## Plex
+
 Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/webhook see: https://support.plex.tv/articles/115002267687-webhooks/
+
+## Tautulli
+
+Create the webhooks in Tautulli with the following settings:
+Webhook URL: http://yourdockerip:8090/webhook
+Webhook Method: Post
+Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
+Data: Under Playback Start, JSON Header will be:
+```json 
+{ "source":"Tautulli" }
+```
+Data:
+```json
+{
+            "event":"played",
+            "file":"{file}",
+            "filename":"{filename}",
+            "mediatype":"{media_type}"
+}
+```
+Similarly, under Recently Added, Header is: 
+```json
+{ "source":"Tautulli" }
+```
+Data:
+```json
+{
+            "event":"added",
+            "file":"{file}",
+            "filename":"{filename}",
+            "mediatype":"{media_type}"
+}
+```
 
 You can define the port via environment variables, but the endpoint "/webhook" is static.
 
