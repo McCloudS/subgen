@@ -137,4 +137,4 @@ if os.path.isfile("/whisper.cpp/samples/jfk.wav"): # delete the sample file, so 
 #subprocess.call("make " + whisper_model, shell=True)
 print("Starting webhook!")
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=int(webhookport))
+    app.run(debug=False, host='0.0.0.0', port=int(webhookport))
