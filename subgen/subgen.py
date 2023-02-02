@@ -40,7 +40,7 @@ def receive_webhook():
         payload = json.loads(request.form['payload'])
     event = payload.get("event")
     if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
-        fullpath = None
+
         if event == "library.new" or event == "media.play": # these are the plex webhooks!
             print("Plex webhook received!")
             metadata = payload.get("Metadata")
@@ -59,29 +59,29 @@ def receive_webhook():
         print("file name with no extension: " + filenamenoextension)
         print("event: " + event)
     
-    if skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)):
-        print("File already has an internal sub we want, skipping generation")
-        return "File already has an internal sub we want, skipping generation"
-    elif os.path.isfile("{}.output.wav".format(fullpath)):
-        print("WAV file already exists, we're assuming it's processing and skipping it")
-        return "WAV file already exists, we're assuming it's processing and skipping it"
-    elif len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) > 0:
-        print("We already have a subgen created for this file, skipping it")
-        return "We already have a subgen created for this file, skipping it"
-       
-    if whisper_speedup:
-        print("This is a speedup run!")
-        print(whisper_speedup)
-        finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
-    else:
-        print("No speedup")
-        finalsubname = "{0}/{1}.subgen.{2}.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
-            
-    gen_subtitles(fullpath, "{}.output.wav".format(fullpath), finalsubname)
+        if skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)):
+            print("File already has an internal sub we want, skipping generation")
+            return "File already has an internal sub we want, skipping generation"
+        elif os.path.isfile("{}.output.wav".format(fullpath)):
+            print("WAV file already exists, we're assuming it's processing and skipping it")
+            return "WAV file already exists, we're assuming it's processing and skipping it"
+        elif len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) > 0:
+            print("We already have a subgen created for this file, skipping it")
+            return "We already have a subgen created for this file, skipping it"
+           
+        if whisper_speedup:
+            print("This is a speedup run!")
+            print(whisper_speedup)
+            finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
+        else:
+            print("No speedup")
+            finalsubname = "{0}/{1}.subgen.{2}.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
+                
+        gen_subtitles(fullpath, "{}.output.wav".format(fullpath), finalsubname)
   
-    if os.path.isfile("{}.output.wav".format(fullpath)):
-        print("Deleting WAV workfile")
-        os.remove("{}.output.wav".format(fullpath))
+        if os.path.isfile("{}.output.wav".format(fullpath)):
+            print("Deleting WAV workfile")
+            os.remove("{}.output.wav".format(fullpath))
 
     return ""
 
