@@ -47,9 +47,12 @@ def receive_webhook():
             metadata = payload.get("Metadata")
             ratingkey = metadata.get("ratingKey")
             fullpath = get_file_name(ratingkey, plexserver, plextoken)
-        else:
+        elif event == "added" or event == "played":
             print("Tautulli webhook received!")
             fullpath = payload.get("file")
+        else:
+            print("Didn't get a webhook we expected, discarding")
+            return ""
         
         filename = pathlib.Path(fullpath).name
         filepath = os.path.dirname(fullpath)
