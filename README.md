@@ -33,7 +33,7 @@ docker pull mccloud/subgen
 
 Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/webhook see: https://support.plex.tv/articles/115002267687-webhooks/
 
-You can define the port via envrionment variables, but the endpoint "/webhook" is static.
+You can define the port via environment variables, but the endpoint "/webhook" is static.
 
 The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER!
 | Variable              | Default Value | Description                                                                                                                                                                              |
