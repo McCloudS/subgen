@@ -40,7 +40,7 @@ def receive_webhook():
         payload = json.loads(request.form['payload'])
     event = payload.get("event")
     if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
-        
+        fullpath = None
         if event == "library.new" or event == "media.play": # these are the plex webhooks!
             print("Plex webhook received!")
             metadata = payload.get("Metadata")
