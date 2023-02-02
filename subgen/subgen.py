@@ -124,17 +124,17 @@ def get_file_name(item_id, plexserver, plextoken):
     return
 
 
-#if not os.path.isdir("/whisper.cpp"):
-    #os.mkdir("/whisper.cpp")
-#os.chdir("/whisper.cpp")
-#subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
+if not os.path.isdir("/whisper.cpp"):
+    os.mkdir("/whisper.cpp")
+os.chdir("/whisper.cpp")
+subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
 if updaterepo:
     print("Updating repo!")
     #subprocess.call("git pull", shell=True)
 if os.path.isfile("/whisper.cpp/samples/jfk.wav"): # delete the sample file, so it doesn't try transcribing it.  Saves us a couple seconds.
     print("Deleting sample file")
     #os.remove("/whisper.cpp/samples/jfk.wav")
-#subprocess.call("make " + whisper_model, shell=True)
+subprocess.call("make " + whisper_model, shell=True)
 print("Starting webhook!")
 if __name__ == "__main__":
     app.run(debug=False, host='0.0.0.0', port=int(webhookport))
