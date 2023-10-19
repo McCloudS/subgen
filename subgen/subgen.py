@@ -1,16 +1,34 @@
+import subprocess
+
+# List of packages to install
+packages_to_install = [
+    'flask',
+    'stable_ts',
+    'requests',
+    'faster-whisper',
+]
+
+for package in packages_to_install:
+    # Run pip install command to install the package locally
+    subprocess.run(['pip', 'install', package, '--target', 'libs'])
+
 import os
 import json
-import requests
 import xml.etree.ElementTree as ET
 import threading
-import stable_whisper
 import av
-from flask import Flask, request
+import sys
     
 def convert_to_bool(in_bool):
     value = str(in_bool).lower()
     return value not in ('false', 'off', '0')
     
+sys.path.append('libs')
+
+from flask import Flask, request    
+import stable_whisper
+import requests
+
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', "token here")
 plexserver = os.getenv('PLEXSERVER', "http://192.168.1.111:32400")
@@ -86,7 +104,7 @@ def add_file_for_transcription(file_path):
         if has_subtitle_language(file_path, skipifinternalsublang):
             print("File already has an internal sub we want, skipping generation")
             return "File already has an internal sub we want, skipping generation"
-        elif os.path.exists(file_path.rsplit('.', 1)[0] + subextension):
+        elif os.path.exists(file_path + subextension):
             print("We already have a subgen created for this file, skipping it")
             return "We already have a subgen created for this file, skipping it"
             
