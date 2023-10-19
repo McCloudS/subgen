@@ -1,127 +1,116 @@
+import sys
 import os
+import time
 import json
+import glob
+import pathlib
 import requests
-import xml.etree.ElementTree as ET
-import threading
-import stable_whisper
-import av
+import subprocess
 from flask import Flask, request
-    
-def convert_to_bool(in_bool):
+import xml.etree.ElementTree as ET
+        
+def converttobool(in_bool):
     value = str(in_bool).lower()
-    return value not in ('false', 'off', '0')
-    
-# Replace your getenv calls with appropriate default values here
-plextoken = os.getenv('PLEXTOKEN', "token here")
-plexserver = os.getenv('PLEXSERVER', "http://192.168.1.111:32400")
+    if value in ('false', 'off', '0'):
+        return False
+    else:
+        return True
+
+# parse our arguments from environment variables
+plextoken = os.getenv('PLEXTOKEN', "tokenhere")
+plexserver = os.getenv('PLEXSERVER', "http://plex:32400")
 whisper_model = os.getenv('WHISPER_MODEL', "medium")
-whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
-concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', '1'))
-procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', "True"))
-procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', "True"))
+whisper_speedup = converttobool(os.getenv('WHISPER_SPEEDUP', "False"))
+whisper_threads = os.getenv('WHISPER_THREADS', "4")
+whisper_processors = os.getenv('WHISPER_PROCESSORS', "1")
+procaddedmedia = converttobool(os.getenv('PROCADDEDMEDIA', "True"))
+procmediaonplay = converttobool(os.getenv('PROCMEDIAONPLAY', "False"))
 namesublang = os.getenv('NAMESUBLANG', "aa")
+updaterepo = converttobool(os.getenv('UPDATEREPO', "True"))
 skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', "eng")
-webhookport = int(os.getenv('WEBHOOKPORT', 8090))
-word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', "False"))
-debug = convert_to_bool(os.getenv('DEBUG', False))
-use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
-path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
-path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
+webhookport = os.getenv('WEBHOOKPORT', 8090)
 
 app = Flask(__name__)
-model = stable_whisper.load_faster_whisper(whisper_model, cpu_threads=whisper_threads)
-files_to_transcribe = set()
-subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
 
 @app.route("/webhook", methods=["POST"])
 def receive_webhook():
-    if debug:
-        print("We got a hook, let's figure out where it came from!")
     if request.headers.get("source") == "Tautulli":
         payload = request.json
-        if debug:
-            print("This hook is from Tautulli!")
     else:
         payload = json.loads(request.form['payload'])
     event = payload.get("event")
-    if debug:
-        print("event hook: " + str(payload))
     if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
+
         if event == "library.new" or event == "media.play": # these are the plex webhooks!
-            print("This hook is from Plex!")
-            fullpath = get_file_name(payload.get("Metadata").get("ratingKey"), plexserver, plextoken)
+            print("Plex webhook received!")
+            metadata = payload.get("Metadata")
+            ratingkey = metadata.get("ratingKey")
+            fullpath = get_file_name(ratingkey, plexserver, plextoken)
         elif event == "added" or event == "played":
             print("Tautulli webhook received!")
             fullpath = payload.get("file")
         else:
             print("Didn't get a webhook we expected, discarding")
             return ""
+        
+        filename = pathlib.Path(fullpath).name
+        filepath = os.path.dirname(fullpath)
+        filenamenoextension = filename.replace(pathlib.Path(fullpath).suffix, "")
 
-        print("Path of file: " + fullpath)
-        if use_path_mapping:
-            fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
-            print("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+        print("fullpath: " + fullpath)
+        print("filepath: " + filepath)
+        print("file name with no extension: " + filenamenoextension)
         print("event: " + event)
-        print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
-        print("Running " + str(whisper_threads) + " threads per transcription")
+    
+        if skipifinternalsublang in str(subprocess.check_output("ffprobe -loglevel error -select_streams s -show_entries stream=index:stream_tags=language -of csv=p=0 \"{}\"".format(fullpath), shell=True)):
+            print("File already has an internal sub we want, skipping generation")
+            return "File already has an internal sub we want, skipping generation"
+        elif os.path.isfile("{}.output.wav".format(fullpath)):
+            print("WAV file already exists, we're assuming it's processing and skipping it")
+            return "WAV file already exists, we're assuming it's processing and skipping it"
+        elif len(glob.glob("{}/{}*subgen*".format(filepath, filenamenoextension))) > 0:
+            print("We already have a subgen created for this file, skipping it")
+            return "We already have a subgen created for this file, skipping it"
+           
+        if whisper_speedup:
+            print("This is a speedup run!")
+            print(whisper_speedup)
+            finalsubname = "{0}/{1}.subgen.{2}.speedup.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
+        else:
+            print("No speedup")
+            finalsubname = "{0}/{1}.subgen.{2}.{3}".format(filepath, filenamenoextension, whisper_model, namesublang)
                 
-        add_file_for_transcription(fullpath)
+        gen_subtitles(fullpath, "{}.output.wav".format(fullpath), finalsubname)
+  
+        if os.path.isfile("{}.output.wav".format(fullpath)):
+            print("Deleting WAV workfile")
+            os.remove("{}.output.wav".format(fullpath))
 
     return ""
 
-def gen_subtitles(inputvideo):
-    try:
-        print(f"Transcribing file: {inputvideo}")
-        result = model.transcribe_stable(inputvideo)
-        result.to_srt_vtt(inputvideo + subextension, word_level=word_level_highlight)
-        print(f"Transcription of {file_path} is completed.")
-        files_to_transcribe.remove(inputvideo)
-    except Exception as e:
-        print(f"Error processing or transcribing {file_path}: {e}")
+def gen_subtitles(filename, inputwav, finalsubname):
+    strip_audio(filename)
+    run_whisper(inputwav, finalsubname)
 
-# Function to add a file for transcription
-def add_file_for_transcription(file_path):
-    if file_path not in files_to_transcribe:
-        
-        if has_subtitle_language(file_path, skipifinternalsublang):
-            print("File already has an internal sub we want, skipping generation")
-            return "File already has an internal sub we want, skipping generation"
-        elif os.path.exists(file_path.rsplit('.', 1)[0] + subextension):
-            print("We already have a subgen created for this file, skipping it")
-            return "We already have a subgen created for this file, skipping it"
-            
-        files_to_transcribe.add(file_path)
-        print(f"Added {file_path} for transcription.")
-        # Start transcription for the file in a separate thread
-    
-        transcription_thread = threading.Thread(target=gen_subtitles, args=(file_path,))
-        transcription_thread.start()
-    else:
-        print(f"File {file_path} is already in the transcription list. Skipping.")
+def strip_audio(filename):
+    print("Starting strip audio")
+    command = "ffmpeg -y -i \"{}\" -ar 16000 -ac 1 -c:a pcm_s16le \"{}.output.wav\"".format(
+        filename, filename)
+    print("Command: " + command)
+    subprocess.call(command, shell=True)
+    print("Done stripping audio")
 
-def has_subtitle_language(video_file, target_language):
-    try:
-        container = av.open(video_file)
-        subtitle_stream = None
+def run_whisper(inputwav, finalsubname):
+    print("Starting whisper")
+    os.chdir("/whisper.cpp")
+    command = "./main -m models/ggml-{}.bin -of \"{}\" -t {} -p {} -osrt -f \"{}\"" .format(
+        whisper_model, finalsubname, whisper_threads, whisper_processors, inputwav)
+    if (whisper_speedup):
+        command = command.replace("-osrt", "-osrt -su")
+    print("Command: " + command)
+    subprocess.call(command, shell=True)
 
-        # Iterate through the streams in the video file
-        for stream in container.streams:
-            if stream.type == 'subtitle':
-                # Check if the subtitle stream has the target language
-                if 'language' in stream.metadata and stream.metadata['language'] == target_language:
-                    subtitle_stream = stream
-                    break
-
-        if subtitle_stream:
-            print(f"Subtitles in '{target_language}' language found in the video.")
-            return True
-        else:
-            print(f"No subtitles in '{target_language}' language found in the video.")
-
-        container.close()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return False
+    print("Done with whisper")
     
 def get_file_name(item_id, plexserver, plextoken):
     url = f"{plexserver}/library/metadata/{item_id}"
@@ -137,6 +126,18 @@ def get_file_name(item_id, plexserver, plextoken):
         print(f"Error: {response.text}")
     return
 
+
+if not os.path.isdir("/whisper.cpp"):
+    os.mkdir("/whisper.cpp")
+os.chdir("/whisper.cpp")
+subprocess.call("git clone https://github.com/ggerganov/whisper.cpp .", shell=True)
+if updaterepo:
+    print("Updating repo!")
+    #subprocess.call("git pull", shell=True)
+if os.path.isfile("/whisper.cpp/samples/jfk.wav"): # delete the sample file, so it doesn't try transcribing it.  Saves us a couple seconds.
+    print("Deleting sample file")
+    #os.remove("/whisper.cpp/samples/jfk.wav")
+subprocess.call("make " + whisper_model, shell=True)
 print("Starting webhook!")
 if __name__ == "__main__":
-    app.run(debug=debug, host='0.0.0.0', port=int(webhookport))
+    app.run(debug=False, host='0.0.0.0', port=int(webhookport))
