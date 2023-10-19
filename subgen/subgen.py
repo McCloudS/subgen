@@ -91,7 +91,7 @@ def gen_subtitles(inputvideo):
     try:
         print(f"Transcribing file: {inputvideo}")
         result = model.transcribe_stable(inputvideo)
-        result.to_srt_vtt(inputvideo + subextension, word_level=word_level_highlight)
+        result.to_srt_vtt(inputvideo.rsplit('.', 1)[0] + ' ' + subextension, word_level=word_level_highlight)
         print(f"Transcription of {file_path} is completed.")
         files_to_transcribe.remove(inputvideo)
     except Exception as e:
@@ -104,7 +104,7 @@ def add_file_for_transcription(file_path):
         if has_subtitle_language(file_path, skipifinternalsublang):
             print("File already has an internal sub we want, skipping generation")
             return "File already has an internal sub we want, skipping generation"
-        elif os.path.exists(file_path + subextension):
+        elif os.path.exists(file_path.rsplit('.', 1)[0] + ' ' + subextension):
             print("We already have a subgen created for this file, skipping it")
             return "We already have a subgen created for this file, skipping it"
             
