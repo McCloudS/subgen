@@ -34,12 +34,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-Use the example docker-compose or build your own, just make sure you define PLEXTOKEN and PLEXSERVER at a minimum.  Can it be run without Docker?  Mostly.  [See below](https://github.com/McCloudS/subgen/blob/main/README.md#running-without-docker)
-
-You can now pull the image directly from Dockerhub:
-```
-docker pull mccloud/subgen
-```
+Install python3 and execute the script.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING
 
 ## Plex
 
@@ -114,21 +109,11 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 
 You might have to tweak the script a little bit, but will work just fine without Docker.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 
-Example of instructions if you're on a Debian based linux once you set your environment variables:
-```sh
-wget https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py
-apt-get update && apt-get install -y ffmpeg git gcc python3
-pip3 install webhook_listener
-python3 -u subgen_nodocker.py
-```
-
 # What are the limitations/problems?
 
-* If Plex adds multiple shows (like a season pack), it will fail to process subtitles.  It is reliant on a SINGLE file to accurately work now.
-* Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  
+* If Plex adds multiple shows (like a season pack), it may fail to process subtitles.  It is reliant on a SINGLE file to accurately work now.
+* Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  (**This is mostly fixed now using stable-ts!**)
 * I made it and know nothing about formal deployment for python coding.  
-* There is no 'wrapper' for python for whisper.cpp at this point, so I'm just using subprocess.call
-* The Whisper.cpp/OpenAI model seems to fail in cases.  I've seen 1 or 2 instances where the subtitle will repeat the same line for several minutes.
 * It's using trained AI models to transcribe, so it WILL mess up...but we find the transcription goofs amusing.  
 
 # What's next?  
@@ -138,9 +123,7 @@ I'm hoping someone that is much more skilled than I, to use this as a pushing of
 Optimizations I can think of off hand:
 * On played, use a faster model with speedup, since you might want those pretty quickly
 * Fix processing for when adding multiple files
-* There might be an OpenAI native CPU version now?  If so, it might be better since it's natively in python
-* Cleaner implementation in a different language.  Python isn't the best for this particular implementation, but I wanted to learn it
-* Whisper (.cpp) has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
+* Whisper has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
 * Add an ability via a web-ui or something to generate subtitles for particular media files/folders.
 
 Will I update or maintain this?  Likely not.  I built this for my own use, and will fix and push issues that directly impact my own usage.  Unfortunately, I don't have the time or expertise to manage a project like this.  
