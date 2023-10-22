@@ -95,7 +95,7 @@ The following environment variables are available in Docker.  They will default 
 | TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda" |
 | WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
 | DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues |
-| USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Examples below. |
+| USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
 | STORE_LOCAL_LIBS | 'True' | This will save and install the python libraries to the folder 'libs' in the same directory as the execution path of subgen.py.  This is primarily so you can manage the libs outside of a docker container if you desire. |
