@@ -82,17 +82,24 @@ The following environment variables are available in Docker.  They will default 
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | WHISPER_MODEL         | medium        | this can be tiny, base, small, medium, large                                                                                                                                             |
-| WHISPER_SPEEDUP       | False         | this adds the option -su "speed up audio by x2 (reduced accuracy)"                                                                                                                       |
 | WHISPER_THREADS       | 4             | number of threads to use during computation                                                                                                                                              |
-| WHISPER_PROCESSORS    | 1             | number of processors to use during computation                                                                                                                                           |
 | PROCADDEDMEDIA        | True          | will gen subtitles for all media added regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                           |
-| PROCMEDIAONPLAY       | False         | will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                          |
-| NAMESUBLANG           | aa            | allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list  in Plex. |
-| UPDATEREPO            | True          | pulls and merges whisper.cpp on every start                                                                                                                                              |
-| SKIPIFINTERNALSUBLANG | eng           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
-| PLEXSERVER | http://plex:32400 | This needs to be set to your local plex server address/port |
-| PLEXTOKEN | tokenhere | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
+| PROCMEDIAONPLAY       | True          | will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                          |
+| NAMESUBLANG           | 'aa'            | allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex. |
+| SKIPIFINTERNALSUBLANG | 'eng'           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
+| PLEXSERVER | 'http://plex:32400' | This needs to be set to your local plex server address/port |
+| PLEXTOKEN | token here | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
+| NEW OPTIONS AS OF 22 Oct 2023 | |
+| CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
+| TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda" |
+| WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
+| DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues |
+| USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Examples below. |
+| PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
+| PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
+| STORE_LOCAL_LIBS | 'True' | This will save and install the python libraries to the folder 'libs' in the same directory as the execution path of subgen.py.  This is primarily so you can manage the libs outside of a docker container if you desire. |
+
 ## Docker Volumes
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
