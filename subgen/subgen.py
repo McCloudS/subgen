@@ -1,33 +1,16 @@
 import subprocess
-
-# List of packages to install
-packages_to_install = [
-    'flask',
-    'stable_ts',
-    'requests',
-    'faster-whisper',
-]
-
-for package in packages_to_install:
-    # Run pip install command to install the package locally
-    subprocess.run(['pip', 'install', package, '--target', 'libs'])
-
 import os
+import importlib
 import json
 import xml.etree.ElementTree as ET
 import threading
 import av
 import sys
-    
+import time
+
 def convert_to_bool(in_bool):
     value = str(in_bool).lower()
     return value not in ('false', 'off', '0')
-    
-sys.path.append('libs')
-
-from flask import Flask, request    
-import stable_whisper
-import requests
 
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', "token here")
@@ -45,6 +28,37 @@ debug = convert_to_bool(os.getenv('DEBUG', False))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
+store_local = convert_to_bool(os.getenv('STORE_LOCAL_LIBS', True))
+
+def install_if_not_installed(package_name):
+    try:
+        importlib.import_module(package_name)
+        print(f"{package_name} is already installed.")
+    except ImportError:
+        print(f"Installing {package_name}...")
+        try:
+            import subprocess
+            subprocess.run(['pip', 'install', package_name, '--target', 'libs'])
+            print(f"{package_name} has been successfully installed.")
+        except Exception as e:
+            print(f"Failed to install {package_name}: {e}")
+
+if store_local:
+    # List of packages to install
+    packages_to_install = [
+        'flask',
+        'stable_ts',
+        'requests',
+        'faster-whisper',
+    ]
+    print("Using local libraries, if you want to update them, simplest way is to delete them!")
+    sys.path.append('libs')
+    for package in packages_to_install:
+        install_if_not_installed(package)
+   
+from flask import Flask, request    
+import stable_whisper
+import requests
 
 app = Flask(__name__)
 model = stable_whisper.load_faster_whisper(whisper_model, cpu_threads=whisper_threads)
@@ -90,9 +104,12 @@ def receive_webhook():
 def gen_subtitles(inputvideo):
     try:
         print(f"Transcribing file: {inputvideo}")
+        start_time = time.time()
         result = model.transcribe_stable(inputvideo)
         result.to_srt_vtt(inputvideo.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
-        print(f"Transcription of {file_path} is completed.")
+        elapsed_time = time.time() - start_time
+        minutes, seconds = divmod(int(elapsed_time), 60)
+        print(f"Transcription of {file_path} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
         files_to_transcribe.remove(inputvideo)
     except Exception as e:
         print(f"Error processing or transcribing {file_path}: {e}")
