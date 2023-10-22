@@ -7,28 +7,35 @@ import threading
 import av
 import sys
 import time
+import queue
 
 def convert_to_bool(in_bool):
-    value = str(in_bool).lower()
-    return value not in ('false', 'off', '0')
+    if isinstance(in_bool, bool):
+        return in_bool
+    else:
+        value = str(in_bool).lower()
+        return value not in ('false', 'off', '0')
 
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', "token here")
 plexserver = os.getenv('PLEXSERVER', "http://192.168.1.111:32400")
 whisper_model = os.getenv('WHISPER_MODEL', "medium")
 whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
-concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', '1'))
-procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', "True"))
-procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', "True"))
+concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', '2'))
+transcribe_device = os.getenv('TRANSCRIBE_DEVICE', "cpu")
+procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
+procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
 namesublang = os.getenv('NAMESUBLANG', "aa")
 skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', "eng")
 webhookport = int(os.getenv('WEBHOOKPORT', 8090))
-word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', "False"))
+word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
 debug = convert_to_bool(os.getenv('DEBUG', False))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 store_local = convert_to_bool(os.getenv('STORE_LOCAL_LIBS', True))
+if transcribe_device == "gpu":
+    transcribe_device = "cuda"
 
 def install_if_not_installed(package_name):
     try:
@@ -61,9 +68,11 @@ import stable_whisper
 import requests
 
 app = Flask(__name__)
-model = stable_whisper.load_faster_whisper(whisper_model, cpu_threads=whisper_threads)
+model = stable_whisper.load_faster_whisper(whisper_model, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
 files_to_transcribe = set()
 subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
+print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
+print("Running " + str(whisper_threads) + " threads per transcription")
 
 @app.route("/webhook", methods=["POST"])
 def receive_webhook():
@@ -89,30 +98,33 @@ def receive_webhook():
             print("Didn't get a webhook we expected, discarding")
             return ""
 
-        print("Path of file: " + fullpath)
+        if debug:
+            print("Path of file: " + fullpath)
+            print("event: " + event)
         if use_path_mapping:
             fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
-            print("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
-        print("event: " + event)
-        print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
-        print("Running " + str(whisper_threads) + " threads per transcription")
+            if debug:
+                print("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+        
                 
         add_file_for_transcription(fullpath)
 
     return ""
 
-def gen_subtitles(inputvideo):
+def gen_subtitles(video_file_path: str) -> None:
     try:
-        print(f"Transcribing file: {inputvideo}")
+        print(f"Transcribing file: {video_file_path}")
         start_time = time.time()
-        result = model.transcribe_stable(inputvideo)
-        result.to_srt_vtt(inputvideo.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
+        result = model.transcribe_stable(video_file_path)
+        result.to_srt_vtt(video_file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
         print(f"Transcription of {file_path} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
-        files_to_transcribe.remove(inputvideo)
+        files_to_transcribe.remove(video_file_path)
     except Exception as e:
-        print(f"Error processing or transcribing {file_path}: {e}")
+        print(f"Error processing or transcribing {video_file_path}: {e}")
+    finally:
+        files_to_transcribe.remove(video_file_path)
 
 # Function to add a file for transcription
 def add_file_for_transcription(file_path):
@@ -129,8 +141,8 @@ def add_file_for_transcription(file_path):
         print(f"Added {file_path} for transcription.")
         # Start transcription for the file in a separate thread
     
-        transcription_thread = threading.Thread(target=gen_subtitles, args=(file_path,))
-        transcription_thread.start()
+        gen_subtitles(file_path)
+        
     else:
         print(f"File {file_path} is already in the transcription list. Skipping.")
 
@@ -158,19 +170,29 @@ def has_subtitle_language(video_file, target_language):
         print(f"An error occurred: {e}")
         return False
     
-def get_file_name(item_id, plexserver, plextoken):
+def get_file_name(item_id: str, plexserver: str, plextoken: str) -> str:
+    """Gets the full path to a file from the Plex server.
+
+    Args:
+        item_id: The ID of the item in the Plex library.
+        plexserver: The URL of the Plex server.
+        plextoken: The Plex token.
+
+    Returns:
+        The full path to the file.
+    """
+
     url = f"{plexserver}/library/metadata/{item_id}"
 
     response = requests.get(url, headers={
-      "X-Plex-Token": "{plextoken}"})
+        "X-Plex-Token": "{plextoken}"})
 
     if response.status_code == 200:
         root = ET.fromstring(response.text)
         fullpath = root.find(".//Part").attrib['file']
         return fullpath
     else:
-        print(f"Error: {response.text}")
-    return
+        return ""
 
 print("Starting webhook!")
 if __name__ == "__main__":
