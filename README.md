@@ -2,6 +2,10 @@
 
 Updates:
 
+22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below.  While I have added GPU support, I haven't tested it yet.  This script will install missing dependencies by itself, so you shouldn't need to do anything else except run it.
+
+The dockerfile: The intent now is to run this directly wherever you want without a specialized docker container.  If you still want to dockerize it, the best way is to download the .py script and drop it in a folder and configure via docker python examples such as: `docker run -it --rm --subgen -v "$PWD":/usr/src/myapp -w /usr/src/myapp python:3 python subgen.py`.  That is partially the reason I added the STORE_LOCAL_LIBS so you can manage the libs outside of a docker deployment.
+
 19 Oct 2023: And we're back!  Uses faster-whisper and stable-ts.  Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time.  As of now, this is not a docker image on dockerhub.  The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts.  Quick and dirty to meet dependencies: pip or `pip3 install flask requests stable-ts faster-whisper`
 
 This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one set up yet.  Tesla T4 is in the mail!
@@ -98,7 +102,7 @@ The following environment variables are available in Docker.  They will default 
 | USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
-| STORE_LOCAL_LIBS | 'True' | This will save and install the python libraries to the folder 'libs' in the same directory as the execution path of subgen.py.  This is primarily so you can manage the libs outside of a docker container if you desire. |
+| STORE_LOCAL_LIBS | 'True' | This will save and install the python libraries to the folder 'libs' in the same directory as the execution path of subgen.py.  This is primarily so you can manage the libs outside of a docker container if you desire. Simplest way to update repos when this is enabled is to delete the libs folder.|
 
 ## Docker Volumes
 
@@ -149,6 +153,8 @@ Will I update or maintain this?  Likely not.  I built this for my own use, and w
 * https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes (2 letter subtitle codes)
 
 # Credits:  
-* Whisper.cpp (https://github.com/ggerganov/whisper.cpp)
+* Whisper.cpp (https://github.com/ggerganov/whisper.cpp) for original implementation
 * Google
 * ffmpeg
+* https://github.com/jianfch/stable-ts
+* https://github.com/guillaumekln/faster-whisper
