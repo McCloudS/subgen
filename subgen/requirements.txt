@@ -1,0 +1,5 @@
+numpy
+stable-ts
+flask
+requests
+faster-whisper
