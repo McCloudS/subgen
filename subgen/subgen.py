@@ -58,7 +58,7 @@ if transcribe_device == "gpu":
     transcribe_device = "cuda"
 
 app = Flask(__name__)
-model = stable_whisper.load_faster_whisper(whisper_model, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
+model = stable_whisper.load_faster_whisper(whisper_model, download_root="/subgen", device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
 files_to_transcribe = set()
 subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
 print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
