@@ -3,13 +3,10 @@ version: '2'
   
   subgen:
     container_name: subgen
-    network_mode: host
     image: mccloud/subgen
     environment:
        - "WHISPER_MODEL=medium"
-       - "WHISPER_SPEEDUP=False"
        - "WHISPER_THREADS=4"
-       - "WHISPER_PROCESSORS=1"
        - "PROCADDEDMEDIA=True"
        - "PROCMEDIAONPLAY=False"
        - "NAMESUBLANG=aa"
@@ -21,4 +18,5 @@ version: '2'
     volumes:
        - "${TV}:/tv"
        - "${MOVIES}:/movies"
-       - "${APPDATA}/subgen:/whisper.cpp"
+    ports:
+       - "8090:8090"
