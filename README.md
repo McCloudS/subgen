@@ -96,11 +96,13 @@ The following environment variables are available in Docker.  They will default 
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
 
-## Docker Volumes
+## Docker Configuration
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
 `"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety. <br><br>`"${APPDATA}/subgen/dist-packages:/usr/local/lib/python3.10/dist-packages"` is just for storing of the python packages, so it won't redownload then, again, not necessary.
+
+If you want to use a GPU, you need to map it accordingly.  
 
 ## Running without Docker
 
