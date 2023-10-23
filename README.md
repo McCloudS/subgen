@@ -91,7 +91,7 @@ The following environment variables are available in Docker.  They will default 
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
 | NEW OPTIONS AS OF 22 Oct 2023 | |
 | CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
-| TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda" |
+| TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda".  You must be running a cuda dockerfile to use the cuda/gpu options without failing. |
 | WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
 | DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 | USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
