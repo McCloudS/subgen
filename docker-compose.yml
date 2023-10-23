@@ -3,6 +3,7 @@ version: '2'
   
   subgen:
     container_name: subgen
+    tty: true
     image: mccloud/subgen
     environment:
        - "WHISPER_MODEL=medium"
