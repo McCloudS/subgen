@@ -1,6 +1,6 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6)
-
-Updates:
+<details>
+<summary>Updates:</summary>
 
 23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, mccloud/subgen:cpu, the other is for cuda/GPU: mccloud/subgen:cuda
 
@@ -14,11 +14,11 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 31 Jan 2023 : Rewrote the script substantially to remove Tautulli and fix some variable handling.  For some reason my implementation requires the container to be in host mode.  My Plex was giving "401 Unauthorized" when attempt to query from docker subnets during API calls.
 
+</details>
+
 Howdy all,
 
 This is a project I've had running for a bit, then cleaned up for 'release' while the kids were sleeping.  It's more of a POC, piece of crap, or a proof of concept.  This was also my first ever Python usage.
-
-# BLUF:  Someone else use this idea (not the code!) as a jumping off point.
 
 # What is this?
 
@@ -34,7 +34,15 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-Install python3 and execute the script.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  The dockerfile is also posted on dockerhub (mccloud/subgen)
+## Install/Setup
+
+### Standalone/Without Docker
+
+install python3 and ffmpeg and execute the script, the script should handle the rest of the dependancies, but if not `pip3 install numpy requests flask faster-whisper stable-ts`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+
+### Docker
+
+The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen).  The dockerfile variants are listed further below.
 
 ## Plex
 
@@ -115,6 +123,8 @@ They are functionally identical, except the cuda variant has all the necessary d
 ## Running without Docker
 
 The script was re-developed without using Docker, so it will work just fine as long as you have the dependencies installed.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
+<br><br>
+The only thing that should needed is `pip3 install numpy requests flask faster-whisper stable-ts` in weird installations, you may need to install ffmpeg via your OS package manager.
 
 # What are the limitations/problems?
 
