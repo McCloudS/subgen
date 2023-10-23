@@ -2,6 +2,8 @@
 
 Updates:
 
+23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, the other is for cuda/GPU: mccloud/subgen:cuda
+
 22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below.  If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.
 
 19 Oct 2023: And we're back!  Uses faster-whisper and stable-ts.  Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time.  As of now, this is not a docker image on dockerhub.  The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts.  Quick and dirty to meet dependencies: pip or `pip3 install flask requests stable-ts faster-whisper`
@@ -103,6 +105,10 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 `"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety. <br><br>`"${APPDATA}/subgen/dist-packages:/usr/local/lib/python3.10/dist-packages"` is just for storing of the python packages, so it won't redownload then, again, not necessary.
 
 If you want to use a GPU, you need to map it accordingly.  
+
+# Images:
+mccloud/subgen:latest is CPU only (smaller)<br>
+mccloud/subgen:cuda is for GPU support
 
 ## Running without Docker
 
