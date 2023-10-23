@@ -78,14 +78,14 @@ You can define the port via environment variables, but the endpoint "/webhook" i
 The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER IF USING PLEX WEBHOOKS!
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| WHISPER_MODEL         | medium        | this can be tiny, base, small, medium, large                                                                                                                                             |
+| WHISPER_MODEL         | 'medium'        | this can be tiny, base, small, medium, large                                                                                                                                             |
 | WHISPER_THREADS       | 4             | number of threads to use during computation                                                                                                                                              |
 | PROCADDEDMEDIA        | True          | will gen subtitles for all media added regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                           |
 | PROCMEDIAONPLAY       | True          | will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                          |
 | NAMESUBLANG           | 'aa'            | allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex. |
 | SKIPIFINTERNALSUBLANG | 'eng'           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
 | PLEXSERVER | 'http://plex:32400' | This needs to be set to your local plex server address/port |
-| PLEXTOKEN | token here | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
+| PLEXTOKEN | 'token here' | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
 | NEW OPTIONS AS OF 22 Oct 2023 | |
 | CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
@@ -100,12 +100,12 @@ The following environment variables are available in Docker.  They will default 
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
-"${APPDATA}/subgen:/subgen" is just for storage of the python script and the language model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety. 
-"${APPDATA}/subgen/dist-packages:/usr/local/lib/python3.10/dist-packages" is just for storing of the python packages, so it won't redownload then, again, not necessary.
+`"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety. 
+`"${APPDATA}/subgen/dist-packages:/usr/local/lib/python3.10/dist-packages"` is just for storing of the python packages, so it won't redownload then, again, not necessary.
 
 ## Running without Docker
 
-You might have to tweak the script a little bit, but will work just fine without Docker.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
+The script was re-developed without using Docker, so it will work just fine as long as you have the dependencies installed.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 
 # What are the limitations/problems?
 
