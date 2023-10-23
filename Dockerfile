@@ -2,7 +2,7 @@ FROM ubuntu:latest
 
 WORKDIR /subgen
 
-RUN apt-get update && apt-get -y install python3 python3-pip ffmpeg
+RUN apt-get update && apt-get -y install ffmpeg python3 python3-pip
 
 ENV PYTHONUNBUFFERED 1
 
