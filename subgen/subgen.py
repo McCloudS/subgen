@@ -80,7 +80,9 @@ def receive_webhook():
     if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
         if event == "library.new" or event == "media.play": # these are the plex webhooks!
             print("This hook is from Plex!")
-            fullpath = get_file_name(payload.get("Metadata").get("ratingKey"), plexserver, plextoken)
+            if(debug):
+                print("Rating key is: " + payload['Metadata']['ratingKey'])
+            fullpath = get_file_name(payload['Metadata']['ratingKey'], plexserver, plextoken)
         elif event == "added" or event == "played":
             print("Tautulli webhook received!")
             fullpath = payload.get("file")
@@ -159,29 +161,32 @@ def has_subtitle_language(video_file, target_language):
         print(f"An error occurred: {e}")
         return False
     
-def get_file_name(item_id: str, plexserver: str, plextoken: str) -> str:
+def get_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
     """Gets the full path to a file from the Plex server.
 
     Args:
-        item_id: The ID of the item in the Plex library.
-        plexserver: The URL of the Plex server.
-        plextoken: The Plex token.
+        itemid: The ID of the item in the Plex library.
+        server_ip: The IP address of the Plex server.
+        plex_token: The Plex token.
 
     Returns:
         The full path to the file.
     """
 
-    url = f"{plexserver}/library/metadata/{item_id}"
+    url = f"{server_ip}/library/metadata/{itemid}"
 
-    response = requests.get(url, headers={
-        "X-Plex-Token": "{plextoken}"})
+    headers = {
+        "X-Plex-Token": plex_token,
+    }
+
+    response = requests.get(url, headers=headers)
 
     if response.status_code == 200:
-        root = ET.fromstring(response.text)
+        root = ET.fromstring(response.content)
         fullpath = root.find(".//Part").attrib['file']
         return fullpath
     else:
-        return ""
+        raise Exception(f"Error: {response.status_code}")
 
 print("Starting webhook!")
 if __name__ == "__main__":
