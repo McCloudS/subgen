@@ -2,9 +2,7 @@
 
 Updates:
 
-22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below.  If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.  This script will install missing dependencies by itself, so you shouldn't need to do anything else except run it.  
-
-The dockerfile: The intent now is to run this directly wherever you want without a specialized docker container.  If you still want to dockerize it, the best way is to download the .py script and drop it in a folder and configure via docker python examples such as: `docker run -it --rm --subgen -v "$PWD":/usr/src/myapp -w /usr/src/myapp python:3 python subgen.py`.  That is partially the reason I added the STORE_LOCAL_LIBS so you can manage the libs outside of a docker deployment.
+22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below.  If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.
 
 19 Oct 2023: And we're back!  Uses faster-whisper and stable-ts.  Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time.  As of now, this is not a docker image on dockerhub.  The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts.  Quick and dirty to meet dependencies: pip or `pip3 install flask requests stable-ts faster-whisper`
 
