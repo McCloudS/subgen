@@ -10,6 +10,7 @@ import queue
 # List of packages to install
 packages_to_install = [
     'numpy',
+    'ffmpeg',
     'stable-ts',
     'flask',
     'requests',
