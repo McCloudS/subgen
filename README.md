@@ -91,7 +91,7 @@ The following environment variables are available in Docker.  They will default 
 | CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
 | TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda" |
 | WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
-| DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues |
+| DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 | USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
