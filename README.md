@@ -107,7 +107,7 @@ You MUST mount your media volumes in subgen the same way Plex sees them.  For ex
 If you want to use a GPU, you need to map it accordingly.  
 
 ### Images:
-mccloud/subgen:latest or mccloud/subgen: cpu is CPU only (smaller)<br>
+mccloud/subgen:latest or mccloud/subgen:cpu is CPU only (smaller)<br>
 mccloud/subgen:cuda is for GPU support
 <br><br>
 They are functionally identical, except the cuda variant has all the necessary dependancies for using a GPU.
