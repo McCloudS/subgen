@@ -20,7 +20,7 @@ This is a project I've had running for a bit, then cleaned up for 'release' whil
 
 # What is this?
 
-This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server using a CPU.  It is currently reliant on webhooks from Plex.  Why? During my limited testing, Plex was VERY sporadically actually sending out their webhooks using their built-in functionality (https://support.plex.tv/articles/115002267687-webhooks).  This uses whisper.cpp which is an implementation of OpenAI's Whisper model to use CPUs (Do your own research!).  While CPUs obviously aren't super efficient at this, but my server sits idle 99% of the time, so this worked great for me.  
+This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server.  It is currently reliant on webhooks from Plex or Tautulli.  This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.  While CPUs obviously aren't super efficient at this, my server sits idle 99% of the time, so this worked great for me.  
 
 # Why?
 
@@ -32,7 +32,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # How do I set it up?
 
-Install python3 and execute the script.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING
+Install python3 and execute the script.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  The dockerfile is also posted on dockerhub (mccloud/subgen)
 
 ## Plex
 
@@ -95,13 +95,12 @@ The following environment variables are available in Docker.  They will default 
 | USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
-| STORE_LOCAL_LIBS | 'True' | This will save and install the python libraries to the folder 'libs' in the same directory as the execution path of subgen.py.  This is primarily so you can manage the libs outside of a docker container if you desire. Simplest way to update repos when this is enabled is to delete the libs folder.|
 
 ## Docker Volumes
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
-"${APPDATA}/subgen:/whisper.cpp" is just for storage of the cloned and compiled code, also the models are stored in the /whisper.cpp/models, so it will prevent redownloading them.  This volume isn't necessary, just a nicety.  
+"${APPDATA}/subgen:/subgen" is just for storage of the python packages and the languagem model, so it will prevent redownloading them.  This volume isn't necessary, just a nicety.  
 
 ## Running without Docker
 
@@ -119,7 +118,6 @@ You might have to tweak the script a little bit, but will work just fine without
 I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazarr.  Bazarr tracks failed subtitle downloads, I originally wanted to utilize its API, but decided on my current solution for simplicity.  
 
 Optimizations I can think of off hand:
-* On played, use a faster model with speedup, since you might want those pretty quickly
 * Fix processing for when adding multiple files
 * Whisper has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
 * Add an ability via a web-ui or something to generate subtitles for particular media files/folders.
