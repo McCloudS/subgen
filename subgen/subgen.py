@@ -1,13 +1,34 @@
 import subprocess
 import os
-import importlib
 import json
 import xml.etree.ElementTree as ET
 import threading
-import av
 import sys
 import time
 import queue
+
+# List of packages to install
+packages_to_install = [
+    'numpy',
+    'stable-ts',
+    'flask',
+    'requests',
+    'faster-whisper',
+    # Add more packages as needed
+]
+
+for package in packages_to_install:
+    print(f"Installing {package}...")
+    try:
+        subprocess.run(['pip3', 'install', package], check=True)
+        print(f"{package} has been successfully installed.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install {package}: {e}")
+
+from flask import Flask, request    
+import stable_whisper
+import requests
+import av
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -33,39 +54,8 @@ debug = convert_to_bool(os.getenv('DEBUG', False))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
-store_local = convert_to_bool(os.getenv('STORE_LOCAL_LIBS', True))
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
-
-def install_if_not_installed(package_name):
-    try:
-        importlib.import_module(package_name)
-        print(f"{package_name} is already installed.")
-    except ImportError:
-        print(f"Installing {package_name}...")
-        try:
-            import subprocess
-            subprocess.run(['pip', 'install', package_name, '--target', 'libs'])
-            print(f"{package_name} has been successfully installed.")
-        except Exception as e:
-            print(f"Failed to install {package_name}: {e}")
-
-if store_local:
-    # List of packages to install
-    packages_to_install = [
-        'flask',
-        'stable_ts',
-        'requests',
-        'faster-whisper',
-    ]
-    print("Using local libraries, if you want to update them, simplest way is to delete them!")
-    sys.path.append('libs')
-    for package in packages_to_install:
-        install_if_not_installed(package)
-   
-from flask import Flask, request    
-import stable_whisper
-import requests
 
 app = Flask(__name__)
 model = stable_whisper.load_faster_whisper(whisper_model, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
@@ -119,8 +109,7 @@ def gen_subtitles(video_file_path: str) -> None:
         result.to_srt_vtt(video_file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
-        print(f"Transcription of {file_path} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
-        files_to_transcribe.remove(video_file_path)
+        print(f"Transcription of {video_file_path} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
     except Exception as e:
         print(f"Error processing or transcribing {video_file_path}: {e}")
     finally:
