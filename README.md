@@ -22,7 +22,7 @@ This is a project I've had running for a bit, then cleaned up for 'release' whil
 
 # What is this?
 
-This will transcribe subtitles (.srt) from your personal media in a Plex or Jellyfin server.  It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli.  This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.  While CPUs obviously aren't super efficient at this, my server sits idle 99% of the time, so this worked great for me.  
+This will transcribe your personal media on a Plex or Jellyfin server to create subtitles (.srt). It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
 
 # Why?
 
