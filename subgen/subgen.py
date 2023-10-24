@@ -127,7 +127,6 @@ def receive_jellyfin_webhook():
     logging.debug("Raw response: %s", request.data)
     
     if "Jellyfin-Server" in request.headers.get("User-Agent"):
-        print("in the jellyfin loop")
         event = request.json["NotificationType"]
         logging.debug(event)
         if((event == "ItemAdded" and procaddedmedia) or (event == "PlaybackStart" and procmediaonplay)):
