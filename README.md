@@ -80,7 +80,7 @@ Data:
             "mediatype":"{media_type}"
 }
 ```
-## 
+## Jellyfin
 
 First, you need to install the Jellyfin webhooks plugin.  Then you need to click "Add Generic Destination", name it anything you want, webhook url is your subgen info (IE http://192.168.1.154:8090/jellyfin).  Next, check Item Added, Playback Start, and Send All Properties.  Last, "Add Request Header" and add the Key: Content-Type Value: application/json<br><br>Click Save and you should be all set!
 
