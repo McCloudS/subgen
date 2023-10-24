@@ -6,6 +6,7 @@ import threading
 import sys
 import time
 import queue
+import logging
 
 # List of packages to install
 packages_to_install = [
@@ -40,6 +41,8 @@ def convert_to_bool(in_bool):
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', "token here")
 plexserver = os.getenv('PLEXSERVER', "http://192.168.1.111:32400")
+jellyfintoken = os.getenv('JELLYFINTOKEN', "token here")
+jellyfinserver = os.getenv('JELLYFINSERVER', "http://192.168.1.111:8096")
 whisper_model = os.getenv('WHISPER_MODEL', "medium")
 whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', '2'))
@@ -51,56 +54,94 @@ skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', "eng")
 webhookport = int(os.getenv('WEBHOOKPORT', 8090))
 word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
 debug = convert_to_bool(os.getenv('DEBUG', False))
-use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
+use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', True))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
+model_location = os.getenv('MODEL_PATH', '.')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
 
 app = Flask(__name__)
-model = stable_whisper.load_faster_whisper(whisper_model, download_root="/subgen", device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
+model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
 files_to_transcribe = set()
 subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
 print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
 print("Running " + str(whisper_threads) + " threads per transcription")
+if debug:
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 @app.route("/webhook", methods=["POST"])
-def receive_webhook():
-    if debug:
-        print("We got a hook, let's figure out where it came from!")
-    if request.headers.get("source") == "Tautulli":
-        payload = request.json
-        if debug:
-            print("This hook is from Tautulli!")
-    else:
-        payload = json.loads(request.form['payload'])
-    event = payload.get("event")
-    if debug:
-        print("event hook: " + str(payload))
-    if ((event == "library.new" or event == "added") and procaddedmedia) or ((event == "media.play" or event == "played") and procmediaonplay):
-        if event == "library.new" or event == "media.play": # these are the plex webhooks!
-            print("This hook is from Plex!")
-            if(debug):
-                print("Rating key is: " + payload['Metadata']['ratingKey'])
-            fullpath = get_file_name(payload['Metadata']['ratingKey'], plexserver, plextoken)
-        elif event == "added" or event == "played":
-            print("Tautulli webhook received!")
-            fullpath = payload.get("file")
-        else:
-            print("Didn't get a webhook we expected, discarding")
-            return ""
+def print_warning():
+    print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, or jellyfin instead of webhook. ***")
+    return ""
 
-        if debug:
-            print("Path of file: " + fullpath)
-            print("event: " + event)
-        if use_path_mapping:
-            fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
-            if debug:
-                print("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+@app.route("/tautulli", methods=["POST"])
+def receive_tautulli_webhook():
+    logging.debug("This hook is from Tautulli webhook!")
+    logging.debug("Headers: %s", request.headers)
+    logging.debug("Raw response: %s", request.data)
+    
+    if request.headers.get("Source") == "Tautulli":
+        event = request.json["event"]
+        if((event == "added" and procaddedmedia) or (event == "played" and procmediaonplay)):
+            fullpath = request.json["file"]
+            logging.debug("Path of file: " + fullpath)
         
-                
-        add_file_for_transcription(fullpath)
+            if use_path_mapping:
+                fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
+                logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
 
+            add_file_for_transcription(fullpath)
+    else:
+        print("This doesn't appear to be a properly configured Tautulli webhook, please review the instructions again!")
+    
+    return ""
+    
+@app.route("/plex", methods=["POST"])
+def receive_plex_webhook():
+    logging.debug("This hook is from Plex webhook!")
+    logging.debug("Headers: %s", request.headers)
+    logging.debug("Raw response: %s", json.loads(request.form['payload']))
+    
+    if "PlexMediaServer" in request.headers.get("User-Agent"):
+        plex_json = json.loads(request.form['payload'])
+        event = plex_json["event"]
+        if((event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay)):
+            fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
+            logging.debug("Path of file: " + fullpath)
+            
+            if use_path_mapping:
+                fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
+                logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+     
+            add_file_for_transcription(fullpath)
+    else:
+        print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
+     
+    return ""
+
+@app.route("/jellyfin", methods=["POST"])
+def receive_jellyfin_webhook():
+    logging.debug("This hook is from Jellyfin webhook!")
+    logging.debug("Headers: %s", request.headers)
+    logging.debug("Raw response: %s", request.data)
+    
+    if "Jellyfin-Server" in request.headers.get("User-Agent"):
+        print("in the jellyfin loop")
+        event = request.json["NotificationType"]
+        logging.debug(event)
+        if((event == "ItemAdded" and procaddedmedia) or (event == "PlaybackStart" and procmediaonplay)):
+            fullpath = get_jellyfin_file_name(request.json["ItemId"], jellyfinserver, jellyfintoken)
+            logging.debug("Path of file: " + fullpath)
+            
+            if use_path_mapping:
+                fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
+                logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+     
+            add_file_for_transcription(fullpath)
+    else:
+        print("This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!")
+     
     return ""
 
 def gen_subtitles(video_file_path: str) -> None:
@@ -161,7 +202,7 @@ def has_subtitle_language(video_file, target_language):
         print(f"An error occurred: {e}")
         return False
     
-def get_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
+def get_plex_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
     """Gets the full path to a file from the Plex server.
 
     Args:
@@ -185,6 +226,33 @@ def get_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
         root = ET.fromstring(response.content)
         fullpath = root.find(".//Part").attrib['file']
         return fullpath
+    else:
+        raise Exception(f"Error: {response.status_code}")
+
+def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str) -> str:
+    """Gets the full path to a file from the Jellyfin server.
+
+    Args:
+        jellyfin_url: The URL of the Jellyfin server.
+        jellyfin_token: The Jellyfin token.
+        item_id: The ID of the item in the Jellyfin library.
+
+    Returns:
+        The full path to the file.
+    """
+
+    headers = {
+        "Authorization": f"MediaBrowser Token={jellyfin_token}",
+    }
+
+    # This is super hacky to pull the first userid from this file to use to make the next call, API appears to fail using only Items/{item_id}
+    userid = json.loads(requests.get(f"{jellyfin_url}/Users", headers=headers).content)[0]['Id']
+    response = requests.get(f"{jellyfin_url}/Users/{userid}/Items/{item_id}", headers=headers)
+
+    if response.status_code == 200:
+        json_data = json.loads(response.content)
+        file_name = json_data['Path']
+        return file_name
     else:
         raise Exception(f"Error: {response.status_code}")
 
