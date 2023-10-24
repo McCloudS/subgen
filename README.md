@@ -88,7 +88,7 @@ First, you need to install the Jellyfin webhooks plugin.  Then you need to click
 
 You can define the port via environment variables, but the endpoints are static.
 
-The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER IF USING PLEX WEBHOOKS!
+The following environment variables are available in Docker.  They will default to the values listed below.
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | WHISPER_MODEL         | 'medium'        | this can be tiny, base, small, medium, large                                                                                                                                             |
