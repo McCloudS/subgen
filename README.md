@@ -91,25 +91,25 @@ You can define the port via environment variables, but the endpoints are static.
 The following environment variables are available in Docker.  They will default to the values listed below.
 | Variable              | Default Value | Description                                                                                                                                                                              |
 |-----------------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda".  You must be running a cuda dockerfile to use the cuda/gpu options without failing. |
 | WHISPER_MODEL         | 'medium'        | this can be tiny, base, small, medium, large                                                                                                                                             |
+| CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
 | WHISPER_THREADS       | 4             | number of threads to use during computation                                                                                                                                              |
+| MODEL_PATH | '.' | This is where the WHISPER_MODEL will be stored.  This defaults to placing it where you execute the script |
 | PROCADDEDMEDIA        | True          | will gen subtitles for all media added regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                           |
 | PROCMEDIAONPLAY       | True          | will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)                                                          |
 | NAMESUBLANG           | 'aa'            | allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex. |
 | SKIPIFINTERNALSUBLANG | 'eng'           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
+| WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
 | PLEXSERVER | 'http://plex:32400' | This needs to be set to your local plex server address/port |
 | PLEXTOKEN | 'token here' | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
 | JELLYFINSERVER | 'http://jellyfin:8096' | Set to your Jellyfin server address/port |
 | JELLYFINTOKEN | 'token here' | Generate a token inside the Jellyfin interface |
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
-| NEW OPTIONS AS OF 22 Oct 2023 | |
-| CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
-| TRANSCRIBE_DEVICE | 'cpu' | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda".  You must be running a cuda dockerfile to use the cuda/gpu options without failing. |
-| WORD_LEVEL_HIGHLIGHT | False | Highlights each words as it's spoken in the subtitle.  See example video @ https://github.com/jianfch/stable-ts |
-| DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 | USE_PATH_MAPPING | False | Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths.  Currently only support for one path replacement. Examples below. |
 | PATH_MAPPING_FROM | '/tv' | This is the path of my media relative to my Plex server |
 | PATH_MAPPING_TO | '/Volumes/TV' | This is the path of that same folder relative to my Mac Mini that will run the script |
+| DEBUG | False | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 
 ## Docker Configuration
 
