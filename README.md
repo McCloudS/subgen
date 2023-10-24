@@ -46,7 +46,7 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 
 ## Plex
 
-Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
+Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
 
 ## Tautulli
 
