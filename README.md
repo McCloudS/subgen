@@ -22,7 +22,7 @@ This is a project I've had running for a bit, then cleaned up for 'release' whil
 
 # What is this?
 
-This is a half-assed attempt of transcribing subtitles (.srt) from your personal media in a Plex server.  It is currently reliant on webhooks from Plex or Tautulli.  This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.  While CPUs obviously aren't super efficient at this, my server sits idle 99% of the time, so this worked great for me.  
+This will transcribe subtitles (.srt) from your personal media in a Plex or Jellyfin server.  It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli.  This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.  While CPUs obviously aren't super efficient at this, my server sits idle 99% of the time, so this worked great for me.  
 
 # Why?
 
@@ -30,7 +30,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # What can it do?
 
-* Create .srt subtitles when a SINGLE media file is added or played via Plex which triggers off of Plex or Tautulli webhooks. 
+* Create .srt subtitles when a SINGLE media file is added or played to Jellyfin or Plex which triggers off of Jellyfin, Plex, or Tautulli webhooks. 
 
 # How do I set it up?
 
@@ -46,7 +46,7 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 
 ## Plex
 
-Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/
+Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
 
 ## Tautulli
 
