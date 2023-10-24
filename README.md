@@ -16,10 +16,6 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 </details>
 
-Howdy all,
-
-This is a project I've had running for a bit, then cleaned up for 'release' while the kids were sleeping.  It's more of a POC, piece of crap, or a proof of concept.  This was also my first ever Python usage.
-
 # What is this?
 
 This will transcribe your personal media on a Plex or Jellyfin server to create subtitles (.srt). It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
