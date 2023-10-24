@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, mccloud/subgen:cpu, the other is for cuda/GPU: mccloud/subgen:cuda
+23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, mccloud/subgen:cpu, the other is for cuda/GPU: mccloud/subgen:cuda.  I also added Jellyfin support and considerable cleanup in the script. I also renamed the webhooks, so they will require new configuration/updates on your end. 
 
 22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below.  If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.
 
@@ -46,12 +46,12 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 
 ## Plex
 
-Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/webhook see: https://support.plex.tv/articles/115002267687-webhooks/
+Create a webhook in Plex that will call back to your subgen address, IE: 192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/
 
 ## Tautulli
 
 Create the webhooks in Tautulli with the following settings:
-Webhook URL: http://yourdockerip:8090/webhook
+Webhook URL: http://yourdockerip:8090/tautulli
 Webhook Method: Post
 Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
 Data: Under Playback Start, JSON Header will be:
@@ -80,10 +80,13 @@ Data:
             "mediatype":"{media_type}"
 }
 ```
+## 
+
+First, you need to install the Jellyfin webhooks plugin.  Then you need to click "Add Generic Destination", name it anything you want, webhook url is your subgen info (IE http://192.168.1.154:8090/jellyfin).  Next, check Item Added, Playback Start, and Send All Properties.  Last, "Add Request Header" and add the Key: Content-Type Value: application/json.
 
 ## Variables
 
-You can define the port via environment variables, but the endpoint "/webhook" is static.
+You can define the port via environment variables, but the endpoints are static.
 
 The following environment variables are available in Docker.  They will default to the values listed below.  YOU MUST DEFINE PLEXTOKEN AND PLEXSERVER IF USING PLEX WEBHOOKS!
 | Variable              | Default Value | Description                                                                                                                                                                              |
@@ -96,6 +99,8 @@ The following environment variables are available in Docker.  They will default 
 | SKIPIFINTERNALSUBLANG | 'eng'           | Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)                     |
 | PLEXSERVER | 'http://plex:32400' | This needs to be set to your local plex server address/port |
 | PLEXTOKEN | 'token here' | This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/ |
+| JELLYFINSERVER | 'http://jellyfin:8096' | Set to your Jellyfin server address/port |
+| JELLYFINTOKEN | 'token here' | Generate a token inside the Jellyfin interface |
 | WEBHOOKPORT | 8090 | Change this if you need a different port for your webhook |
 | NEW OPTIONS AS OF 22 Oct 2023 | |
 | CONCURRENT_TRANSCRIPTIONS | 2 | Number of files it will transcribe in parallel |
