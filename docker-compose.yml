@@ -1,6 +1,6 @@
 #docker-compose.yml
 version: '2'
-  
+services:
   subgen:
     container_name: subgen
     tty: true
