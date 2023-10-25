@@ -18,7 +18,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 # What is this?
 
-This will transcribe your personal media on a Plex or Jellyfin server to create subtitles (.srt). It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
+This will transcribe your personal media on a Plex or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe them into english. It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
 
 # Why?
 
@@ -144,6 +144,10 @@ Optimizations I can think of off hand:
 * Add an ability via a web-ui or something to generate subtitles for particular media files/folders.
 
 Will I update or maintain this?  Likely not.  I built this for my own use, and will fix and push issues that directly impact my own usage.  Unfortunately, I don't have the time or expertise to manage a project like this.  
+
+# Audio Languages Supported (via OpenAI)
+
+Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catalan, Chinese, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, Galician, German, Greek, Hebrew, Hindi, Hungarian, Icelandic, Indonesian, Italian, Japanese, Kannada, Kazakh, Korean, Latvian, Lithuanian, Macedonian, Malay, Marathi, Maori, Nepali, Norwegian, Persian, Polish, Portuguese, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish, Swahili, Swedish, Tagalog, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese, and Welsh.
 
 # Additional reading:
 
