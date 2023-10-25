@@ -15,7 +15,7 @@ services:
        - "PLEXTOKEN=plextoken"
        - "PLEXSERVER=http://plexserver:32400"
        - "JELYFINTOKEN=token here"
-       - "JELLYFINSERVER="http://jellyfin:8096"
+       - "JELLYFINSERVER=http://jellyfin:8096"
        - "WEBHOOKPORT=8090"
        - "CONCURRENT_TRANSCRIPTIONS=2"
        - "WORD_LEVEL_HIGHLIGHT=False"
