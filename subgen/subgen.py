@@ -310,6 +310,7 @@ def is_video_file(file_path):
         return False
 
 def transcribe_existing():
+    print("Starting to search folders to see if we need to create subtitles.")
     for path in transcribe_folders:
         for root, dirs, files in os.walk(path):
             for file in files:
@@ -317,7 +318,7 @@ def transcribe_existing():
                 if is_video_file(file_path):
                     threading.Thread(target=add_file_for_transcription, args=(file_path, False)).start()
                     
-    print("Finished queueing files for transcription")
+    print("Finished searching and queueing files for transcription")
                     
 if transcribe_folders:
     transcribe_folders = transcribe_folders.split(",")
