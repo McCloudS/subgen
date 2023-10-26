@@ -84,6 +84,7 @@ def receive_tautulli_webhook():
     
     if request.headers.get("Source") == "Tautulli":
         event = request.json["event"]
+        logging.debug("Event detected is: " + event)
         if((event == "added" and procaddedmedia) or (event == "played" and procmediaonplay)):
             fullpath = request.json["file"]
             logging.debug("Path of file: " + fullpath)
@@ -107,6 +108,7 @@ def receive_plex_webhook():
     if "PlexMediaServer" in request.headers.get("User-Agent"):
         plex_json = json.loads(request.form['payload'])
         event = plex_json["event"]
+        logging.debug("Event detected is: " + event)
         if((event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay)):
             fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.debug("Path of file: " + fullpath)
@@ -129,7 +131,7 @@ def receive_jellyfin_webhook():
     
     if "Jellyfin-Server" in request.headers.get("User-Agent"):
         event = request.json["NotificationType"]
-        logging.debug(event)
+        logging.debug("Event detected is: " + event)
         if((event == "ItemAdded" and procaddedmedia) or (event == "PlaybackStart" and procmediaonplay)):
             fullpath = get_jellyfin_file_name(request.json["ItemId"], jellyfinserver, jellyfintoken)
             logging.debug("Path of file: " + fullpath)
@@ -141,6 +143,32 @@ def receive_jellyfin_webhook():
             add_file_for_transcription(fullpath)
     else:
         print("This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!")
+     
+    return ""
+
+@app.route("/emby", methods=["POST"])
+def receive_emby_webhook():
+    logging.debug("This hook is from Emby webhook!")
+    logging.debug("Headers: %s", request.headers)
+    logging.debug("Raw response: %s", request.form)
+    
+    if "Emby Server" in request.headers.get("User-Agent"):
+        data = request.form.get('data')
+        if data:
+            data_dict = json.loads(data)
+            fullpath = data_dict.get('Item', {}).get('Path', '')
+            event = data_dict.get('Event', '')
+            logging.debug("Event detected is: " + event)
+            if((event == "library.new" and procaddedmedia) or (event == "playback.start" and procmediaonplay)):
+                logging.debug("Path of file: " + fullpath)
+                
+                if use_path_mapping:
+                    fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
+                    logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+     
+                add_file_for_transcription(fullpath)
+    else:
+        print("This doesn't appear to be a properly configured Emby webhook, please review the instructions again!")
      
     return ""
 
