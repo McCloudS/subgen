@@ -60,6 +60,7 @@ path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
+jellyfin_userid = ""
 
 app = Flask(__name__)
 model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
@@ -244,9 +245,17 @@ def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str)
         "Authorization": f"MediaBrowser Token={jellyfin_token}",
     }
 
-    # This is super hacky to pull the first userid from this file to use to make the next call, API appears to fail using only Items/{item_id}
-    userid = json.loads(requests.get(f"{jellyfin_url}/Users", headers=headers).content)[0]['Id']
-    response = requests.get(f"{jellyfin_url}/Users/{userid}/Items/{item_id}", headers=headers)
+    # Cheap way to get the admin user id, and save it for later use.
+    if not jellyfin_userid:
+        users_request = json.loads(requests.get(f"{jellyfin_url}/Users", headers=headers).content)
+        for user in users_request:
+            if user['Policy']['IsAdministrator']:
+                jellyfin_userid = user['Id']
+                break
+        if not jellyfin_userid:
+            raise Exception("Unable to find administrator user in Jellyfin")
+
+    response = requests.get(f"{jellyfin_url}/Users/{jellyfin_userid}/Items/{item_id}", headers=headers)
 
     if response.status_code == 200:
         json_data = json.loads(response.content)
