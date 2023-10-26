@@ -18,7 +18,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 # What is this?
 
-This will transcribe your personal media on a Plex or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe them into english. It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
+This will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe them into english. It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
 
 # Why?
 
@@ -43,6 +43,12 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 ## Plex
 
 Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
+
+## Emby
+
+All you need to do is create a webhook in Emby pointing to your subgen IE: http://192.168.154:8090/emby
+
+Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
 ## Tautulli
 
