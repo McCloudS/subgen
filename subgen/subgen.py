@@ -60,6 +60,7 @@ path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
+transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
 jellyfin_userid = ""
@@ -178,7 +179,7 @@ def gen_subtitles(video_file_path: str) -> None:
     try:
         print(f"Transcribing file: {video_file_path}")
         start_time = time.time()
-        result = model.transcribe_stable(video_file_path, task="translate")
+        result = model.transcribe_stable(video_file_path, task=transcribe_or_translate)
         result.to_srt_vtt(video_file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
