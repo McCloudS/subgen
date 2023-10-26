@@ -193,7 +193,7 @@ def add_file_for_transcription(file_path, front=True):
     if file_path not in files_to_transcribe:
         
         if has_subtitle_language(file_path, skipifinternalsublang):
-            print("File already has an internal sub we want, skipping generation")
+            logging.debug("File already has an internal sub we want, skipping generation")
             return "File already has an internal sub we want, skipping generation"
         elif os.path.exists(file_path.rsplit('.', 1)[0] + subextension):
             print("We already have a subgen created for this file, skipping it")
@@ -205,7 +205,8 @@ def add_file_for_transcription(file_path, front=True):
             files_to_transcribe.append(file_path)
         print(f"Added {file_path} for transcription.")
         # Start transcription for the file in a separate thread
-    
+
+        print(f"{len(files_to_transcribe)} files in the queue for transcription")
         gen_subtitles(file_path)
         
     else:
@@ -225,10 +226,10 @@ def has_subtitle_language(video_file, target_language):
                     break
 
         if subtitle_stream:
-            print(f"Subtitles in '{target_language}' language found in the video.")
+            logging.debug(f"Subtitles in '{target_language}' language found in the video.")
             return True
         else:
-            print(f"No subtitles in '{target_language}' language found in the video.")
+            logging.debug(f"No subtitles in '{target_language}' language found in the video.")
 
         container.close()
     except Exception as e:
@@ -298,6 +299,7 @@ def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str)
         raise Exception(f"Error: {response.status_code}")
 
 def is_video_file(file_path):
+    av.logging.set_level(av.logging.PANIC)
     try:
         container = av.open(file_path)
         for stream in container.streams:
@@ -313,12 +315,13 @@ def transcribe_existing():
             for file in files:
                 file_path = os.path.join(root, file)
                 if is_video_file(file_path):
-                    add_file_for_transcription(file_path, False)
+                    threading.Thread(target=add_file_for_transcription, args=(file_path, False)).start()
+                    
+    print("Finished queueing files for transcription")
                     
 if transcribe_folders:
     transcribe_folders = transcribe_folders.split(",")
-    transcription_thread = threading.Thread(target=transcribe_existing)
-    transcription_thread.start()
+    transcribe_existing()
 
 print("Starting webhook!")
 if __name__ == "__main__":
