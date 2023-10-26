@@ -178,7 +178,7 @@ def gen_subtitles(video_file_path: str) -> None:
     try:
         print(f"Transcribing file: {video_file_path}")
         start_time = time.time()
-        result = model.transcribe_stable(video_file_path)
+        result = model.transcribe_stable(video_file_path, task="translate")
         result.to_srt_vtt(video_file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
