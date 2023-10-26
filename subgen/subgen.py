@@ -7,6 +7,7 @@ import sys
 import time
 import queue
 import logging
+from array import array
 
 # List of packages to install
 packages_to_install = [
@@ -58,13 +59,14 @@ use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
+transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
 jellyfin_userid = ""
 
 app = Flask(__name__)
 model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
-files_to_transcribe = set()
+files_to_transcribe = []
 subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
 print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
 print("Running " + str(whisper_threads) + " threads per transcription")
@@ -187,7 +189,7 @@ def gen_subtitles(video_file_path: str) -> None:
         files_to_transcribe.remove(video_file_path)
 
 # Function to add a file for transcription
-def add_file_for_transcription(file_path):
+def add_file_for_transcription(file_path, front=True):
     if file_path not in files_to_transcribe:
         
         if has_subtitle_language(file_path, skipifinternalsublang):
@@ -197,7 +199,10 @@ def add_file_for_transcription(file_path):
             print("We already have a subgen created for this file, skipping it")
             return "We already have a subgen created for this file, skipping it"
             
-        files_to_transcribe.add(file_path)
+        if front:
+            files_to_transcribe.insert(0, file_path)
+        else:
+            files_to_transcribe.append(file_path)
         print(f"Added {file_path} for transcription.")
         # Start transcription for the file in a separate thread
     
@@ -291,6 +296,29 @@ def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str)
         return file_name
     else:
         raise Exception(f"Error: {response.status_code}")
+
+def is_video_file(file_path):
+    try:
+        container = av.open(file_path)
+        for stream in container.streams:
+            if stream.type == 'video':
+                return True
+        return False
+    except av.AVError:
+        return False
+
+def transcribe_existing():
+    for path in transcribe_folders:
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if is_video_file(file_path):
+                    add_file_for_transcription(file_path, False)
+                    
+if transcribe_folders:
+    transcribe_folders = transcribe_folders.split(",")
+    transcription_thread = threading.Thread(target=transcribe_existing)
+    transcription_thread.start()
 
 print("Starting webhook!")
 if __name__ == "__main__":
