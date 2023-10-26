@@ -280,6 +280,7 @@ def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str)
     }
 
     # Cheap way to get the admin user id, and save it for later use.
+    global jellyfin_userid
     if not jellyfin_userid:
         users_request = json.loads(requests.get(f"{jellyfin_url}/Users", headers=headers).content)
         for user in users_request:
