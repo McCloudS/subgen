@@ -20,7 +20,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 # What is this?
 
-This will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe them into english. It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
+This will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe them into english. It technically has support to transcribe from a foreign langauge to itself (IE Japanese > Japanese). It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
 
 # Why?
 
@@ -114,6 +114,7 @@ The following environment variables are available in Docker.  They will default 
 | PATH_MAPPING_FROM         | '/tv'                  | This is the path of my media relative to my Plex server                                                                                                                                                                                                                                   |
 | PATH_MAPPING_TO           | '/Volumes/TV'          | This is the path of that same folder relative to my Mac Mini that will run the script                                                                                                                                                                                                     |
 | TRANSCRIBE_FOLDERS        | ''                     | Takes a comma separated list (For example: /tv, /movies, /familyvideos) and iterates through and adds those files to be queued for subtitle generation if they don't have internal subtitles                                                                                              |
+| TRANSCRIBE_OR_TRANSLATE   | 'translate'            | Takes either 'transcribe' or 'translate'.  Transcribe will transcribe the audio in the same language as the input. Translate will transcribe and translate into English. | 
 | DEBUG                     | False                  | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 
 ## Docker Configuration
