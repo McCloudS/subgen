@@ -7,6 +7,7 @@ import sys
 import time
 import queue
 import logging
+import gc
 from array import array
 
 # List of packages to install
@@ -66,7 +67,7 @@ if transcribe_device == "gpu":
 jellyfin_userid = ""
 
 app = Flask(__name__)
-model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
+model = None
 files_to_transcribe = []
 subextension =  '.subgen.' + whisper_model + '.' + namesublang + '.srt'
 print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
@@ -179,6 +180,7 @@ def gen_subtitles(video_file_path: str) -> None:
     try:
         print(f"Transcribing file: {video_file_path}")
         start_time = time.time()
+        model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions)
         result = model.transcribe_stable(video_file_path, task=transcribe_or_translate)
         result.to_srt_vtt(video_file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
         elapsed_time = time.time() - start_time
@@ -188,6 +190,10 @@ def gen_subtitles(video_file_path: str) -> None:
         print(f"Error processing or transcribing {video_file_path}: {e}")
     finally:
         files_to_transcribe.remove(video_file_path)
+        if len(files_to_transcribe) == 0:
+            logging.debug("Queue is empty, clearing/releasing VRAM")
+            del model
+            gc.collect()
 
 # Function to add a file for transcription
 def add_file_for_transcription(file_path, front=True):
