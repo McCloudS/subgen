@@ -71,9 +71,9 @@ if transcribe_device == "gpu":
 app = FastAPI()
 model = None
 files_to_transcribe = []
-subextension =  f".subgen.{whisper_model}.{namesublang}.srt"
-print("Transcriptions are limited to running " + str(concurrent_transcriptions) + " at a time")
-print("Running " + str(whisper_threads) + " threads per transcription")
+subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
+print(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
+print(f"Running {str(whisper_threads)} threads per transcription")
 
 if debug:
     logging.basicConfig(stream=sys.stderr, level=logging.NOTSET)
@@ -219,7 +219,10 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
     finally:
         if len(files_to_transcribe) == 0:
             logging.debug("Queue is empty, clearing/releasing VRAM")
-            del model
+            try:
+                del model
+            except Exception as e:
+                None
             gc.collect()
 
 def has_subtitle_language(video_file, target_language):
@@ -345,4 +348,4 @@ if transcribe_folders:
 print("Starting webhook!")
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug)
+    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True)
