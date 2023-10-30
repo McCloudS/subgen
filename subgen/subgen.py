@@ -19,6 +19,7 @@ packages_to_install = [
     'requests',
     'faster-whisper',
     'uvicorn',
+    'python-multipart',
     # Add more packages as needed
 ]
 
