@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+31 Oct 2023: Added Bazarr support via Whipser provider.
+
 25 Oct 2023: Added Emby (IE http://192.168.1.111:8090/emby) support and TRANSCRIBE_FOLDERS, which will recurse through the provided folders and generate subtitles.  It's geared towards attempting to transcribe existing media without using a webhook.
 
 23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, mccloud/subgen:cpu, the other is for cuda/GPU: mccloud/subgen:cuda.  I also added Jellyfin support and considerable cleanup in the script. I also renamed the webhooks, so they will require new configuration/updates on your end. Instead of /webhook they are now /plex, /tautulli, and /jellyfin.
@@ -56,7 +58,7 @@ Emby was really nice and provides good information in their responses, so we don
 
 You only need to confiure the Whisper Provider as shown below: <br>
 ![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
-The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  I recomend not enabling this with other webhooks, or you will likely be generating duplicate subtitles.
 
 ## Tautulli
 
