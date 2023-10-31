@@ -52,6 +52,12 @@ All you need to do is create a webhook in Emby pointing to your subgen IE: http:
 
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
+## Bazarr
+
+You only need to confiure the Whisper Provider as shown below: <br>
+![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png)
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090)
+
 ## Tautulli
 
 Create the webhooks in Tautulli with the following settings:
