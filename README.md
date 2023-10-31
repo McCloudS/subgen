@@ -55,8 +55,8 @@ Emby was really nice and provides good information in their responses, so we don
 ## Bazarr
 
 You only need to confiure the Whisper Provider as shown below: <br>
-![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png)
-The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090)
+![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.
 
 ## Tautulli
 
