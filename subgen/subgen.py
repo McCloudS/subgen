@@ -26,6 +26,14 @@ packages_to_install = [
     # Add more packages as needed
 ]
 
+for package in packages_to_install:
+    print(f"Installing {package}...")
+    try:
+        subprocess.run(['pip3', 'install', package], check=True)
+        print(f"{package} has been successfully installed.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install {package}: {e}")
+
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
 from fastapi.responses import StreamingResponse, RedirectResponse
 import numpy as np
