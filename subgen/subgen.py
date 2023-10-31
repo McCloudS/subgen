@@ -226,7 +226,7 @@ def delete_model():
     if len(files_to_transcribe) == 0:
         global model
         logging.debug("Queue is empty, clearing/releasing VRAM")
-        del model
+        model = None
         gc.collect()
 
 def get_lang_pair(whisper_languages, key):
