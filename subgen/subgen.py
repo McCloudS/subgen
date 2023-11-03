@@ -88,12 +88,12 @@ else:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
 @app.post("/webhook")
-def print_warning():
+async def print_warning():
     print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, or jellyfin instead of webhook. ***")
     return ""
 
 @app.post("/tautulli")
-def receive_tautulli_webhook(
+async def receive_tautulli_webhook(
     source: Union[str, None] = Header(None), 
     event: str = Body(None),
     file: str = Body(None),
@@ -112,7 +112,7 @@ def receive_tautulli_webhook(
     return ""
     
 @app.post("/plex")
-def receive_plex_webhook(
+async def receive_plex_webhook(
     user_agent: Union[str, None] = Header(None), 
     payload: Union[str, None] = Form(),
     ):
@@ -133,7 +133,7 @@ def receive_plex_webhook(
     return ""
 
 @app.post("/jellyfin")
-def receive_jellyfin_webhook(
+async def receive_jellyfin_webhook(
     user_agent: Union[str, None] = Header(None), 
     NotificationType: str = Body(None),
     file: str = Body(None),
@@ -154,7 +154,7 @@ def receive_jellyfin_webhook(
     return ""
 
 @app.post("/emby")
-def receive_emby_webhook(
+async def receive_emby_webhook(
     user_agent: Union[str, None] = Header(None), 
     data: Union[str, None] = Form(None),
     ):
@@ -176,7 +176,7 @@ def receive_emby_webhook(
     return ""
 
 @app.post("/asr")
-async def asr(
+async async def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
         language: Union[str, None] = Query(default=None),
         initial_prompt: Union[str, None] = Query(default=None),  #not used by Bazarr
@@ -209,7 +209,7 @@ async def asr(
         })
 
 @app.post("/detect-language")
-async def detect_language(
+async async def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
