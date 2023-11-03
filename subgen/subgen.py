@@ -93,7 +93,7 @@ async def print_warning():
     return ""
 
 @app.post("/tautulli")
-async def receive_tautulli_webhook(
+def receive_tautulli_webhook(
     source: Union[str, None] = Header(None), 
     event: str = Body(None),
     file: str = Body(None),
@@ -112,7 +112,7 @@ async def receive_tautulli_webhook(
     return ""
     
 @app.post("/plex")
-async def receive_plex_webhook(
+def receive_plex_webhook(
     user_agent: Union[str, None] = Header(None), 
     payload: Union[str, None] = Form(),
     ):
@@ -133,7 +133,7 @@ async def receive_plex_webhook(
     return ""
 
 @app.post("/jellyfin")
-async def receive_jellyfin_webhook(
+def receive_jellyfin_webhook(
     user_agent: Union[str, None] = Header(None), 
     NotificationType: str = Body(None),
     file: str = Body(None),
@@ -154,7 +154,7 @@ async def receive_jellyfin_webhook(
     return ""
 
 @app.post("/emby")
-async def receive_emby_webhook(
+def receive_emby_webhook(
     user_agent: Union[str, None] = Header(None), 
     data: Union[str, None] = Form(None),
     ):
@@ -176,7 +176,7 @@ async def receive_emby_webhook(
     return ""
 
 @app.post("/asr")
-async async def asr(
+def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
         language: Union[str, None] = Query(default=None),
         initial_prompt: Union[str, None] = Query(default=None),  #not used by Bazarr
@@ -209,7 +209,7 @@ async async def asr(
         })
 
 @app.post("/detect-language")
-async async def detect_language(
+def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
