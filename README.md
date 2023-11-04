@@ -123,6 +123,7 @@ The following environment variables are available in Docker.  They will default 
 | PATH_MAPPING_TO           | '/Volumes/TV'          | This is the path of that same folder relative to my Mac Mini that will run the script                                                                                                                                                                                                     |
 | TRANSCRIBE_FOLDERS        | ''                     | Takes a comma separated list (For example: /tv, /movies, /familyvideos) and iterates through and adds those files to be queued for subtitle generation if they don't have internal subtitles                                                                                              |
 | TRANSCRIBE_OR_TRANSLATE   | 'translate'            | Takes either 'transcribe' or 'translate'.  Transcribe will transcribe the audio in the same language as the input. Translate will transcribe and translate into English. | 
+| COMPUTE_TYPE | 'auto' | Set compute-type using the following information: https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md |
 | DEBUG                     | False                  | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 
 ## Docker Configuration
