@@ -300,7 +300,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             print(f"File {os.path.basename(file_path)} is already in the transcription list. Skipping.")
 
     except Exception as e:
-        print(f"Error processing or transcribing {video_file_path}: {e}")
+        print(f"Error processing or transcribing {file_path}: {e}")
     finally:
         delete_model()
 
