@@ -180,5 +180,5 @@ Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catala
 * Google
 * ffmpeg
 * https://github.com/jianfch/stable-ts
-* https://github.com/guillaumekln/faster-whisper
+*  https://github.com/guillaumekln/faster-whisper
 * Whipser ASR Webservice (https://github.com/ahmetoner/whisper-asr-webservice) for how to implement Bazarr webhooks.
