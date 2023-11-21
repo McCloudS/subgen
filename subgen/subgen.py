@@ -175,7 +175,7 @@ def receive_emby_webhook(
         print("This doesn't appear to be a properly configured Emby webhook, please review the instructions again!")
      
     return ""
-
+# idea and some code for asr and detect language from https://github.com/ahmetoner/whisper-asr-webservice
 @app.post("/asr")
 def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
