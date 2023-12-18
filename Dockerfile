@@ -8,6 +8,6 @@ ENV PYTHONUNBUFFERED 1
 
 ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
 
-CMD [ "python3", "-u", "subgen/subgen.py" ]
+CMD [ "python3", "-u", "./subgen.py" ]
 
 EXPOSE 8090
