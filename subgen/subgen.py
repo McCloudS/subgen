@@ -129,10 +129,10 @@ def receive_plex_webhook(
      
             gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
             try:
-                refresh_plex_metadata(item_id, plexserver, plextoken)
-                logging.info(f"Metadata for item {item_id} refreshed successfully.")
+                refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
+                logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
             except Exception as e:
-                logging.error(f"Failed to refresh metadata for item {item_id}: {e}")
+                logging.error(f"Failed to refresh metadata for item {plex_json['Metadata']['ratingKey']}: {e}")
             else:
                 print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
      
