@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-19 Dec 2023: Added the ability for Plex to automatically update meta data so the subtitles shows up properly on playback. (See https://github.com/McCloudS/subgen/pull/33 from Rikiar73574)  
+19 Dec 2023: Added the ability for Plex and Jellyfin to automatically update metadata so the subtitles shows up properly on playback. (See https://github.com/McCloudS/subgen/pull/33 from Rikiar73574)  
 
 31 Oct 2023: Added Bazarr support via Whipser provider.
 
