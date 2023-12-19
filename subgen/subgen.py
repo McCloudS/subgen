@@ -154,6 +154,11 @@ def receive_jellyfin_webhook(
             logging.debug(f"Path of file: {fullpath}")
      
             gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            try:
+                refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
+                logging.info(f"Metadata for item {ItemId} refreshed successfully.")
+            except Exception as e:
+                logging.error(f"Failed to refresh metadata for item {ItemId}: {e}")
     else:
         print("This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!")
      
@@ -387,6 +392,42 @@ def refresh_plex_metadata(itemid: str, server_ip: str, plex_token: str) -> None:
     # Check if the request was successful
     if response.status_code == 200:
         print("Metadata refresh initiated successfully.")
+    else:
+        raise Exception(f"Error refreshing metadata: {response.status_code}")
+
+def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) -> None:
+    """
+    Refreshes the metadata of a Jellyfin library item.
+    
+    Args:
+        itemid: The ID of the item in the Jellyfin library whose metadata needs to be refreshed.
+        server_ip: The IP address of the Jellyfin server.
+        jellyfin_token: The Jellyfin token used for authentication.
+        
+    Raises:
+        Exception: If the server does not respond with a successful status code.
+    """
+
+    # Jellyfin API endpoint to refresh metadata for a specific item
+    url = f"{server_ip}/library/metadata/{itemid}/refresh"
+
+    # Headers to include the Jellyfin token for authentication
+    headers = {
+        "Authorization": f"MediaBrowser Token={jellyfin_token}",
+    }
+
+    # Cheap way to get the admin user id, and save it for later use.
+    users = json.loads(requests.get(f"{server_ip}/Users", headers=headers).content)
+    jellyfin_admin = get_jellyfin_admin(users)
+
+    response = requests.get(f"{server_ip}/Users/{jellyfin_admin}/Items/{item_id}/Refresh", headers=headers)
+
+    # Sending the PUT request to refresh metadata
+    response = requests.post(url, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 204:
+        print("Metadata refresh queued successfully.")
     else:
         raise Exception(f"Error refreshing metadata: {response.status_code}")
 
