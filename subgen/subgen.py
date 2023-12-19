@@ -133,8 +133,8 @@ def receive_plex_webhook(
                 logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
             except Exception as e:
                 logging.error(f"Failed to refresh metadata for item {plex_json['Metadata']['ratingKey']}: {e}")
-        else:
-            print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
+    else:
+        print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
      
     return ""
 
