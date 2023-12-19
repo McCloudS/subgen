@@ -133,8 +133,8 @@ def receive_plex_webhook(
                 logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
             except Exception as e:
                 logging.error(f"Failed to refresh metadata for item {plex_json['Metadata']['ratingKey']}: {e}")
-            else:
-                print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
+        else:
+            print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
      
     return ""
 
@@ -374,7 +374,7 @@ def refresh_plex_metadata(itemid: str, server_ip: str, plex_token: str) -> None:
     """
 
     # Plex API endpoint to refresh metadata for a specific item
-    url = f"http://{server_ip}:32400/library/metadata/{itemid}/refresh"
+    url = f"{server_ip}/library/metadata/{itemid}/refresh"
 
     # Headers to include the Plex token for authentication
     headers = {
