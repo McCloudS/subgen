@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+19 Dec 2023: Added the ability for Plex to automatically update meta data so the subtitles shows up properly on playback. (See https://github.com/McCloudS/subgen/pull/33 from Rikiar73574)  
+
 31 Oct 2023: Added Bazarr support via Whipser provider.
 
 25 Oct 2023: Added Emby (IE http://192.168.1.111:8090/emby) support and TRANSCRIBE_FOLDERS, which will recurse through the provided folders and generate subtitles.  It's geared towards attempting to transcribe existing media without using a webhook.
