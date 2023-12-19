@@ -128,6 +128,11 @@ def receive_plex_webhook(
             logging.debug("Path of file: " + fullpath)
      
             gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            try:
+                refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
+                logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
+            except Exception as e:
+                logging.error(f"Failed to refresh metadata for item {plex_json['Metadata']['ratingKey']}: {e}")
     else:
         print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
      
@@ -354,6 +359,37 @@ def get_plex_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
         return fullpath
     else:
         raise Exception(f"Error: {response.status_code}")
+
+def refresh_plex_metadata(itemid: str, server_ip: str, plex_token: str) -> None:
+    """
+    Refreshes the metadata of a Plex library item.
+    
+    Args:
+        itemid: The ID of the item in the Plex library whose metadata needs to be refreshed.
+        server_ip: The IP address of the Plex server.
+        plex_token: The Plex token used for authentication.
+        
+    Raises:
+        Exception: If the server does not respond with a successful status code.
+    """
+
+    # Plex API endpoint to refresh metadata for a specific item
+    url = f"{server_ip}/library/metadata/{itemid}/refresh"
+
+    # Headers to include the Plex token for authentication
+    headers = {
+        "X-Plex-Token": plex_token,
+    }
+
+    # Sending the PUT request to refresh metadata
+    response = requests.put(url, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        print("Metadata refresh initiated successfully.")
+    else:
+        raise Exception(f"Error refreshing metadata: {response.status_code}")
+
 
 def get_jellyfin_file_name(item_id: str, jellyfin_url: str, jellyfin_token: str) -> str:
     """Gets the full path to a file from the Jellyfin server.
