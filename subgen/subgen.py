@@ -88,6 +88,15 @@ if debug:
 else:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
+@app.get("/plex")
+@app.get("/webhook")
+@app.get("/jellyfin")
+@app.get("/asr")
+@app.get("/emby")
+@app.get("/detect-language")
+def handle_get_request(request: Request):
+    return "You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"
+
 @app.post("/webhook")
 async def print_warning():
     print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, or jellyfin instead of webhook. ***")
