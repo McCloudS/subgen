@@ -1,5 +1,6 @@
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
+VOLUME /subgen
 WORKDIR /subgen
 
 RUN apt-get update && apt-get -y install python3 python3-pip ffmpeg
