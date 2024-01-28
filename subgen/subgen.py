@@ -18,7 +18,7 @@ import numpy as np
 import stable_whisper
 import requests
 import av
-import ffmpeg-python
+import ffmpeg
 import whisper
 
 def convert_to_bool(in_bool):
