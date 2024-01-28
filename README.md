@@ -42,7 +42,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and execute the script and `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+install python3 and ffmpeg and execute the script and `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
 
 ### Docker
 
@@ -148,7 +148,7 @@ They are functionally identical, except the cuda variant has all the necessary d
 
 The script was re-developed without using Docker, so it will work just fine as long as you have the dependencies installed.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 <br><br>
-The only thing that should needed is `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart whisper` in weird installations, you may need to install ffmpeg via your OS package manager.
+The only thing that should needed is `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper` in weird installations, you may need to install ffmpeg via your OS package manager.
 
 # What are the limitations/problems?
 
