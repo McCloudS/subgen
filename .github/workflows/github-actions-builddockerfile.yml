@@ -23,12 +23,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: mccloud/subgen:latest, mccloud/subgen:cpu
-      -
-        name: Build and push cuda
-        uses: docker/build-push-action@v5
-        with:
-          file: ./Dockerfile.cuda
-          push: true
-          tags: mccloud/subgen:cuda, mccloud/subgen:gpu
+          tags: mccloud/subgen:latest
        
