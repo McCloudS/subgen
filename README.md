@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+28 Jan 2024: Fixed issue with ffmpeg python module not importing correctly.  Removed separate GPU/CPU containers.  Also removed the script from installing packages, which should help with odd updates I can't control (from other packages/modules). The image is a couple gigabytes larger, but allows easier maintenance.  
+
 19 Dec 2023: Added the ability for Plex and Jellyfin to automatically update metadata so the subtitles shows up properly on playback. (See https://github.com/McCloudS/subgen/pull/33 from Rikiar73574)  
 
 31 Oct 2023: Added Bazarr support via Whipser provider.
@@ -40,7 +42,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and execute the script, the script should handle the rest of the dependancies, but if not `pip3 install numpy requests flask faster-whisper stable-ts`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+install python3 and ffmpeg and execute the script and `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
 
 ### Docker
 
@@ -146,7 +148,7 @@ They are functionally identical, except the cuda variant has all the necessary d
 
 The script was re-developed without using Docker, so it will work just fine as long as you have the dependencies installed.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
 <br><br>
-The only thing that should needed is `pip3 install numpy requests flask faster-whisper stable-ts` in weird installations, you may need to install ffmpeg via your OS package manager.
+The only thing that should needed is `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart whisper` in weird installations, you may need to install ffmpeg via your OS package manager.
 
 # What are the limitations/problems?
 
