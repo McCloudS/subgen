@@ -293,13 +293,13 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
             print(f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
-            files_to_transcribe.remove(file_path)
         else:
             print(f"File {os.path.basename(file_path)} is already in the transcription list. Skipping.")
 
     except Exception as e:
         print(f"Error processing or transcribing {file_path}: {e}")
     finally:
+        files_to_transcribe.remove(file_path)
         delete_model()
 
 def has_subtitle_language(video_file, target_language):
