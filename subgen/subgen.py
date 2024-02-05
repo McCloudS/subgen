@@ -478,9 +478,10 @@ def transcribe_existing():
     for path in transcribe_folders:
         logging.debug(path)
         for root, dirs, files in os.walk(path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+            if files:
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
                     
     print("Finished searching and queueing files for transcription")
                     
