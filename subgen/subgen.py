@@ -480,8 +480,7 @@ def transcribe_existing():
         for root, dirs, files in os.walk(path):
             for file in files:
                 file_path = os.path.join(root, file)
-                if is_video_file(file_path):
-                    gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+                gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
                     
     print("Finished searching and queueing files for transcription")
                     
