@@ -272,7 +272,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             if has_subtitle_language(file_path, skipifinternalsublang):
                 logging.debug(f"{file_path} already has an internal sub we want, skipping generation")
                 return f"{file_path} already has an internal sub we want, skipping generation"
-            elif os.path.exists(file_path.rsplit('.', 1)[0] + subextension):
+            elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
                 print(f"{file_path} already has a subgen created for this, skipping it")
                 return f"{file_path} already has a subgen created for this, skipping it"
                 
@@ -289,7 +289,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             start_model()
             
             result = model.transcribe_stable(file_path, task=transcribe_or_translate_str)
-            result.to_srt_vtt(file_path.rsplit('.', 1)[0] + subextension, word_level=word_level_highlight)
+            result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
             print(f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
@@ -301,6 +301,10 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
     finally:
         files_to_transcribe.remove(file_path)
         delete_model()
+
+def get_file_name_without_extension(file_path):
+    file_name, file_extension = os.path.splitext(file_path)
+    return file_name
 
 def has_subtitle_language(video_file, target_language):
     try:
