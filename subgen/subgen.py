@@ -53,6 +53,7 @@ transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
+transcribe_folders = transcribe_folders.split("|")
 
 app = FastAPI()
 model = None
@@ -485,7 +486,6 @@ def transcribe_existing():
     print("Finished searching and queueing files for transcription")
                     
 if transcribe_folders:
-    transcribe_folders = transcribe_folders.split("|")
     transcribe_existing()
 
 whisper_languages = {
