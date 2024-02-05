@@ -470,8 +470,8 @@ def is_video_file(file_path):
 
 def path_mapping(fullpath):
     if use_path_mapping:
-        fullpath = fullpath.replace(path_mapping_from, path_mapping_to)
         logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
+        return fullpath.replace(path_mapping_from, path_mapping_to)
     return fullpath
 
 def transcribe_existing():
@@ -591,7 +591,8 @@ whisper_languages = {
     "su": "sundanese",
 }
 
-print("Starting webhook!")
+
 if __name__ == "__main__":
     import uvicorn
+    print("Starting Subgen with listening webhooks!")
     uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True)
