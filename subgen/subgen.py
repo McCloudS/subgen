@@ -485,7 +485,7 @@ def transcribe_existing():
     print("Finished searching and queueing files for transcription")
                     
 if transcribe_folders:
-    transcribe_folders = transcribe_folders.split(",")
+    transcribe_folders = transcribe_folders.split("|")
     transcribe_existing()
 
 whisper_languages = {
