@@ -42,11 +42,17 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and execute the script and `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
 
 ### Docker
 
 The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen).  The dockerfile variants are listed further below.
+
+You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
+
+`"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model. This volume isn't necessary, just a nicety.  If you map this volume, you will have to likely manually place subgen.py and update it yourself, so it is not recomended unless you are doing dev work.
+
+If you want to use a GPU, you need to map it accordingly.  
 
 ## Plex
 
@@ -130,44 +136,26 @@ The following environment variables are available in Docker.  They will default 
 | COMPUTE_TYPE | 'auto' | Set compute-type using the following information: https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md |
 | DEBUG                     | False                  | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 
-## Docker Configuration
-
-You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
-
-`"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model. This volume isn't necessary, just a nicety.  If you map this volume, you will have to likely manually place subgen.py and update it yourself, so it is not recomended unless you are doing dev work.
-
-If you want to use a GPU, you need to map it accordingly.  
-
 ### Images:
 mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
 ~~mccloud/subgen:cuda is for GPU support~~
 <br><br>
 There is now only a single image being maintained, the image has everything necessary to do both CPU and GPU.
 
-## Running without Docker
-
-The script was re-developed without using Docker, so it will work just fine as long as you have the dependencies installed.  You can either set the variables as environment variables in your CLI or edit the script manually at the top.  As mentioned above, your paths still have to match Plex. 
-<br><br>
-The only thing that should needed is `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper` in weird installations, you may need to install ffmpeg via your OS package manager.
-
 # What are the limitations/problems?
 
-* If Plex adds multiple shows (like a season pack), it may fail to process subtitles.  It is reliant on a SINGLE file to accurately work now.
-* Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  (**This is mostly fixed now using stable-ts!**)
+* If Plex adds multiple shows (like a season pack), it may fail to process subtitles.
+* Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  (**This is appears mostly fixed now using stable-ts!**)
 * I made it and know nothing about formal deployment for python coding.  
-* It's using trained AI models to transcribe, so it WILL mess up...but we find the transcription goofs amusing.  
+* It's using trained AI models to transcribe, so it WILL mess up
 
 # What's next?  
 
 I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazarr.  Bazarr tracks failed subtitle downloads, I originally wanted to utilize its API, but decided on my current solution for simplicity.  
 
-Optimizations I can think of off hand:
-* Fix processing for when adding multiple files
-* Whisper has the ability to translate a good chunk of languages into english.  I didn't explore this.  I'm not sure what this looks like with bi-lingual shows like Acapulco.  
-* Add an ability via a web-ui or something to generate subtitles for particular media files/folders.
-
-Will I update or maintain this?  Likely not.  I built this for my own use, and will fix and push issues that directly impact my own usage.  Unfortunately, I don't have the time or expertise to manage a project like this.  
-
+Optimizations I can think of off hand:  
+* Add an ability via a web-ui or something to generate subtitles for particular media files/folders. (**No GUI planned, but TRANSCRIBE_FOLDERS can do this**)
+  
 # Audio Languages Supported (via OpenAI)
 
 Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catalan, Chinese, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, Galician, German, Greek, Hebrew, Hindi, Hungarian, Icelandic, Indonesian, Italian, Japanese, Kannada, Kazakh, Korean, Latvian, Lithuanian, Macedonian, Malay, Marathi, Maori, Nepali, Norwegian, Persian, Polish, Portuguese, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish, Swahili, Swedish, Tagalog, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese, and Welsh.
@@ -184,5 +172,5 @@ Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catala
 * Google
 * ffmpeg
 * https://github.com/jianfch/stable-ts
-*  https://github.com/guillaumekln/faster-whisper
+* https://github.com/guillaumekln/faster-whisper
 * Whipser ASR Webservice (https://github.com/ahmetoner/whisper-asr-webservice) for how to implement Bazarr webhooks.
