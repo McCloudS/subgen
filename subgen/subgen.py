@@ -9,9 +9,7 @@ import queue
 import logging
 import gc
 import io
-from array import array
 from typing import BinaryIO, Union, Any
-import random
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
 from fastapi.responses import StreamingResponse, RedirectResponse
 import numpy as np
