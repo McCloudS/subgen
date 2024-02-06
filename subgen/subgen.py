@@ -262,7 +262,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
     
     try:
         if not is_video_file(file_path):
-            print(f"{file_path} isn't a video file!")
+            logging.debug(f"{file_path} isn't a video file!")
             return None
             
         if file_path not in files_to_transcribe:
