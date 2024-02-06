@@ -51,7 +51,6 @@ transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
-transcribe_folders = transcribe_folders.split("|")
 
 app = FastAPI()
 model = None
@@ -476,6 +475,7 @@ def path_mapping(fullpath):
     return fullpath
 
 def transcribe_existing():
+    transcribe_folders = transcribe_folders.split("|")
     print("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
     for path in transcribe_folders:
