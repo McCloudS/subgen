@@ -297,7 +297,8 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
     except Exception as e:
         print(f"Error processing or transcribing {file_path}: {e}")
     finally:
-        files_to_transcribe.remove(file_path)
+        if file_path in files_to_transcribe:
+            files_to_transcribe.remove(file_path)
         delete_model()
 
 def get_file_name_without_extension(file_path):
