@@ -15,6 +15,13 @@ jobs:
     steps:
       - name: Delete huge unnecessary tools folder
         run: rm -rf /opt/hostedtoolcache
+      - name: free disk space
+        run: | 
+          sudo swapoff -a
+          sudo rm -f /swapfile
+          sudo apt clean
+          docker rmi $(docker image ls -aq)
+          df -h
       - name: Setup Docker buildx
         uses: docker/setup-buildx-action@v2
       -
