@@ -475,6 +475,7 @@ def path_mapping(fullpath):
     return fullpath
 
 def transcribe_existing():
+    global transcribe_folders
     transcribe_folders = transcribe_folders.split("|")
     print("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
