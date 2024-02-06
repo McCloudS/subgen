@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+5 Feb 2024: General housekeeping, minor tweaks on the TRANSCRIBE_FOLDERS function.  Added a GHCR repo in addition to Dockerhub.
+
 28 Jan 2024: Fixed issue with ffmpeg python module not importing correctly.  Removed separate GPU/CPU containers.  Also removed the script from installing packages, which should help with odd updates I can't control (from other packages/modules). The image is a couple gigabytes larger, but allows easier maintenance.  
 
 19 Dec 2023: Added the ability for Plex and Jellyfin to automatically update metadata so the subtitles shows up properly on playback. (See https://github.com/McCloudS/subgen/pull/33 from Rikiar73574)  
