@@ -46,7 +46,7 @@ install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi request
 
 ### Docker
 
-The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen).  The dockerfile variants are listed further below.
+The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen) and GHCR (ghcr.io/mcclouds/subgen:latest). 
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
