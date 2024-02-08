@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-8 Feb 2024: Added FORCE_DETECTED_LANGUAGE_TO to force a wrongly detected language.
+8 Feb 2024: Added FORCE_DETECTED_LANGUAGE_TO to force a wrongly detected language.  Fixed asr to actually use the language passed to it.  
 
 5 Feb 2024: General housekeeping, minor tweaks on the TRANSCRIBE_FOLDERS function.  Added a GHCR repo in addition to Dockerhub.
 
