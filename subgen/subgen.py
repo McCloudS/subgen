@@ -49,6 +49,7 @@ path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
+force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -285,8 +286,11 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             print(f"Transcribing file: {os.path.basename(file_path)}")
             start_time = time.time()
             start_model()
-            
-            result = model.transcribe_stable(file_path, task=transcribe_or_translate_str)
+
+            if(force_detected_language_to):
+                result = model.transcribe_stable(file_path, language=force_detected_language_to, task=transcribe_or_translate_str)
+            else:
+                result = model.transcribe_stable(file_path, task=transcribe_or_translate_str)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
