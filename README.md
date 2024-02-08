@@ -137,6 +137,7 @@ The following environment variables are available in Docker.  They will default 
 | TRANSCRIBE_OR_TRANSLATE   | 'translate'            | Takes either 'transcribe' or 'translate'.  Transcribe will transcribe the audio in the same language as the input. Translate will transcribe and translate into English. | 
 | COMPUTE_TYPE | 'auto' | Set compute-type using the following information: https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md |
 | DEBUG                     | False                  | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
+| FORCE_DETECTED_LANGUAGE_TO | '' | This is to force the model to a language instead of the detected one, takes a 2 letter language code.  For example, your audio is French but keeps detecting as English, you would set it to 'fr' |
 
 ### Images:
 mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
