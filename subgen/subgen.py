@@ -191,7 +191,7 @@ def asr(
         #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
         files_to_transcribe.insert(0, f"Bazarr-detect-langauge-{random_name}")
-        result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000)
+        result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
         print(f"Bazarr transcription is completed, it took {minutes} minutes and {seconds} seconds to complete.")
