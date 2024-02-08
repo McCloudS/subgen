@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+8 Feb 2024: Added FORCE_DETECTED_LANGUAGE_TO to force a wrongly detected language.
+
 5 Feb 2024: General housekeeping, minor tweaks on the TRANSCRIBE_FOLDERS function.  Added a GHCR repo in addition to Dockerhub.
 
 28 Jan 2024: Fixed issue with ffmpeg python module not importing correctly.  Removed separate GPU/CPU containers.  Also removed the script from installing packages, which should help with odd updates I can't control (from other packages/modules). The image is a couple gigabytes larger, but allows easier maintenance.  
