@@ -272,7 +272,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
                 logging.debug(f"{file_path} already has an internal sub we want, skipping generation")
                 return f"{file_path} already has an internal sub we want, skipping generation"
             elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
-                print(f"{file_path} already has a subgen created for this, skipping it")
+                logging.debug(f"{file_path} already has a subgen created for this, skipping it")
                 return f"{file_path} already has a subgen created for this, skipping it"
                 
             if front:
@@ -288,6 +288,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True) 
             start_model()
 
             if(force_detected_language_to):
+                logging.debug(f"Forcing detected audio language to {force_detected_language_to}")
                 result = model.transcribe_stable(file_path, language=force_detected_language_to, task=transcribe_or_translate_str)
             else:
                 result = model.transcribe_stable(file_path, task=transcribe_or_translate_str)
