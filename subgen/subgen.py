@@ -51,7 +51,7 @@ transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
 force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
 hf_transformers = os.getenv('HF_TRANSFORMERS', False)
-hf_batch_size = os.getenv('HF_BATCH_SIZE', 24)
+hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = os.getenv('CLEAR_VRAM_ON_COMPLETE', True)
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 if transcribe_device == "gpu":
@@ -239,7 +239,10 @@ def detect_language(
         start_model()
 
         files_to_transcribe.insert(0, f"Bazarr-detect-langauge-{random_name}")
-        detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000).language
+        if(hf_transformers):
+            detected_lang_code = model.transcribe(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000, batch_size=hf_batch_size).language
+        else:
+            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000).language
             
     except Exception as e:
         print(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
