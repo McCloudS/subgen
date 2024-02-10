@@ -49,7 +49,7 @@ path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
-force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', None)
+force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
 hf_transformers = os.getenv('HF_TRANSFORMERS', False)
 hf_batch_size = os.getenv('HF_BATCH_SIZE', 24)
 clear_vram_on_complete = os.getenv('CLEAR_VRAM_ON_COMPLETE', True)
@@ -259,7 +259,7 @@ def start_model():
     if model is None:
         logging.debug("Model was purged, need to re-create")
         if(hf_transformers):
-            logging.debug("Use Hugging Face Transformers, whisper_threads, concurrent_transcriptions, and model_location variables are ignored!")
+            logging.debug("Using Hugging Face Transformers, whisper_threads, concurrent_transcriptions, and model_location variables are ignored!")
             model = stable_whisper.load_hf_whisper(whisper_model, device=transcribe_device)
         else:
             model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
@@ -290,7 +290,7 @@ def get_lang_pair(whisper_languages, key):
   else:
     return whisper_languages[other_side]
 
-def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True, forceLanguage=force_detected_language_to) -> None:
+def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forceLanguage=None) -> None:
     """Generates subtitles for a video file.
 
     Args:
@@ -300,8 +300,8 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True, 
     """
     
     try:
-        if not is_video_file(file_path):
-            logging.debug(f"{file_path} isn't a video file!")
+        if not has_audio(file_path):
+            logging.debug(f"{file_path} doesn't have any audio to transcribe!")
             return None
             
         if file_path not in files_to_transcribe:
@@ -327,11 +327,14 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True, 
             print(f"Transcribing file: {os.path.basename(file_path)}")
             start_time = time.time()
             start_model()
-
+            global force_detected_language_to
+            if force_detected_language_to:
+                forceLanguage = force_detected_language_to
+                print(f"Forcing language to {forceLanguage}")
             if(hf_transformers):
-                result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate_str)
+                result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate)
             else:
-                result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate_str)
+                result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
@@ -503,15 +506,14 @@ def get_jellyfin_admin(users):
             
     raise Exception("Unable to find administrator user in Jellyfin")
 
-def is_video_file(file_path):
-    av.logging.set_level(av.logging.PANIC)
+def has_audio(file_path):
     try:
         container = av.open(file_path)
         for stream in container.streams:
-            if stream.type == 'video':
+            if stream.type == 'audio':
                 return True
         return False
-    except av.AVError:
+    except (av.AVError, UnicodeDecodeError):
         return False
 
 def path_mapping(fullpath):
@@ -532,7 +534,7 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
                 gen_subtitles(path_mapping(file_path), transcribe_or_translate, False, forceLanguage)
     # if the path specified was actually a single file and not a folder, process it
     if os.path.isfile(path):
-        if is_video_file(path):
+        if has_audio(path):
             gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
                     
     print("Finished searching and queueing files for transcription")
