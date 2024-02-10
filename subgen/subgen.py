@@ -314,7 +314,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate_str: str, front=True, 
                 message = f"{file_path} already has a SDH subtitle created for this, skipping it"
             if message != None:
                 print(message)
-                #return message
+                return message
                 
             if front:
                 files_to_transcribe.insert(0, file_path)
