@@ -19,9 +19,12 @@ RUN apt-get update \
     uvicorn \
     python-multipart \
     python-ffmpeg \
-    whisper
+    whisper \
+    transformers \
+    accelerate \
+    optimum
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
+ADD https://raw.githubusercontent.com/McCloudS/subgen/transformers/subgen/subgen.py /subgen/subgen.py
 
 CMD [ "python3", "-u", "./subgen.py" ]
 
