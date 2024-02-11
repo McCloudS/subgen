@@ -56,7 +56,7 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
-`"${APPDATA}/subgen:/subgen"` is just for storage of the python script and the language model. This volume isn't necessary, just a nicety.  If you map this volume, you will have to likely manually place subgen.py and update it yourself, so it is not recomended unless you are doing dev work.
+`"${APPDATA}/subgen/models:/subgen/models"` is just for storage of the language models.  This isn't necessary, but you will have to redownload the models on any new image pulls if you don't use it.  
 
 If you want to use a GPU, you need to map it accordingly.  
 
