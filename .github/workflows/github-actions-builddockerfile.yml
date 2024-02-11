@@ -39,4 +39,4 @@ jobs:
           target: docker.io/mccloud/subgen:latest
           overwrite: true
       # Push to the registry
-      - run: docker image push "mccloud/subgen:latest"
+      - run: docker image push "mccloud/subgen:latest" --all-tags
