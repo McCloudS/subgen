@@ -27,8 +27,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       -
-        name: Build and push
+        name: Build
         uses: docker/build-push-action@v5
         with:
-          push: true
+          push: false
           tags: mccloud/subgen:latest
+      - uses: kitabisa/docker-slim-action@v1
+        env:
+          DSLIM_HTTP_PROBE: false
+        with:
+          target: mccloud/subgen:latest
+          overwrite: true
+      # Push to the registry
+      - run: docker image push "mccloud/subgen:latest"
