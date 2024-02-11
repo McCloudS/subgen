@@ -24,9 +24,10 @@ services:
        - "PATH_MAPPING_FROM=/tv"
        - "PATH_MAPPING_TO=/Volumes/TV"
        - "TRANSCRIBE_DEVICE=cpu"
-       - "MODEL_PATH=."
+       - "MODEL_PATH=./models"
     volumes:
        - "${TV}:/tv"
        - "${MOVIES}:/movies"
+       - "${APPDATA}/subgen/models:/subgen/models"
     ports:
        - "8090:8090"
