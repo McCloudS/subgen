@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads. Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.  Docker builds will still be auto-built on any commit.  If you don't want to use the auto-update function, no action is needed on your part and continue to update docker images as before.  Fixed bug where detect-langauge could return an empty result.  Reduced useless debug output that was spamming logs and defaulted DEBUG to True.
+11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads. Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.  Docker builds will still be auto-built on any commit.  If you don't want to use the auto-update function, no action is needed on your part and continue to update docker images as before.  Fixed bug where detect-langauge could return an empty result.  Reduced useless debug output that was spamming logs and defaulted DEBUG to True.  Added APPEND, which will add f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}" at the end of a subtitle.
 
 10 Feb 2024: Added some features from JaiZed's branch such as skipping if SDH subtitles are detected, functions updated to also be able to transcribe audio files, allow individual files to be manually transcribed, and a better implementation of forceLanguage. Added /batch endpoint (Thanks JaiZed).  Allows you to navigate in a browser to http://subgen_ip:8090/docs and call the batch endpoint which can take a file or a folder to manually transcribe files.  Added CLEAR_VRAM_ON_COMPLETE, HF_TRANSFORMERS, HF_BATCH_SIZE.  Hugging Face Transformers boast '9x increase', but my limited testing shows it's comparable to faster-whisper or slightly slower.  I also have an older 8gb GPU.  Simplest way to persist HF Transformer models is to set "HF_HUB_CACHE" and set it to "/subgen/models" for Docker (assuming you have the matching volume).
 
@@ -150,6 +150,7 @@ The following environment variables are available in Docker.  They will default 
 | HF_TRANSFORMERS | 'False' | Uses Hugging Face Transformers models that should be faster, not tested as of now because HF is down. |
 | HF_BATCH_SIZE | 24 | Batch size to be used with above.  Batch size has a correlation to VRAM, not sure what it is yet and may require tinkering.  
 | UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py built into the Docker image.  Standalone users can use this with launcher.py to get updates. |
+| APPEND | False | Will add the following at the end of a subtitle: "Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
 
 ### Images:
 mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
