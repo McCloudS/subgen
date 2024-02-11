@@ -70,6 +70,7 @@ else:
 
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 @app.get("/plex")
 @app.get("/webhook")
