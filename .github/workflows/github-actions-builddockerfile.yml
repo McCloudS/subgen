@@ -3,7 +3,7 @@ name: Build_Subgen_Dockerfile
 on:
   push:
     branches:
-      - 'launcher'
+      - 'main'
     paths-ignore:
       - '**.md'
       - '**.yml'
@@ -24,4 +24,4 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           push: true
-          tags: mccloud/subgen:launcher
+          tags: mccloud/subgen:latest
