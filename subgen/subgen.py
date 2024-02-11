@@ -25,7 +25,7 @@ def convert_to_bool(in_bool):
         return in_bool
     else:
         value = str(in_bool).lower()
-        return value not in ('false', 'off', '0')
+        return value not in ('false', 'off', '0', 0)
 
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', 'token here')
