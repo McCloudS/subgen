@@ -24,7 +24,10 @@ def main():
     # Check if the environment variable is set
     github_download_enabled = convert_to_bool(os.getenv("UPDATE", False))
     
-    if github_download_enabled:
+  	if not os.path.exists(output_file):
+        print(f"File {output_file} does not exist. Downloading from GitHub...")
+        download_from_github(github_url, output_file)
+    elif github_download_enabled:
         print("Downloading subgen.py from GitHub...")
         download_from_github(github_url, output_file)
     else:
