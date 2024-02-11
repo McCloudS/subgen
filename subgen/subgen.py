@@ -64,9 +64,12 @@ subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
 subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
 if debug:
-    logging.basicConfig(stream=sys.stderr, level=logging.NOTSET)
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 else:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+
+logging.getLogger("multipart").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 @app.get("/plex")
 @app.get("/webhook")
