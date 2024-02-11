@@ -161,16 +161,12 @@ There is now only a single image being maintained, the image has everything nece
 # What are the limitations/problems?
 
 * If Plex adds multiple shows (like a season pack), it may fail to process subtitles.
-* Long pauses/silence behave strangely.  It will likely show the previous or next words during long gaps of silence.  (**This is appears mostly fixed now using stable-ts!**)
 * I made it and know nothing about formal deployment for python coding.  
 * It's using trained AI models to transcribe, so it WILL mess up
 
 # What's next?  
 
-I'm hoping someone that is much more skilled than I, to use this as a pushing off point to make this better.  In a perfect world, this would integrate with Plex, Sonarr, Radarr, or Bazarr.  Bazarr tracks failed subtitle downloads, I originally wanted to utilize its API, but decided on my current solution for simplicity.  
-
-Optimizations I can think of off hand:  
-* Add an ability via a web-ui or something to generate subtitles for particular media files/folders. (**No GUI planned, but TRANSCRIBE_FOLDERS can do this**)
+Fix documentation and make it prettier!
   
 # Audio Languages Supported (via OpenAI)
 
@@ -178,8 +174,6 @@ Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catala
 
 # Additional reading:
 
-* https://github.com/ggerganov/whisper.cpp/issues/89 (Benchmarks)
-* https://github.com/openai/whisper/discussions/454 (Whisper CPU implementation)
 * https://github.com/openai/whisper (Original OpenAI project)
 * https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes (2 letter subtitle codes)
 
