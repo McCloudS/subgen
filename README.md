@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads.  If you want to maintain an older version of subgen.py, you need to mount it as a path (IE "${APPDATA}/subgen/subgen.py:/subgen/subgen.py"). Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.
+11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads. Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.
 
 10 Feb 2024: Added some features from JaiZed's branch such as skipping if SDH subtitles are detected, functions updated to also be able to transcribe audio files, allow individual files to be manually transcribed, and a better implementation of forceLanguage. Added /batch endpoint (Thanks JaiZed).  Allows you to navigate in a browser to http://subgen_ip:8090/docs and call the batch endpoint which can take a file or a folder to manually transcribe files.  Added CLEAR_VRAM_ON_COMPLETE, HF_TRANSFORMERS, HF_BATCH_SIZE.  Hugging Face Transformers boast '9x increase', but my limited testing shows it's comparable to faster-whisper or slightly slower.  I also have an older 8gb GPU.  Simplest way to persist HF Transformer models is to set "HF_HUB_CACHE" and set it to "/subgen/models" for Docker (assuming you have the matching volume).
 
@@ -59,6 +59,8 @@ The dockerfile is in the repo along with an example docker-compose file, and is 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
 `"${APPDATA}/subgen/models:/subgen/models"` is just for storage of the language models.  This isn't necessary, but you will have to redownload the models on any new image pulls if you don't use it.  
+
+`"${APPDATA}/subgen/subgen.py:/subgen/subgen.py"` If you want to control the version of subgen.py by yourself.  Launcher.py can still be used to download a newer version.
 
 If you want to use a GPU, you need to map it accordingly.  
 
