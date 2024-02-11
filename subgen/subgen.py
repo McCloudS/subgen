@@ -54,6 +54,8 @@ hf_transformers = convert_to_bool(os.getenv('HF_TRANSFORMERS', False))
 hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
+append = convert_to_bool(os.getenv('APPEND', False))
+
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
 
@@ -71,6 +73,20 @@ else:
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
+
+TIME_OFFSET = 5
+
+def appendLine(result):
+    if append:
+        lastSegment = result.segments[-1].copy()
+        lastSegment.id += 1
+        lastSegment.start += TIME_OFFSET
+        lastSegment.end += TIME_OFFSET
+        lastSegment.text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
+        lastSegment.words = []
+        # lastSegment.words[0].word = lastSegment.text
+        # lastSegment.words = lastSegment.words[:len(lastSegment.words)-1]
+        result.segments.append(lastSegment)
 
 @app.get("/plex")
 @app.get("/webhook")
@@ -212,6 +228,7 @@ def asr(
             result = model.transcribe(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, batch_size=hf_batch_size)
         else:
             result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language)
+        appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
         print(f"Bazarr transcription is completed, it took {minutes} minutes and {seconds} seconds to complete.")
@@ -339,6 +356,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
                 result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate)
             else:
                 result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate)
+            appendLine(result)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
