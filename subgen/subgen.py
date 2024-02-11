@@ -268,7 +268,6 @@ def start_model():
             model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
-    global clear_vram_on_complete
     if clear_vram_on_complete:
         if len(files_to_transcribe) == 0:
             global model
