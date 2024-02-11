@@ -50,9 +50,9 @@ model_location = os.getenv('MODEL_PATH', '.')
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
 force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
-hf_transformers = os.getenv('HF_TRANSFORMERS', False)
+hf_transformers = convert_to_bool(os.getenv('HF_TRANSFORMERS', False))
 hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
-clear_vram_on_complete = os.getenv('CLEAR_VRAM_ON_COMPLETE', True)
+clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
