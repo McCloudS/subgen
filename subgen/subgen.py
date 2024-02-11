@@ -48,7 +48,7 @@ path_mapping_from = os.getenv('PATH_MAPPING_FROM', '/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', '/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', '.')
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
-transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'translate')
+transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
 force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
 hf_transformers = convert_to_bool(os.getenv('HF_TRANSFORMERS', False))
 hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
@@ -268,6 +268,7 @@ def start_model():
             model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
+    global clear_vram_on_complete
     if clear_vram_on_complete:
         if len(files_to_transcribe) == 0:
             global model
