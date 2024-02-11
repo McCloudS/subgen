@@ -30,13 +30,5 @@ jobs:
         name: Build
         uses: docker/build-push-action@v5
         with:
-          push: false
+          push: true
           tags: mccloud/subgen:latest
-      - uses: kitabisa/docker-slim-action@v1
-        env:
-          DSLIM_HTTP_PROBE: false
-        with:
-          target: docker.io/mccloud/subgen:latest
-          overwrite: true
-      # Push to the registry
-      - run: docker image push "mccloud/subgen:latest" --all-tags
