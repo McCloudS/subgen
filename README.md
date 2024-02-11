@@ -6,7 +6,7 @@
 
 8 Feb 2024: Added FORCE_DETECTED_LANGUAGE_TO to force a wrongly detected language.  Fixed asr to actually use the language passed to it.  
 
-5 Feb 2024: General housekeeping, minor tweaks on the TRANSCRIBE_FOLDERS function.  Added a GHCR repo in addition to Dockerhub.
+5 Feb 2024: General housekeeping, minor tweaks on the TRANSCRIBE_FOLDERS function.
 
 28 Jan 2024: Fixed issue with ffmpeg python module not importing correctly.  Removed separate GPU/CPU containers.  Also removed the script from installing packages, which should help with odd updates I can't control (from other packages/modules). The image is a couple gigabytes larger, but allows easier maintenance.  
 
@@ -48,11 +48,11 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate`.  You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
 
 ### Docker
 
-The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen) and GHCR (ghcr.io/mcclouds/subgen:latest). 
+The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen). 
 
 You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
