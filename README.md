@@ -147,7 +147,7 @@ The following environment variables are available in Docker.  They will default 
 | CLEAR_VRAM_ON_COMPLETE | 'True' | This will delete the model and do garbage collection when queue is empty.  Good if you need to use the VRAM for something else. |
 | HF_TRANSFORMERS | 'False' | Uses Hugging Face Transformers models that should be faster, not tested as of now because HF is down. |
 | HF_BATCH_SIZE | 24 | Batch size to be used with above.  Batch size has a correlation to VRAM, not sure what it is yet and may require tinkering.  
-| UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py build into the image.  |
+| UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py built into the Docker image.  Standalone users can use this with launcher.py to get updates. |
 
 ### Images:
 mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
