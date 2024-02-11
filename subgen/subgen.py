@@ -650,6 +650,10 @@ if __name__ == "__main__":
     print(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
     print(f"Running {str(whisper_threads)} threads per transcription")
     print(f"Using {transcribe_device} to encode")
+    if hf_transformers:
+        print(f"Using Hugging Face Transformers")
+    else:
+        print(f"Using faster-whisper")
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
     uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True)
