@@ -80,7 +80,7 @@ def handle_get_request(request: Request):
 
 @app.post("/webhook")
 async def print_warning():
-    print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, or jellyfin instead of webhook. ***")
+    print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, emby, or jellyfin instead of webhook. ***")
     return ""
 
 @app.post("/tautulli")
