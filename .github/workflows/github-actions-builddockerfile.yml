@@ -24,6 +24,10 @@ jobs:
             /usr/share/dotnet /usr/local/lib/android /opt/ghc \
             /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
             /usr/lib/jvm || true
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           echo "some directories deleted"
           sudo apt install aptitude -y >/dev/null 2>&1
           sudo aptitude purge aria2 ansible azure-cli shellcheck rpm xorriso zsync \
