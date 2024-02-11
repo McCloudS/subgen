@@ -23,8 +23,8 @@ RUN apt-get update \
     accelerate \
     optimum
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
+ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
 
-CMD [ "python3", "-u", "./subgen.py" ]
+CMD [ "python3", "-u", "launcher.py", "python3", "-u", "./subgen.py" ]
 
 EXPOSE 8090
