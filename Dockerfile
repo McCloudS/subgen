@@ -23,7 +23,7 @@ RUN apt-get update \
     accelerate \
     optimum
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/launcher/launcher.py /subgen/launcher.py
+ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
 
 CMD [ "bash", "-c", "python3 -u launcher.py && python3 -u subgen.py" ]
 
