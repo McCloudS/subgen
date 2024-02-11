@@ -28,7 +28,7 @@ def main():
         print(f"File {output_file} does not exist. Downloading from GitHub...")
         download_from_github(github_url, output_file)
     elif github_download_enabled:
-        print("Downloading subgen.py from GitHub...")
+        print(f"File exists, but UPDATE is set to True. Downloading {output_file} from GitHub...")
         download_from_github(github_url, output_file)
     else:
         print("Environment variable UPDATE is not set or set to False, skipping download.")
