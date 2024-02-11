@@ -19,7 +19,7 @@ def download_from_github(url, output_file):
 
 def main():
     github_url = "https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py"
-    output_file = "subgen.py"
+    output_file = "./subgen.py"
     
     # Check if the environment variable is set
     github_download_enabled = convert_to_bool(os.getenv("UPDATE", False))
