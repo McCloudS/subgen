@@ -25,6 +25,6 @@ RUN apt-get update \
 
 ADD https://raw.githubusercontent.com/McCloudS/subgen/launcher/launcher.py /subgen/launcher.py
 
-CMD [ "python3", "-u", "launcher.py", "&&", "python3", "-u", "subgen.py" ]
+CMD [ "bash", "-c", "python3 -u launcher.py && python3 -u subgen.py" ]
 
 EXPOSE 8090
