@@ -83,7 +83,7 @@ def appendLine(result):
         lastSegment.id += 1
         lastSegment.start += TIME_OFFSET
         lastSegment.end += TIME_OFFSET
-        date_time_str = datetime.now().strftime("%d %B %Y %H:%M:%S")
+        date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
         lastSegment.text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}"
         lastSegment.words = []
         # lastSegment.words[0].word = lastSegment.text
