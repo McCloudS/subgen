@@ -42,7 +42,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # What can it do?
 
-* Create .srt subtitles when a SINGLE media file is added or played to Jellyfin or Plex which triggers off of Jellyfin, Plex, or Tautulli webhooks. 
+* Create .srt subtitles when a SINGLE media file is added or played to Jellyfin or Plex which triggers off of Jellyfin, Plex, or Tautulli webhooks. It can also be called via the Whisper provider inside Bazarr.
 
 # How do I set it up?
 
