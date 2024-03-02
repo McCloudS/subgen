@@ -27,5 +27,3 @@ ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/l
 ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
 
 CMD [ "bash", "-c", "python3 -u launcher.py && python3 -u subgen.py" ]
-
-EXPOSE 9000
