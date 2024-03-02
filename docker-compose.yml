@@ -35,4 +35,4 @@ services:
        - "${MOVIES}:/movies"
        - "${APPDATA}/subgen/models:/subgen/models"
     ports:
-       - "8090:8090"
+       - "9000:9000"
