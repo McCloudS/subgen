@@ -6,7 +6,7 @@
 
 11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads. Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.  Docker builds will still be auto-built on any commit.  If you don't want to use the auto-update function, no action is needed on your part and continue to update docker images as before.  Fixed bug where detect-langauge could return an empty result.  Reduced useless debug output that was spamming logs and defaulted DEBUG to True.  Added APPEND, which will add f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}" at the end of a subtitle.
 
-10 Feb 2024: Added some features from JaiZed's branch such as skipping if SDH subtitles are detected, functions updated to also be able to transcribe audio files, allow individual files to be manually transcribed, and a better implementation of forceLanguage. Added /batch endpoint (Thanks JaiZed).  Allows you to navigate in a browser to http://subgen_ip:8090/docs and call the batch endpoint which can take a file or a folder to manually transcribe files.  Added CLEAR_VRAM_ON_COMPLETE, HF_TRANSFORMERS, HF_BATCH_SIZE.  Hugging Face Transformers boast '9x increase', but my limited testing shows it's comparable to faster-whisper or slightly slower.  I also have an older 8gb GPU.  Simplest way to persist HF Transformer models is to set "HF_HUB_CACHE" and set it to "/subgen/models" for Docker (assuming you have the matching volume).
+10 Feb 2024: Added some features from JaiZed's branch such as skipping if SDH subtitles are detected, functions updated to also be able to transcribe audio files, allow individual files to be manually transcribed, and a better implementation of forceLanguage. Added /batch endpoint (Thanks JaiZed).  Allows you to navigate in a browser to http://subgen_ip:9000/docs and call the batch endpoint which can take a file or a folder to manually transcribe files.  Added CLEAR_VRAM_ON_COMPLETE, HF_TRANSFORMERS, HF_BATCH_SIZE.  Hugging Face Transformers boast '9x increase', but my limited testing shows it's comparable to faster-whisper or slightly slower.  I also have an older 8gb GPU.  Simplest way to persist HF Transformer models is to set "HF_HUB_CACHE" and set it to "/subgen/models" for Docker (assuming you have the matching volume).
 
 8 Feb 2024: Added FORCE_DETECTED_LANGUAGE_TO to force a wrongly detected language.  Fixed asr to actually use the language passed to it.  
 
@@ -18,7 +18,7 @@
 
 31 Oct 2023: Added Bazarr support via Whipser provider.
 
-25 Oct 2023: Added Emby (IE http://192.168.1.111:8090/emby) support and TRANSCRIBE_FOLDERS, which will recurse through the provided folders and generate subtitles.  It's geared towards attempting to transcribe existing media without using a webhook.
+25 Oct 2023: Added Emby (IE http://192.168.1.111:9000/emby) support and TRANSCRIBE_FOLDERS, which will recurse through the provided folders and generate subtitles.  It's geared towards attempting to transcribe existing media without using a webhook.
 
 23 Oct 2023: There are now two docker images, ones for CPU (it's smaller): mccloud/subgen:latest, mccloud/subgen:cpu, the other is for cuda/GPU: mccloud/subgen:cuda.  I also added Jellyfin support and considerable cleanup in the script. I also renamed the webhooks, so they will require new configuration/updates on your end. Instead of /webhook they are now /plex, /tautulli, and /jellyfin.
 
@@ -68,11 +68,11 @@ If you want to use a GPU, you need to map it accordingly.
 
 ## Plex
 
-Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:8090/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
+Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:9000/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
 
 ## Emby
 
-All you need to do is create a webhook in Emby pointing to your subgen IE: http://192.168.154:8090/emby
+All you need to do is create a webhook in Emby pointing to your subgen IE: http://192.168.154:9000/emby
 
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
@@ -80,12 +80,12 @@ Emby was really nice and provides good information in their responses, so we don
 
 You only need to confiure the Whisper Provider as shown below: <br>
 ![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
-The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:8090) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  I recomend not enabling this with other webhooks, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:9000) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  I recomend not enabling this with other webhooks, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
 
 ## Tautulli
 
 Create the webhooks in Tautulli with the following settings:
-Webhook URL: http://yourdockerip:8090/tautulli
+Webhook URL: http://yourdockerip:9000/tautulli
 Webhook Method: Post
 Triggers: Whatever you want, but you'll likely want "Playback Start" and "Recently Added"
 Data: Under Playback Start, JSON Header will be:
@@ -116,7 +116,7 @@ Data:
 ```
 ## Jellyfin
 
-First, you need to install the Jellyfin webhooks plugin.  Then you need to click "Add Generic Destination", name it anything you want, webhook url is your subgen info (IE http://192.168.1.154:8090/jellyfin).  Next, check Item Added, Playback Start, and Send All Properties.  Last, "Add Request Header" and add the Key: `Content-Type` Value: `application/json`<br><br>Click Save and you should be all set!
+First, you need to install the Jellyfin webhooks plugin.  Then you need to click "Add Generic Destination", name it anything you want, webhook url is your subgen info (IE http://192.168.1.154:9000/jellyfin).  Next, check Item Added, Playback Start, and Send All Properties.  Last, "Add Request Header" and add the Key: `Content-Type` Value: `application/json`<br><br>Click Save and you should be all set!
 
 ## Variables
 
