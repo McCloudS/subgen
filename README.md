@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  
+
 29 Feb 2024: Changed sefault port to align with whisper-asr and deconflict other consumers of the previous port.
 
 11 Feb 2024: Added a 'launcher.py' file for Docker to prevent huge image downloads. Now set UPDATE to True if you want pull the latest version, otherwise it will default to what was in the image on build.  Docker builds will still be auto-built on any commit.  If you don't want to use the auto-update function, no action is needed on your part and continue to update docker images as before.  Fixed bug where detect-langauge could return an empty result.  Reduced useless debug output that was spamming logs and defaulted DEBUG to True.  Added APPEND, which will add f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}" at the end of a subtitle.
