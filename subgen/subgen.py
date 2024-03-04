@@ -104,7 +104,7 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {f"version" : "Subgen v{subgen_version}"}
+    return {"version" : f"Subgen v{subgen_version}"}
 
 @app.post("/webhook")
 async def print_warning():
