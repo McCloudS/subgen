@@ -23,7 +23,7 @@ jobs:
         id: setcalver
         with:
           default_branch: 'refs/heads/main'
-          format: 'YY.M.D'
+          format: 'YYYY.M.D'
           version_prefix: ''
       - name: Update version file
         run: |
