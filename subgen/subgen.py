@@ -100,6 +100,10 @@ def appendLine(result):
 def handle_get_request(request: Request):
     return "You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"
 
+@app.get("/status")
+def status():
+    return {"version" : "Subgen commit: COMMIT_VERSION on: $COMMIT_DATE"}
+
 @app.post("/webhook")
 async def print_warning():
     print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, emby, or jellyfin instead of webhook. ***")
