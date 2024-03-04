@@ -21,6 +21,8 @@ import av
 import ffmpeg
 import whisper
 
+subgen_version = XXX
+
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
         return in_bool
@@ -102,7 +104,7 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {"version" : "Subgen commit: $COMMIT_VERSION on: $COMMIT_DATE"}
+    return {f"version" : "Subgen v{subgen_version}"}
 
 @app.post("/webhook")
 async def print_warning():
