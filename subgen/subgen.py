@@ -102,7 +102,7 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {"version" : "Subgen commit: COMMIT_VERSION on: $COMMIT_DATE"}
+    return {"version" : "Subgen commit: $COMMIT_VERSION on: $COMMIT_DATE"}
 
 @app.post("/webhook")
 async def print_warning():
