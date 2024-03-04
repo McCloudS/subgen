@@ -1,3 +1,5 @@
+subgen_version = 2024.3.1
+
 from datetime import datetime
 import subprocess
 import os
@@ -20,8 +22,6 @@ import requests
 import av
 import ffmpeg
 import whisper
-
-subgen_version = 2024.3.1
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
