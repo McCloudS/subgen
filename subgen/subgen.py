@@ -673,7 +673,7 @@ whisper_languages = {
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Subgen v{subgen_version}")
+    print(f"Subgen {subgen_version}")
     print("Starting Subgen with listening webhooks!")
     print(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
     print(f"Running {str(whisper_threads)} threads per transcription")
