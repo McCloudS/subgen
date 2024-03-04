@@ -19,6 +19,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: paulhatch/semantic-version@v5.3.0
+        id: version
         with:
           # The prefix to use to identify tags
           tag_prefix: "v"
@@ -37,7 +38,7 @@ jobs:
           bump_each_commit: true
       - name: Update version file
         run: |
-          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.semantic-version.outputs.version }}/' subgen/subgen.py
+          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.version.outputs.version }}/' subgen/subgen.py
       
       - name: Commit and push changes
         run: |
