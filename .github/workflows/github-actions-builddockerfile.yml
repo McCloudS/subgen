@@ -27,7 +27,7 @@ jobs:
           version_prefix: ''
       - name: Update version file
         run: |
-          run: sed -i "s/subgen_version =.*/subgen_version = '${{ steps.setcalver.outputs.package_version }}'/" subgen/subgen.py
+          sed -i "s/subgen_version =.*/subgen_version = 'v${{ steps.setcalver.outputs.package_version }}'/" subgen/subgen.py
       
       - name: Commit and push changes
         run: |
