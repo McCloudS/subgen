@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  
+4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  Can also use distil models now!  See variables below!
 
 29 Feb 2024: Changed sefault port to align with whisper-asr and deconflict other consumers of the previous port.
 
@@ -128,7 +128,7 @@ The following environment variables are available in Docker.  They will default 
 | Variable                  | Default Value          | Description                                                                                                                                                                                                                                                                               |
 |---------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | TRANSCRIBE_DEVICE         | 'cpu'                  | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda".                                                                                                                     |
-| WHISPER_MODEL             | 'medium'               | Can be:'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', or 'large'                                    |
+| WHISPER_MODEL             | 'medium'               | Can be:'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-medium.en', 'distil-small.en'                                   |
 | CONCURRENT_TRANSCRIPTIONS | 2                      | Number of files it will transcribe in parallel                                                                                                                                                                                                                                            |
 | WHISPER_THREADS           | 4                      | number of threads to use during computation                                                                                                                                                                                                                                               |
 | MODEL_PATH                | './models'                    | This is where the WHISPER_MODEL will be stored.  This defaults to placing it where you execute the script in the folder 'models'                                                                                                                                                                              |
