@@ -14,13 +14,13 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
       - name: Get next version
         uses: reecetech/version-increment@2023.10.1
         id: version
         with:
           scheme: calver
-      - name: Checkout code
-        uses: actions/checkout@v2
       - name: Update version file
         run: |
           sed -i 's/subgen_version =.*/subgen_version = ${{ steps.version.outputs.version }}/' subgen/subgen.py
