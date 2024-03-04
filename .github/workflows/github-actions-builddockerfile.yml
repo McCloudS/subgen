@@ -18,27 +18,16 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - uses: paulhatch/semantic-version@v5.3.0
-        id: version
+      - name: Set Calver Version
+        uses: Nelyx/action-calver@v1.0.0
+        id: setcalver
         with:
-          # The prefix to use to identify tags
-          tag_prefix: "v"
-          # A string which, if present in a git commit, indicates that a change represents a
-          # major (breaking) change, supports regular expressions wrapped with '/'
-          major_pattern: "(MAJOR)"
-          # A string which indicates the flags used by the `major_pattern` regular expression. Supported flags: idgs
-          major_regexp_flags: ""
-          # Same as above except indicating a minor change, supports regular expressions wrapped with '/'
-          minor_pattern: "(MINOR)"
-          # A string which indicates the flags used by the `minor_pattern` regular expression. Supported flags: idgs
-          minor_regexp_flags: ""
-          # A string to determine the format of the version output
-          version_format: "${increment}"
-          # If this is set to true, *every* commit will be treated as a new version.
-          bump_each_commit: true
+          default_branch: 'refs/heads/main'
+          format: 'YY.M.D'
+          version_prefix: ''
       - name: Update version file
         run: |
-          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.version.outputs.version }}/' subgen/subgen.py
+          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.setcalver.outputs.package_version }}/' subgen/subgen.py
       
       - name: Commit and push changes
         run: |
