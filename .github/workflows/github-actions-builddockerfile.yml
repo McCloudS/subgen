@@ -10,6 +10,34 @@ on:
   workflow_dispatch:
 
 jobs:
+  update_version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Extract commit version and date
+        run: |
+          export COMMIT_VERSION=$(git describe --tags --abbrev=0)
+          export COMMIT_DATE=$(git log -1 --format=%cd --date=format:'%Y-%m-%d')
+          echo "Commit Version: $COMMIT_VERSION"
+          echo "Commit Date: $COMMIT_DATE"
+          echo "::set-env name=COMMIT_VERSION::$COMMIT_VERSION"
+          echo "::set-env name=COMMIT_DATE::$COMMIT_DATE"
+
+      - name: Update Python file
+        run: |
+          sed -i "s/\$COMMIT_VERSION/${COMMIT_VERSION}/g" subgen/subgen.py
+          sed -i "s/\$COMMIT_DATE/${COMMIT_DATE}/g" subgen/subgen.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add version.py
+          git commit -m "Update subgen.py with commit version and date"
+          git push
   docker:
     runs-on: ubuntu-latest
     steps:
