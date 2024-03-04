@@ -104,7 +104,7 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper: {whisper.__version__}"}
+    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__}"}
 
 @app.post("/webhook")
 async def print_warning():
