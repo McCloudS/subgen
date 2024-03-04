@@ -677,6 +677,7 @@ if __name__ == "__main__":
     print(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
     print(f"Running {str(whisper_threads)} threads per transcription")
     print(f"Using {transcribe_device} to encode")
+    print(f"Subgen v{subgen_version}")
     if hf_transformers:
         print(f"Using Hugging Face Transformers")
     else:
