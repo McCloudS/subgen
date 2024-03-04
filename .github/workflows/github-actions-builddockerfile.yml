@@ -16,14 +16,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Get next version
-        uses: reecetech/version-increment@2023.10.1
-        id: version
-        with:
-          scheme: calver
+      - name: Increment and tag with CalVer
+        uses: mani-sh-reddy/calver-increment@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YEAR_FORMAT: "YY"
       - name: Update version file
         run: |
-          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.version.outputs.version }}/' subgen/subgen.py
+          sed -i 's/subgen_version =.*/subgen_version = ${{ steps.version.outputs.new_tag }}/' subgen/subgen.py
+      
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Actions"
