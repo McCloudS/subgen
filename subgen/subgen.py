@@ -68,10 +68,33 @@ files_to_transcribe = []
 subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
 subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
+# Define a filter class
+class MultiplePatternsFilter(logging.Filter):
+    def filter(self, record):
+        # Define the patterns to search for
+        patterns = [
+            "Compression ratio threshold is not met",
+            "Processing segment at",
+            "Log probability threshold is",
+            "Reset prompt"
+        ]
+        # Return False if any of the patterns are found, True otherwise
+        return not any(pattern in record.getMessage() for pattern in patterns)
+
+# Configure logging
 if debug:
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format="%(asctime)s %(levelname)s: %(message)s")
+    level = logging.DEBUG
+    logging.basicConfig(stream=sys.stdout, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 else:
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+    level = logging.INFO
+    logging.basicConfig(stream=sys.stdout, level=level)
+
+# Get the root logger
+logger = logging.getLogger()
+logger.setLevel(level)  # Set the logger level
+
+for handler in logger.handlers:
+    handler.addFilter(MultiplePatternsFilter())
 
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
