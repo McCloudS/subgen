@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-5 Mar 2024: Added timestamps option.
+5 Mar 2024: Cleaned up logging. Added timestamps option (if Debug = True, timestamps will print in logs).
 
 4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  Can also use distil models now!  See variables below!
 
@@ -157,7 +157,6 @@ The following environment variables are available in Docker.  They will default 
 | HF_BATCH_SIZE | 24 | Batch size to be used with above.  Batch size has a correlation to VRAM, not sure what it is yet and may require tinkering.  
 | UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py built into the Docker image.  Standalone users can use this with launcher.py to get updates. |
 | APPEND | False | Will add the following at the end of a subtitle: "Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
-| TIMESTAMPS | True | Will add a datetime before stdout `[2024-03-05 07:12:45.081047] Using faster-whisper` |
 
 ### Images:
 mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
