@@ -139,7 +139,9 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__}"}
+    in_docker = os.path.exists('/.dockerenv')
+    docker_status = "Docker" if in_docker else "Standalone"
+    return {"version" : f"{docker_status} Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__}"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
