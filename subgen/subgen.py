@@ -1,4 +1,4 @@
-subgen_version = '2024.3.5.189'
+subgen_version = '2024.3.5.188'
 
 from datetime import datetime
 import subprocess
@@ -69,24 +69,10 @@ files_to_transcribe = []
 subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
 subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
-if timestamps:
-	# Define a custom class that modifies sys.stdout
-    class TimestampedStdout:
-        def __init__(self, stdout):
-            self.stdout = stdout
-        def write(self, x):
-	        # Append the timestamp to every printed line
-            self.stdout.write(x.replace("\n", "\n[%s] " % str(datetime.now())))
-        def flush(self):
-	        # Flush the output
-            self.stdout.flush()
-            # Replace sys.stdout with the custom class
-    sys.stdout = TimestampedStdout(sys.stdout)
-
 if debug:
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format="%(asctime)s %(levelname)s: %(message)s")
 else:
-    logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
@@ -124,8 +110,7 @@ def status():
 
 @app.post("/webhook")
 async def print_warning():
-    print("*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, emby, or jellyfin instead of webhook. ***")
-    return ""
+    return {"*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, emby, or jellyfin instead of webhook. ***"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
@@ -142,7 +127,7 @@ def receive_tautulli_webhook(
         
             gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
     else:
-        print("This doesn't appear to be a properly configured Tautulli webhook, please review the instructions again!")
+        return {"This doesn't appear to be a properly configured Tautulli webhook, please review the instructions again!"}
     
     return ""
     
@@ -168,7 +153,7 @@ def receive_plex_webhook(
             except Exception as e:
                 logging.error(f"Failed to refresh metadata for item {plex_json['Metadata']['ratingKey']}: {e}")
     else:
-        print("This doesn't appear to be a properly configured Plex webhook, please review the instructions again!")
+        return {"This doesn't appear to be a properly configured Plex webhook, please review the instructions again!"}
      
     return ""
 
@@ -194,7 +179,7 @@ def receive_jellyfin_webhook(
             except Exception as e:
                 logging.error(f"Failed to refresh metadata for item {ItemId}: {e}")
     else:
-        print("This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!")
+        return {"This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!"}
      
     return ""
 
@@ -216,7 +201,7 @@ def receive_emby_webhook(
      
                 gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
     else:
-        print("This doesn't appear to be a properly configured Emby webhook, please review the instructions again!")
+        return {"This doesn't appear to be a properly configured Emby webhook, please review the instructions again!"}
      
     return ""
     
@@ -239,7 +224,7 @@ def asr(
         word_timestamps: bool = Query(default=False, description="Word level timestamps") #not used by Bazarr
 ):
     try:
-        print(f"Transcribing file from Bazarr/ASR webhook")
+        logging.info(f"Transcribing file from Bazarr/ASR webhook")
         result = None
         #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
@@ -255,9 +240,9 @@ def asr(
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
-        print(f"Bazarr transcription is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+        logging.info(f"Bazarr transcription is completed, it took {minutes} minutes and {seconds} seconds to complete.")
     except Exception as e:
-        print(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
+        logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
     finally:
         if f"Bazarr-detect-langauge-{random_name}" in files_to_transcribe:
             files_to_transcribe.remove(f"Bazarr-detect-langauge-{random_name}")
@@ -290,7 +275,7 @@ def detect_language(
             detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000).language
             
     except Exception as e:
-        print(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
+        logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
         
     finally:
         if f"Bazarr-detect-langauge-{random_name}" in files_to_transcribe:
@@ -358,24 +343,24 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             elif os.path.exists(file_path.rsplit('.', 1)[0] + subextensionSDH):
                 message = f"{file_path} already has a SDH subtitle created for this, skipping it"
             if message != None:
-                print(message)
+                logging.info(message)
                 return message
                 
             if front:
                 files_to_transcribe.insert(0, file_path)
             else:
                 files_to_transcribe.append(file_path)
-            print(f"Added {os.path.basename(file_path)} for transcription.")
+            logging.info(f"Added {os.path.basename(file_path)} for transcription.")
             # Start transcription for the file in a separate thread
 
-            print(f"{len(files_to_transcribe)} files in the queue for transcription")
-            print(f"Transcribing file: {os.path.basename(file_path)}")
+            logging.info(f"{len(files_to_transcribe)} files in the queue for transcription")
+            logging.info(f"Transcribing file: {os.path.basename(file_path)}")
             start_time = time.time()
             start_model()
             global force_detected_language_to
             if force_detected_language_to:
                 forceLanguage = force_detected_language_to
-                print(f"Forcing language to {forceLanguage}")
+                logging.info(f"Forcing language to {forceLanguage}")
             if(hf_transformers):
                 result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate)
             else:
@@ -384,12 +369,12 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
-            print(f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+            logging.info(f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
         else:
-            print(f"File {os.path.basename(file_path)} is already in the transcription list. Skipping.")
+            logging.info(f"File {os.path.basename(file_path)} is already in the transcription list. Skipping.")
 
     except Exception as e:
-        print(f"Error processing or transcribing {file_path}: {e}")
+        logging.info(f"Error processing or transcribing {file_path}: {e}")
     finally:
         if file_path in files_to_transcribe:
             files_to_transcribe.remove(file_path)
@@ -420,7 +405,7 @@ def has_subtitle_language(video_file, target_language):
 
         container.close()
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.info(f"An error occurred: {e}")
         return False
     
 def get_plex_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
@@ -476,7 +461,7 @@ def refresh_plex_metadata(itemid: str, server_ip: str, plex_token: str) -> None:
 
     # Check if the request was successful
     if response.status_code == 200:
-        print("Metadata refresh initiated successfully.")
+        logging.info("Metadata refresh initiated successfully.")
     else:
         raise Exception(f"Error refreshing metadata: {response.status_code}")
 
@@ -512,7 +497,7 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
 
     # Check if the request was successful
     if response.status_code == 204:
-        print("Metadata refresh queued successfully.")
+        logging.info("Metadata refresh queued successfully.")
     else:
         raise Exception(f"Error refreshing metadata: {response.status_code}")
 
@@ -570,7 +555,7 @@ def path_mapping(fullpath):
 
 def transcribe_existing(transcribe_folders, forceLanguage=None):
     transcribe_folders = transcribe_folders.split("|")
-    print("Starting to search folders to see if we need to create subtitles.")
+    logging.info("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
     for path in transcribe_folders:
         logging.debug(path)
@@ -583,7 +568,7 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
         if has_audio(path):
             gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
                     
-    print("Finished searching and queueing files for transcription")
+    logging.info("Finished searching and queueing files for transcription")
 
 whisper_languages = {
     "en": "english",
@@ -689,15 +674,15 @@ whisper_languages = {
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Subgen v{subgen_version}")
-    print("Starting Subgen with listening webhooks!")
-    print(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
-    print(f"Running {str(whisper_threads)} threads per transcription")
-    print(f"Using {transcribe_device} to encode")
+    logging.info(f"Subgen v{subgen_version}")
+    logging.info("Starting Subgen with listening webhooks!")
+    logging.info(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
+    logging.info(f"Running {str(whisper_threads)} threads per transcription")
+    logging.info(f"Using {transcribe_device} to encode")
     if hf_transformers:
-        print(f"Using Hugging Face Transformers")
+        logging.info(f"Using Hugging Face Transformers")
     else:
-        print(f"Using faster-whisper")
+        logging.info(f"Using faster-whisper")
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
     uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True)
