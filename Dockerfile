@@ -23,6 +23,8 @@ RUN apt-get update \
     accelerate \
     optimum
 
+ENV PYTHONUNBUFFERED=1
+
 ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
 ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
 
