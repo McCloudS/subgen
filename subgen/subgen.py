@@ -1,4 +1,4 @@
-subgen_version = '2024.3.5.193'
+subgen_version = '2024.3.5.192'
 
 from datetime import datetime
 import subprocess
@@ -22,6 +22,7 @@ import requests
 import av
 import ffmpeg
 import whisper
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -76,7 +77,11 @@ class MultiplePatternsFilter(logging.Filter):
             "Compression ratio threshold is not met",
             "Processing segment at",
             "Log probability threshold is",
-            "Reset prompt"
+            "Reset prompt",
+            "Attempting to release",
+            "released on ",
+            "Attempting to acquire",
+            "acquired on",
         ]
         # Return False if any of the patterns are found, True otherwise
         return not any(pattern in record.getMessage() for pattern in patterns)
@@ -84,10 +89,10 @@ class MultiplePatternsFilter(logging.Filter):
 # Configure logging
 if debug:
     level = logging.DEBUG
-    logging.basicConfig(stream=sys.stdout, level=level, format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 else:
     level = logging.INFO
-    logging.basicConfig(stream=sys.stdout, level=level)
+    logging.basicConfig(stream=sys.stderr, level=level)
 
 # Get the root logger
 logger = logging.getLogger()
@@ -100,6 +105,11 @@ logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
+
+#This forces a flush to print progress correctly
+def progress(seek, total):
+    sys.stdout.flush()
+    sys.stderr.flush()
 
 TIME_OFFSET = 5
 
@@ -250,12 +260,11 @@ def asr(
         
         start_time = time.time()
         start_model()
-        
         files_to_transcribe.insert(0, f"Bazarr-detect-langauge-{random_name}")
         if(hf_transformers):
-            result = model.transcribe(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, batch_size=hf_batch_size)
+            result = model.transcribe(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
         else:
-            result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language)
+            result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, progress_callback=progress)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -381,9 +390,9 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
                 forceLanguage = force_detected_language_to
                 logging.info(f"Forcing language to {forceLanguage}")
             if(hf_transformers):
-                result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate)
+                result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate, progress_callback=progress)
             else:
-                result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate)
+                result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress)
             appendLine(result)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
