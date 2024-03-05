@@ -84,7 +84,7 @@ if timestamps:
     sys.stdout = TimestampedStdout(sys.stdout)
 
 if debug:
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format="%(asctime)s %(levelname)s: %(message)s")
 else:
     logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 
