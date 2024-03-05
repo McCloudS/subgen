@@ -22,7 +22,6 @@ import requests
 import av
 import ffmpeg
 import whisper
-from tqdm.contrib.logging import logging_redirect_tqdm
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -69,6 +68,9 @@ files_to_transcribe = []
 subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
 subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
+in_docker = os.path.exists('/.dockerenv')
+docker_status = "Docker" if in_docker else "Standalone"
+
 # Define a filter class
 class MultiplePatternsFilter(logging.Filter):
     def filter(self, record):
@@ -89,10 +91,10 @@ class MultiplePatternsFilter(logging.Filter):
 # Configure logging
 if debug:
     level = logging.DEBUG
-    logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(stream=sys.stdout, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 else:
     level = logging.INFO
-    logging.basicConfig(stream=sys.stderr, level=level)
+    logging.basicConfig(stream=sys.stdout, level=level)
 
 # Get the root logger
 logger = logging.getLogger()
@@ -110,6 +112,9 @@ logging.getLogger("watchfiles").setLevel(logging.WARNING)
 def progress(seek, total):
     sys.stdout.flush()
     sys.stderr.flush()
+    if(docker_status) == 'Docker':
+        percent = ((seek / total) * 100)
+        logging.info(f"Progress: {seek}/{total} ({percent:.2f}%)")
 
 TIME_OFFSET = 5
 
