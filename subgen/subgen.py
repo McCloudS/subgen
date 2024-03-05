@@ -58,6 +58,7 @@ hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
+timestamps = convert_to_bool(os.getenv('TIMESTAMPS', True))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -68,6 +69,20 @@ files_to_transcribe = []
 subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
 subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
+if timestamps:
+	# Define a custom class that modifies sys.stdout
+    class TimestampedStdout:
+        def __init__(self, stdout):
+            self.stdout = stdout
+        def write(self, x):
+	        # Append the timestamp to every printed line
+            self.stdout.write(x.replace("\n", "\n[%s] " % str(datetime.now())))
+        def flush(self):
+	        # Flush the output
+            self.stdout.flush()
+            # Replace sys.stdout with the custom class
+    sys.stdout = TimestampedStdout(sys.stdout)
+
 if debug:
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 else:
@@ -76,6 +91,7 @@ else:
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
+logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 TIME_OFFSET = 5
 
