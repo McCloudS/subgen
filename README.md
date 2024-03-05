@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+5 Mar 2024: Added timestamps option.
+
 4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  Can also use distil models now!  See variables below!
 
 29 Feb 2024: Changed sefault port to align with whisper-asr and deconflict other consumers of the previous port.
