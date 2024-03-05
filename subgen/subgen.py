@@ -1,4 +1,4 @@
-subgen_version = '2024.3.5.199'
+subgen_version = '2024.3.5.198'
 
 from datetime import datetime
 import subprocess
@@ -91,10 +91,10 @@ class MultiplePatternsFilter(logging.Filter):
 # Configure logging
 if debug:
     level = logging.DEBUG
-    logging.basicConfig(stream=sys.stdout, level=level, format="%(asctime)s %(levelname)s: %(message)s")
+    logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 else:
     level = logging.INFO
-    logging.basicConfig(stream=sys.stdout, level=level)
+    logging.basicConfig(stream=sys.stderr, level=level)
 
 # Get the root logger
 logger = logging.getLogger()
@@ -113,8 +113,9 @@ def progress(seek, total):
     sys.stdout.flush()
     sys.stderr.flush()
     if(docker_status) == 'Docker':
-        percent = ((seek / total) * 100)
-        logging.info(f"Transcribe: ({percent:.2f}%) {seek} / {total} seconds")
+        #percent = ((seek / total) * 100)
+        #logging.info(f"Transcribe: {percent:.2f}% {seek}/{total} seconds")
+        logging.info("Force Transcribe Status Update...")
 
 TIME_OFFSET = 5
 
