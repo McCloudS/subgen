@@ -40,7 +40,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 
 # What is this?
 
-This will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe or translate them into english. It technically has support to transcribe from a foreign langauge to itself (IE Japanese > Japanese, see [TRANSCRIBE_OR_TRANSLATE](https://github.com/McCloudS/subgen#variables)). It is currently reliant on webhooks from Jellyfin, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
+This will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files with the following languages: https://github.com/McCloudS/subgen/edit/main/README.md#audio-languages-supported-via-openai and transcribe or translate them into english. It can also be used as a Whisper provider in Bazarr (See below instructions). It technically has support to transcribe from a foreign langauge to itself (IE Japanese > Japanese, see [TRANSCRIBE_OR_TRANSLATE](https://github.com/McCloudS/subgen#variables)). It is currently reliant on webhooks from Jellyfin, Emby, Plex, or Tautulli. This uses stable-ts and faster-whisper which can use both Nvidia GPUs and CPUs.
 
 # Why?
 
@@ -48,7 +48,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 # What can it do?
 
-* Create .srt subtitles when a SINGLE media file is added or played to Jellyfin or Plex which triggers off of Jellyfin, Plex, or Tautulli webhooks. It can also be called via the Whisper provider inside Bazarr.
+* Create .srt subtitles when a media file is added or played which triggers off of Jellyfin, Plex, or Tautulli webhooks. It can also be called via the Whisper provider inside Bazarr.
 
 # How do I set it up?
 
@@ -62,7 +62,7 @@ install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi request
 
 The dockerfile is in the repo along with an example docker-compose file, and is also posted on dockerhub (mccloud/subgen). 
 
-You MUST mount your media volumes in subgen the same way Plex sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
+If using Subgen without Bazarr, you MUST mount your media volumes in subgen the same way Plex (or your media server) sees them.  For example, if Plex uses "/Share/media/TV:/tv" you must have that identical volume in subgen.  
 
 `"${APPDATA}/subgen/models:/subgen/models"` is just for storage of the language models.  This isn't necessary, but you will have to redownload the models on any new image pulls if you don't use it.  
 
@@ -167,7 +167,6 @@ There is now only a single image being maintained, the image has everything nece
 
 # What are the limitations/problems?
 
-* If Plex adds multiple shows (like a season pack), it may fail to process subtitles.
 * I made it and know nothing about formal deployment for python coding.  
 * It's using trained AI models to transcribe, so it WILL mess up
 
