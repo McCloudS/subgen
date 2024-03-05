@@ -99,17 +99,14 @@ def appendLine(result):
 @app.get("/asr")
 @app.get("/emby")
 @app.get("/detect-language")
+@app.get("/tautulli")
 @app.get("/")
 def handle_get_request(request: Request):
-    return "You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"
+    return {"You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"}
 
 @app.get("/status")
 def status():
     return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__}"}
-
-@app.post("/webhook")
-async def print_warning():
-    return {"*** This is the legacy webhook.  You need to update to webhook urls to end in plex, tautulli, emby, or jellyfin instead of webhook. ***"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
