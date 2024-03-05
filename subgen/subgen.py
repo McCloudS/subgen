@@ -58,7 +58,6 @@ hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
-timestamps = convert_to_bool(os.getenv('TIMESTAMPS', True))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
