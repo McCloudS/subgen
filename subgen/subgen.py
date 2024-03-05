@@ -114,7 +114,7 @@ def progress(seek, total):
     sys.stderr.flush()
     if(docker_status) == 'Docker':
         percent = ((seek / total) * 100)
-        logging.info(f"Progress: {seek}/{total} ({percent:.2f}%)")
+        logging.info(f"Transcribe: {percent:.2f}% {seek}/{total} seconds")
 
 TIME_OFFSET = 5
 
