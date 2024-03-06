@@ -121,7 +121,7 @@ def progress(seek, total):
         last_digit = str(current_time)[-1]
         # Check if the last digit is '0' or '5' This is to only try to update every 5 seconds so we don't spam console
         if last_digit in ('0', '5'):
-            logging.info("Force Transcribe Status Update...")
+            logging.info("Force Update...")
 
 TIME_OFFSET = 5
 
