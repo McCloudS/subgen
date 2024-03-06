@@ -115,7 +115,13 @@ def progress(seek, total):
     if(docker_status) == 'Docker':
         #percent = ((seek / total) * 100)
         #logging.info(f"Transcribe: {percent:.2f}% {seek}/{total} seconds")
-        logging.info("Force Transcribe Status Update...")
+        # Get the current time in seconds
+        current_time = int(time.time())
+        # Convert the time to a string and get the last character
+        last_digit = str(current_time)[-1]
+        # Check if the last digit is '0' or '5' This is to only try to update every 5 seconds so we don't spam console
+        if last_digit in ('0', '5'):
+            logging.info("Force Transcribe Status Update...")
 
 TIME_OFFSET = 5
 
