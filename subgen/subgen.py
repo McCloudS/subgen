@@ -22,6 +22,7 @@ import requests
 import av
 import ffmpeg
 import whisper
+import re
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -154,6 +155,47 @@ def status():
     in_docker = os.path.exists('/.dockerenv')
     docker_status = "Docker" if in_docker else "Standalone"
     return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__} ({docker_status})"}
+
+@app.post("/subsync")
+def subsync(
+        audio_file: UploadFile = File(...),
+        subtitle_file: UploadFile = File(...),
+        language: Union[str, None] = Query(default=None),
+):
+    try:
+        logging.info(f"Syncing subtitle file from Subsync webhook")
+        result = None
+        
+        srt_content = subtitle_file.file.read().decode('utf-8')
+        srt_content = re.sub(r'\{.*?\}', '', srt_content)
+        # Remove numeric counters for each entry
+        srt_content = re.sub(r'^\d+$', '', srt_content, flags=re.MULTILINE)
+        # Remove timestamps and formatting
+        srt_content = re.sub(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}', '', srt_content)
+        # Remove any remaining newlines and spaces
+        srt_content = re.sub(r'\n\n+', '\n', srt_content).strip()
+                
+        start_time = time.time()
+        start_model()
+
+        result = model.align(audio_file.file.read(), srt_content, language=language)
+        appendLine(result)
+        elapsed_time = time.time() - start_time
+        minutes, seconds = divmod(int(elapsed_time), 60)
+        logging.info(f"Subsync is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+    except Exception as e:
+        logging.info(f"Error processing or aligning {audio_file.filename} or {subtitle_file.filename}: {e}")
+    finally:
+        delete_model()
+    if result:
+        return StreamingResponse(
+            iter(result.to_srt_vtt(filepath = None, word_level=word_level_highlight)),
+            media_type="text/plain",
+            headers={
+                'Source': 'Aligned using stable-ts from Subgen!',
+            })
+    else:
+        return
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
