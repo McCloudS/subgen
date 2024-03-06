@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+6 Mar 2024: Added a `/subsync` endpoint that can attempt to align/synchronize subtitles to a file.  Takes audio_file, subtitle_file, language (2 letter code), and outputs an srt.
+
 5 Mar 2024: Cleaned up logging. Added timestamps option (if Debug = True, timestamps will print in logs).
 
 4 Mar 2024: Updated Dockerfile CUDA to 12.2.2 (From CTranslate2).  Added endpoint `/status` to return Subgen version.  Can also use distil models now!  See variables below!
