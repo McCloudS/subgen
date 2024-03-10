@@ -368,7 +368,10 @@ def detect_language(
             files_to_transcribe.remove(f"Bazarr-detect-language-{random_name}")
         delete_model()
 
-        return {"detected_language": get_lang_pair(whisper_languages, detected_lang_code), "language_code": detected_lang_code}
+        if result:
+            return {"detected_language": get_lang_pair(whisper_languages, detected_lang_code), "language_code": detected_lang_code}
+        else:
+            return
 
 def start_model():
     global model
