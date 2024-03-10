@@ -298,6 +298,7 @@ def batch(
     transcribe_existing(directory, forceLanguage)
     
 # idea and some code for asr and detect language from https://github.com/ahmetoner/whisper-asr-webservice
+@app.post("//asr")
 @app.post("/asr")
 def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
@@ -316,7 +317,7 @@ def asr(
         
         start_time = time.time()
         start_model()
-        files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
+        files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         if(hf_transformers):
             result = model.transcribe(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
         else:
@@ -328,8 +329,8 @@ def asr(
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
     finally:
-        if f"Bazarr-detect-language-{random_name}" in files_to_transcribe:
-            files_to_transcribe.remove(f"Bazarr-detect-language-{random_name}")
+        if f"Bazarr-asr-{random_name}" in files_to_transcribe:
+            files_to_transcribe.remove(f"Bazarr-asr-{random_name}")
         delete_model()
     if result:
         return StreamingResponse(
@@ -341,6 +342,7 @@ def asr(
     else:
         return
 
+@app.post("//detect-language")
 @app.post("/detect-language")
 def detect_language(
         audio_file: UploadFile = File(...),
