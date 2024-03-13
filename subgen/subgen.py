@@ -348,6 +348,7 @@ def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
+    detected_lang_code = ""  # Initialize with an empty string
     try:
         #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
