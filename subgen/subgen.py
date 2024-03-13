@@ -350,7 +350,6 @@ def detect_language(
 ):    
     try:
         #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
-        result = None
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
         start_model()
 
@@ -368,10 +367,7 @@ def detect_language(
             files_to_transcribe.remove(f"Bazarr-detect-language-{random_name}")
         delete_model()
 
-        if result:
-            return {"detected_language": get_lang_pair(whisper_languages, detected_lang_code), "language_code": detected_lang_code}
-        else:
-            return
+        return {"detected_language": get_lang_pair(whisper_languages, detected_lang_code), "language_code": detected_lang_code}
 
 def start_model():
     global model
