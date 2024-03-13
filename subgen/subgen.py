@@ -454,24 +454,14 @@ def get_file_name_without_extension(file_path):
 
 def has_subtitle_language(video_file, target_language):
     try:
-        container = av.open(video_file)
-        subtitle_stream = None
-
-        # Iterate through the streams in the video file
-        for stream in container.streams:
-            if stream.type == 'subtitle':
-                # Check if the subtitle stream has the target language
-                if 'language' in stream.metadata and stream.metadata['language'] == target_language:
-                    subtitle_stream = stream
-                    break
-
-        if subtitle_stream:
-            logging.debug(f"Subtitles in '{target_language}' language found in the video.")
-            return True
-        else:
-            logging.debug(f"No subtitles in '{target_language}' language found in the video.")
-
-        container.close()
+        with av.open(video_file) as container:
+            subtitle_stream = next((stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata and stream.metadata['language'] == target_language), None)
+            
+            if subtitle_stream:
+                logging.debug(f"Subtitles in '{target_language}' language found in the video.")
+                return True
+            else:
+                logging.debug(f"No subtitles in '{target_language}' language found in the video.")
     except Exception as e:
         logging.info(f"An error occurred: {e}")
         return False
@@ -608,10 +598,7 @@ def get_jellyfin_admin(users):
 def has_audio(file_path):
     try:
         container = av.open(file_path)
-        for stream in container.streams:
-            if stream.type == 'audio':
-                return True
-        return False
+        return any(stream.type == 'audio' for stream in container.streams)
     except (av.AVError, UnicodeDecodeError):
         return False
 
