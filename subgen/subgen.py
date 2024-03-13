@@ -367,7 +367,7 @@ def detect_language(
             files_to_transcribe.remove(f"Bazarr-detect-language-{random_name}")
         delete_model()
 
-        return {"detected_language": get_lang_pair(whisper_languages, detected_lang_code), "language_code": detected_lang_code}
+        return {"detected_language": whisper_languages.get(detected_lang_code, detected_lang_code) , "language_code": detected_lang_code}
 
 def start_model():
     global model
@@ -386,24 +386,6 @@ def delete_model():
             logging.debug("Queue is empty, clearing/releasing VRAM")
             model = None
             gc.collect()
-
-def get_lang_pair(whisper_languages, key):
-  """Returns the other side of the pair in the Whisper languages dictionary.
-
-  Args:
-    whisper_languages: A dictionary of Whisper languages.
-    key: The key to look up in the dictionary.
-
-  Returns:
-    The other side of the pair in the Whisper languages dictionary, or None if the
-    key is not found in the dictionary.
-  """
-
-  other_side = whisper_languages.get(key)
-  if other_side is None:
-    return key
-  else:
-    return whisper_languages[other_side]
 
 def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forceLanguage=None) -> None:
     """Generates subtitles for a video file.
