@@ -312,10 +312,10 @@ def asr(
         output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
         word_timestamps: bool = Query(default=False, description="Word level timestamps") #not used by Bazarr
 ):
+        random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
     try:
         logging.info(f"Transcribing file from Bazarr/ASR webhook")
         result = None
-        random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         
         start_time = time.time()
         start_model()
@@ -352,8 +352,8 @@ def detect_language(
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
     detected_lang_code = ""  # Initialize with an empty string
+    random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
     try:
-        random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_model()
 
         files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
