@@ -1,4 +1,4 @@
-name: Build_Subgen_Dockerfile
+name: Update_CalVer
 
 on:
   push:
