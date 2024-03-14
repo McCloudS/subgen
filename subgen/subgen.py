@@ -359,9 +359,9 @@ def detect_language(
         files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if(hf_transformers):
-            detected_lang_code = model.transcribe(whisper.pad_or_trim(audio_data, input_sr=16000, batch_size=hf_batch_size).language
+            detected_lang_code = model.transcribe(whisper.pad_or_trim(audio_data), input_sr=16000, batch_size=hf_batch_size).language
         else:
-            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data, input_sr=16000).language
+            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data), input_sr=16000).language
             
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
