@@ -161,10 +161,9 @@ The following environment variables are available in Docker.  They will default 
 | APPEND | False | Will add the following at the end of a subtitle: "Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
 
 ### Images:
-mccloud/subgen:latest ~~or mccloud/subgen:cpu is CPU only (smaller)<br>~~
-~~mccloud/subgen:cuda is for GPU support~~
+`mccloud/subgen:latest` is GPU or CPU <br>
+`mccloud/subgen:cpu` is for CPU only (slightly smaller image)
 <br><br>
-There is now only a single image being maintained, the image has everything necessary to do both CPU and GPU.
 
 # What are the limitations/problems?
 
