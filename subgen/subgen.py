@@ -322,9 +322,9 @@ def asr(
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if(hf_transformers):
-            result = model.transcribe(np.frombuffer(audio_data, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
+            result = model.transcribe(audio_data, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
         else:
-            result = model.transcribe_stable(np.frombuffer(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
+            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
