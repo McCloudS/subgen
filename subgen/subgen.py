@@ -71,6 +71,8 @@ subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt
 
 in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
+last_print_time = None
+
 
 # Define a filter class
 class MultiplePatternsFilter(logging.Filter):
@@ -114,14 +116,15 @@ def progress(seek, total):
     sys.stdout.flush()
     sys.stderr.flush()
     if(docker_status) == 'Docker':
-        #percent = ((seek / total) * 100)
-        #logging.info(f"Transcribe: {percent:.2f}% {seek}/{total} seconds")
-        # Get the current time in seconds
-        current_time = int(time.time())
-        # Convert the time to a string and get the last character
-        last_digit = str(current_time)[-1]
-        # Check if the last digit is '0' or '5' This is to only try to update every 5 seconds so we don't spam console
-        if last_digit in ('0', '5'):
+        global last_print_time
+        # Get the current time
+        current_time = time.time()
+    
+        # Check if 5 seconds have passed since the last print
+        if last_print_time is None or (current_time - last_print_time) >= 5:
+            # Update the last print time
+            last_print_time = current_time
+            # Log the message
             logging.info("Force Update...")
 
 TIME_OFFSET = 5
