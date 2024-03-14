@@ -361,7 +361,7 @@ def detect_language(
         if(hf_transformers):
             detected_lang_code = model.transcribe(whisper.pad_or_trim(audio_data, input_sr=16000, batch_size=hf_batch_size).language
         else:
-            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_data, input_sr=16000).language
+            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data, input_sr=16000).language
             
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
