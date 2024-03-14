@@ -260,7 +260,7 @@ def receive_jellyfin_webhook(
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Path of file: {fullpath}")
      
-            gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            titles(path_mapping(fullpath), transcribe_or_translate, True)
             try:
                 refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
                 logging.info(f"Metadata for item {ItemId} refreshed successfully.")
@@ -287,7 +287,7 @@ def receive_emby_webhook(
             if((event == "library.new" and procaddedmedia) or (event == "playback.start" and procmediaonplay)):
                 logging.debug("Path of file: " + fullpath)
      
-                gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+                titles(path_mapping(fullpath), transcribe_or_translate, True)
     else:
         return {"This doesn't appear to be a properly configured Emby webhook, please review the instructions again!"}
      
@@ -315,16 +315,16 @@ def asr(
     try:
         logging.info(f"Transcribing file from Bazarr/ASR webhook")
         result = None
-        #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
-        random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
+        random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         
         start_time = time.time()
         start_model()
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
+        audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if(hf_transformers):
-            result = model.transcribe(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
+            result = model.transcribe(np.frombuffer(audio_data, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
         else:
-            result = model.transcribe_stable(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, task=task, input_sr=16000, language=language, progress_callback=progress)
+            result = model.transcribe_stable(np.frombuffer(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -353,15 +353,15 @@ def detect_language(
 ):    
     detected_lang_code = ""  # Initialize with an empty string
     try:
-        #give the 'process' a random name so mutliple Bazaar transcribes can operate at the same time.
-        random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
+        random_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
         start_model()
 
         files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
+        audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if(hf_transformers):
-            detected_lang_code = model.transcribe(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000, batch_size=hf_batch_size).language
+            detected_lang_code = model.transcribe(whisper.pad_or_trim(audio_data, input_sr=16000, batch_size=hf_batch_size).language
         else:
-            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0), input_sr=16000).language
+            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(np.frombuffer(audio_data, input_sr=16000).language
             
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -384,20 +384,20 @@ def start_model():
             model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
-    if clear_vram_on_complete:
-        if len(files_to_transcribe) == 0:
-            global model
-            logging.debug("Queue is empty, clearing/releasing VRAM")
-            model = None
-            gc.collect()
+    if clear_vram_on_complete and len(files_to_transcribe) == 0:
+        global model
+        logging.debug("Queue is empty, clearing/releasing VRAM")
+        model = None
+        gc.collect()
 
 def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forceLanguage=None) -> None:
     """Generates subtitles for a video file.
 
     Args:
-        file_path: The path to the video file.
-        transcription_or_translation: The type of transcription or translation to perform.
-        front: Whether to add the file to the front of the transcription queue.
+        file_path: str - The path to the video file.
+        transcribe_or_translate: str - The type of transcription or translation to perform.
+        front: bool - Whether to add the file to the front of the transcription queue. Default is True.
+        forceLanguage: str - The language to force for transcription or translation. Default is None.
     """
     
     try:
