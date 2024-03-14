@@ -11,7 +11,7 @@ RUN apt-get update \
         ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install -r cpu_requirements.txt
+    && pip3 install -r cpu_requirements.txt --no-deps
 
 ENV PYTHONUNBUFFERED=1
 
