@@ -52,5 +52,6 @@ jobs:
         name: Build and push CPU
         uses: docker/build-push-action@v5
         with:
+          file: ./Dockerfile.cpu
           push: true
           tags: mccloud/subgen:cpu
