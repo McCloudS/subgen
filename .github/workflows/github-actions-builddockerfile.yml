@@ -43,15 +43,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
-        name: Build and push GPU
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: mccloud/subgen:latest
-      -
         name: Build and push CPU
         uses: docker/build-push-action@v5
         with:
           file: ./Dockerfile.cpu
           push: true
           tags: mccloud/subgen:cpu
+      -
+        name: Build and push GPU
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: mccloud/subgen:latest
