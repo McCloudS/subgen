@@ -2,6 +2,8 @@ FROM ubuntu:22.04
 
 WORKDIR /subgen
 
+COPY cpu_requirements.txt cpu_requirements.txt
+
 RUN apt-get update \
     && apt-get install -y \
         python3 \
@@ -9,19 +11,7 @@ RUN apt-get update \
         ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && pip3 install \
-    numpy \
-    stable-ts \
-    fastapi \
-    requests \
-    faster-whisper \
-    uvicorn \
-    python-multipart \
-    python-ffmpeg \
-    whisper \
-    transformers \
-    accelerate \
-    optimum
+    && pip3 install -r cpu_requirements.txt
 
 ENV PYTHONUNBUFFERED=1
 
