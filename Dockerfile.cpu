@@ -1,4 +1,4 @@
-FROM bookworm-slim
+FROM stable-slim
 
 WORKDIR /subgen
 
