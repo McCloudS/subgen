@@ -2,8 +2,6 @@ FROM alpine
 
 WORKDIR /subgen
 
-RUN rm /usr/lib/python*/EXTERNALLY-MANAGED
-
 RUN apk add --no-cache \ 
     python3 \
     cmd:pip3 \
@@ -21,7 +19,8 @@ RUN apk add --no-cache \
     whisper \
     transformers \
     accelerate \
-    optimum 
+    optimum \
+    --break-system-packages
 
 ENV PYTHONUNBUFFERED=1
 
