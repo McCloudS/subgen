@@ -1,17 +1,25 @@
-FROM ubuntu:22.04
+FROM alpine
 
 WORKDIR /subgen
 
-COPY cpu_requirements.txt cpu_requirements.txt
-
-RUN apt-get update \
-    && apt-get install -y \
-        python3 \
-        python3-pip \
-        ffmpeg \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip3 install -r cpu_requirements.txt --no-deps
+RUN apk add --no-cache \ 
+    python3 \
+    python3-pip \
+    ffmpeg \
+    bash \
+    && pip3 install \
+    numpy \
+    stable-ts \
+    fastapi \
+    requests \
+    faster-whisper \
+    uvicorn \
+    python-multipart \
+    python-ffmpeg \
+    whisper \
+    transformers \
+    accelerate \
+    optimum
 
 ENV PYTHONUNBUFFERED=1
 
