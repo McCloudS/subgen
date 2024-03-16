@@ -1,12 +1,14 @@
-FROM alpine
+FROM bookworm-slim
 
 WORKDIR /subgen
 
-RUN apk add --no-cache \ 
-    python3 \
-    cmd:pip3 \
-    ffmpeg \
-    bash \
+RUN apt-get update \
+    && apt-get install -y \
+        python3 \
+        python3-pip \
+        ffmpeg \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
     && pip3 install \
     numpy \
     stable-ts \
@@ -19,8 +21,7 @@ RUN apk add --no-cache \
     whisper \
     transformers \
     accelerate \
-    optimum \
-    --break-system-packages
+    optimum
 
 ENV PYTHONUNBUFFERED=1
 
