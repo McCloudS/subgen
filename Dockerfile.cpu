@@ -4,7 +4,7 @@ WORKDIR /subgen
 
 RUN apk add --no-cache \ 
     python3 \
-    python3-pip \
+    py3-pip \
     ffmpeg \
     bash \
     && pip3 install \
