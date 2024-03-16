@@ -2,7 +2,7 @@ FROM alpine
 
 WORKDIR /subgen
 
-RUN apk add --no-cache \ 
+RUN apk add --no-cache --break-system-packages \ 
     python3 \
     cmd:pip3 \
     ffmpeg \
@@ -19,7 +19,7 @@ RUN apk add --no-cache \
     whisper \
     transformers \
     accelerate \
-    optimum
+    optimum 
 
 ENV PYTHONUNBUFFERED=1
 
