@@ -1,4 +1,4 @@
-FROM debian:stable-slim
+FROM python:3.11-slim-bullseye
 
 WORKDIR /subgen
 
