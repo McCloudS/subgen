@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+19 Mar 2024: Added a `MONITOR` environment variable.  Will 'watch' or 'monitor' your `TRANSCRIBE_FOLDERS` for changes and run on them.  Useful if you just want to paste files into a folder and get subtitles.   
+
 6 Mar 2024: Added a `/subsync` endpoint that can attempt to align/synchronize subtitles to a file.  Takes audio_file, subtitle_file, language (2 letter code), and outputs an srt.
 
 5 Mar 2024: Cleaned up logging. Added timestamps option (if Debug = True, timestamps will print in logs).
@@ -58,7 +60,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate`.  Then run it: `python3 subgen.py`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`.  Then run it: `python3 subgen.py`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
 
 ### Docker
 
@@ -159,6 +161,7 @@ The following environment variables are available in Docker.  They will default 
 | HF_BATCH_SIZE | 24 | Batch size to be used with above.  Batch size has a correlation to VRAM, not sure what it is yet and may require tinkering.  
 | UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py built into the Docker image.  Standalone users can use this with launcher.py to get updates. |
 | APPEND | False | Will add the following at the end of a subtitle: "Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
+| MONITOR | False | Will monitor `TRANSCRIBE_FOLDERS` for real-time changes to see if we need to generate subtitles |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
