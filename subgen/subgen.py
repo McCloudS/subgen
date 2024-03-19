@@ -615,15 +615,16 @@ def path_mapping(fullpath):
         return fullpath.replace(path_mapping_from, path_mapping_to)
     return fullpath
 
-# Define a handler class that will process new files
-class NewFileHandler(FileSystemEventHandler):
-    def on_created(self, event):
-        # Only process if it's a file
-        if not event.is_directory:
-            file_path = event.src_path
-            # Call the gen_subtitles function
-            logging.info(f"File: {path_mapping(file_path)} was added")
-            gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+if monitor:
+    # Define a handler class that will process new files
+    class NewFileHandler(FileSystemEventHandler):
+        def on_created(self, event):
+            # Only process if it's a file
+            if not event.is_directory:
+                file_path = event.src_path
+                # Call the gen_subtitles function
+                logging.info(f"File: {path_mapping(file_path)} was added")
+                gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
 
 def transcribe_existing(transcribe_folders, forceLanguage=None):
     transcribe_folders = transcribe_folders.split("|")
