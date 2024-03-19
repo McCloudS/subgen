@@ -60,6 +60,7 @@ hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
+reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -764,4 +765,4 @@ if __name__ == "__main__":
         logging.info(f"Using faster-whisper")
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
-    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True, reload_include='*.py')
+    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)
