@@ -23,6 +23,8 @@ import av
 import ffmpeg
 import whisper
 import re
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -610,6 +612,16 @@ def path_mapping(fullpath):
         return fullpath.replace(path_mapping_from, path_mapping_to)
     return fullpath
 
+# Define a handler class that will process new files
+class NewFileHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        # Only process if it's a file
+        if not event.is_directory:
+            file_path = event.src_path
+            # Call the gen_subtitles function
+            logging.info(f"File: {path_mapping(file_path)} was added")
+            gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+
 def transcribe_existing(transcribe_folders, forceLanguage=None):
     transcribe_folders = transcribe_folders.split("|")
     logging.info("Starting to search folders to see if we need to create subtitles.")
@@ -624,8 +636,14 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
     if os.path.isfile(path):
         if has_audio(path):
             gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
-                    
-    logging.info("Finished searching and queueing files for transcription")
+     # Set up the observer to watch for new files
+    observer = Observer()
+    for path in transcribe_folders:
+        if os.path.isdir(path):
+            handler = NewFileHandler()
+            observer.schedule(handler, path, recursive=True)
+    observer.start()
+    logging.info("Finished searching and queueing files for transcription. Now watching for new files.")
 
 whisper_languages = {
     "en": "english",
