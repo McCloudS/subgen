@@ -7,6 +7,8 @@ on:
   #  paths-ignore:
   #    - '**.md'
   #    - '**.yml'
+    paths:
+      - 'requirements.txt'
   workflow_dispatch:
 
 jobs:
