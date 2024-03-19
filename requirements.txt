@@ -1,0 +1,13 @@
+numpy
+stable-ts
+fastapi
+requests
+faster-whisper
+uvicorn
+python-multipart
+python-ffmpeg
+whisper
+transformers
+accelerate
+optimum
+watchdog
