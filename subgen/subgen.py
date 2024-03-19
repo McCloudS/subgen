@@ -639,13 +639,14 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
         if has_audio(path):
             gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
      # Set up the observer to watch for new files
-    observer = Observer()
-    for path in transcribe_folders:
-        if os.path.isdir(path):
-            handler = NewFileHandler()
-            observer.schedule(handler, path, recursive=True)
-    observer.start()
-    logging.info("Finished searching and queueing files for transcription. Now watching for new files.")
+    if monitor:
+        observer = Observer()
+        for path in transcribe_folders:
+            if os.path.isdir(path):
+                handler = NewFileHandler()
+                observer.schedule(handler, path, recursive=True)
+        observer.start()
+        logging.info("Finished searching and queueing files for transcription. Now watching for new files.")
 
 whisper_languages = {
     "en": "english",
