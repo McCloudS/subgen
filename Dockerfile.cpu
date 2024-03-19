@@ -2,25 +2,16 @@ FROM python:3.11-slim-bullseye
 
 WORKDIR /subgen
 
+ADD https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt /subgen/requirements.txt
+
 RUN apt-get update \
     && apt-get install -y \
+        python3 \
+        python3-pip \
         ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install \
-    numpy \
-    stable-ts \
-    fastapi \
-    requests \
-    faster-whisper \
-    uvicorn \
-    python-multipart \
-    python-ffmpeg \
-    whisper \
-    transformers \
-    accelerate \
-    optimum \
-    watchdog
+    && pip install -r requirements.txt
 
 ENV PYTHONUNBUFFERED=1
 
