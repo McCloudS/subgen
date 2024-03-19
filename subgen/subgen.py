@@ -616,7 +616,7 @@ def path_mapping(fullpath):
 if monitor:
 # Define a handler class that will process new files
     class NewFileHandler(FileSystemEventHandler):
-        def on_created(self, event):
+        def on_modified(self, event):
             # Only process if it's a file
             if not event.is_directory:
                 file_path = event.src_path
