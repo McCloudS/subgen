@@ -764,4 +764,4 @@ if __name__ == "__main__":
         logging.info(f"Using faster-whisper")
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
-    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True)
+    uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=debug, use_colors=True, reload_include='*.py')
