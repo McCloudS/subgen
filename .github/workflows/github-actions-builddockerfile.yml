@@ -1,7 +1,7 @@
 name: Build_Subgen_Dockerfile_GPU
 
 on:
-  #push:
+  push:
   #  branches:
   #    - 'main'
   #  paths-ignore:
