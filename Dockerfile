@@ -21,7 +21,8 @@ RUN apt-get update \
     whisper \
     transformers \
     accelerate \
-    optimum
+    optimum \
+    watchdog
 
 ENV PYTHONUNBUFFERED=1
 
