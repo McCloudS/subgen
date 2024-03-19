@@ -76,7 +76,6 @@ in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
-
 # Define a filter class
 class MultiplePatternsFilter(logging.Filter):
     def filter(self, record):
@@ -90,6 +89,11 @@ class MultiplePatternsFilter(logging.Filter):
             "released on ",
             "Attempting to acquire",
             "acquired on",
+            "header parsing failed",
+            "timescale not set",
+            "misdetection possible",
+            "srt was added",
+            "doesn't have any audio to transcribe",
         ]
         # Return False if any of the patterns are found, True otherwise
         return not any(pattern in record.getMessage() for pattern in patterns)
