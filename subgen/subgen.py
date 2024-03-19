@@ -23,8 +23,6 @@ import av
 import ffmpeg
 import whisper
 import re
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 
 def convert_to_bool(in_bool):
     if isinstance(in_bool, bool):
@@ -53,6 +51,7 @@ use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', './models')
+monitor = convert_to_bool(os.getenv('MONITOR', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
 force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
@@ -64,6 +63,10 @@ append = convert_to_bool(os.getenv('APPEND', False))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
+
+if monitor:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
 
 app = FastAPI()
 model = None
