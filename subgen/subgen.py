@@ -1,4 +1,4 @@
-subgen_version = '2024.3.19.11'
+subgen_version = '2024.3.19.10'
 
 from datetime import datetime
 import subprocess
@@ -616,7 +616,7 @@ def path_mapping(fullpath):
     return fullpath
 
 if monitor:
-    # Define a handler class that will process new files
+# Define a handler class that will process new files
     class NewFileHandler(FileSystemEventHandler):
         def on_created(self, event):
             # Only process if it's a file
