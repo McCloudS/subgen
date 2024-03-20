@@ -7,7 +7,7 @@ def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1')
 
-def install_packages_from_requirements(requirements_file, force_update):
+def install_packages_from_requirements(requirements_file):
     try:
         subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
         print(f"Requirements from {requirements_file} have been successfully installed.")
@@ -44,7 +44,7 @@ def main():
 
     # Install packages from requirements.txt if the install or packageupdate argument is True
     if args.install:
-        install_packages_from_requirements(requirements_file, args.packageupdate)
+        install_packages_from_requirements(requirements_file)
     
     subgen_script_name = "./subgen.py"
     
