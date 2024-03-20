@@ -267,7 +267,7 @@ def receive_jellyfin_webhook(
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Path of file: {fullpath}")
      
-            titles(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
             try:
                 refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
                 logging.info(f"Metadata for item {ItemId} refreshed successfully.")
