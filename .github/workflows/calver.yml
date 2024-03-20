@@ -4,10 +4,9 @@ on:
   push:
     branches:
       - 'main'
-    paths-ignore:
-      - '**.md'
-      - '**.yml'
-      - 'Dockerfile**'
+    paths:
+      - 'subgen.py'
+      - 'launcher.py'
   workflow_dispatch:
 
 jobs:
