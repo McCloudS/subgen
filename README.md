@@ -60,13 +60,14 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py --update --install`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
+Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
 
 #### Using Launcher
 
 lunacher.py can launch subgen for you and automate the setup and can take the following options:
 
-![image](https://github.com/McCloudS/subgen/assets/64094529/320e3243-7733-4b14-a1af-7215e541d244)
+![image](https://github.com/McCloudS/subgen/assets/64094529/b2364e22-a586-46d8-b051-e95f11db68c0)
+
 
 
 ### Docker
