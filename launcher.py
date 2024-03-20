@@ -30,6 +30,7 @@ def main():
     parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
+    parser.add_argument('-s', '--skiprun', default=False, action='store_true', help="Skip running subgen.py (default: False)")
                   
     args = parser.parse_args()
 
@@ -42,7 +43,7 @@ def main():
     requirements_file = "requirements.txt"
 
     # Install packages from requirements.txt if the install or packageupdate argument is True
-    if args.install or args.packageupdate:
+    if args.install:
         install_packages_from_requirements(requirements_file, args.packageupdate)
     
     subgen_script_name = "./subgen.py"
@@ -55,8 +56,10 @@ def main():
         download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
     else:
         print("Environment variable UPDATE is not set or set to False, skipping download.")
-        
-    subprocess.run(['python3', '-u', 'subgen.py'], check=True)
+    if not args.skiprun:    
+        subprocess.run(['python3', '-u', 'subgen.py'], check=True)
+    else:
+        print("not running subgen.py: -s or --skiprun set")
 
 if __name__ == "__main__":
     main()
