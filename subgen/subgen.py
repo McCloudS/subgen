@@ -624,7 +624,7 @@ if monitor:
             # Only process if it's a file
             if not event.is_directory:
                 file_path = event.src_path
-                if has_audio(file_path)
+                if has_audio(file_path):
                 # Call the gen_subtitles function
                     logging.info(f"File: {path_mapping(file_path)} was added")
                     gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
