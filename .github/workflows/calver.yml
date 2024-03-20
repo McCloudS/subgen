@@ -34,6 +34,6 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add subgen/subgen.py
+          git add subgen.py
           git commit -m "Automated update subgen.py with version"
           git push
