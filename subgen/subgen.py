@@ -63,7 +63,7 @@ if transcribe_device == "gpu":
     transcribe_device = "cuda"
 
 if monitor:
-    from watchdog.observers import Observer
+    from watchdog.observers.polling import PollingObserver as Observer
     from watchdog.events import FileSystemEventHandler
 
 app = FastAPI()
@@ -606,7 +606,7 @@ def get_jellyfin_admin(users):
 
 def has_audio(file_path):
     try:
-        container = av.open(file_path)
+        with av.open(file_path) as container
         return any(stream.type == 'audio' for stream in container.streams)
     except (av.AVError, UnicodeDecodeError):
         return False
@@ -618,15 +618,20 @@ def path_mapping(fullpath):
     return fullpath
 
 if monitor:
-# Define a handler class that will process new files
+    # Define a handler class that will process new files
     class NewFileHandler(FileSystemEventHandler):
-        def on_modified(self, event):
+        def create_subtitle(self, event):
             # Only process if it's a file
             if not event.is_directory:
                 file_path = event.src_path
+                if has_audio(file_path)
                 # Call the gen_subtitles function
-                logging.info(f"File: {path_mapping(file_path)} was added")
-                gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+                    logging.info(f"File: {path_mapping(file_path)} was added")
+                    gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+        def on_created(self, event):
+            self.create_subtitle(event)
+        def on_modified(self, event):
+            self.create_subtitle(event)
 
 def transcribe_existing(transcribe_folders, forceLanguage=None):
     transcribe_folders = transcribe_folders.split("|")
