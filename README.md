@@ -60,7 +60,7 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-install python3 and ffmpeg and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`.  Then run it: `python3 subgen.py`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  
+Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py --update --install`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
 
 ### Docker
 
