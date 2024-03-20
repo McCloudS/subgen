@@ -294,7 +294,7 @@ def receive_emby_webhook(
             if((event == "library.new" and procaddedmedia) or (event == "playback.start" and procmediaonplay)):
                 logging.debug("Path of file: " + fullpath)
      
-                titles(path_mapping(fullpath), transcribe_or_translate, True)
+                gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
     else:
         return {"This doesn't appear to be a properly configured Emby webhook, please review the instructions again!"}
      
