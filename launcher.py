@@ -9,12 +9,7 @@ def convert_to_bool(in_bool):
 
 def install_packages_from_requirements(requirements_file, force_update):
     try:
-        # If force_update is True, add the '--upgrade' flag to force an update
-        if force_update:
-            subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
-        else:
-            subprocess.run(['pip3', 'install', '-r', requirements_file], check=True)
-        
+        subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
         print(f"Requirements from {requirements_file} have been successfully installed.")
     except subprocess.CalledProcessError as e:
         print(f"Failed to install requirements: {e}")
@@ -32,7 +27,7 @@ def main():
     # Construct the argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument( '-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
-    parser.add_argument('-i', '--install', default=False, action='store_true', help="Install packages (default: False)")
+    parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-p', '--packageupdate', default=False, action='store_true', help="Force update PIP packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
