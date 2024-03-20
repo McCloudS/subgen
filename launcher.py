@@ -55,10 +55,10 @@ def main():
     
     if not os.path.exists(subgen_script_name):
         print(f"File {subgen_script_name} does not exist. Downloading from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py", subgen_script_name)
+        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
     elif convert_to_bool(os.getenv("UPDATE", "False")) or args.update:
         print(f"File exists, but UPDATE is set to True. Downloading {subgen_script_name} from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py", subgen_script_name)
+        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
     else:
         print("Environment variable UPDATE is not set or set to False, skipping download.")
         
