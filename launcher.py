@@ -31,11 +31,11 @@ def download_from_github(url, output_file):
 def main():
     # Construct the argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
-    parser.add_argument('--install', default=False, action='store_true', help="Install packages (default: False)")
-    parser.add_argument('--packageupdate', default=False, action='store_true', help="Force update PIP packages (default: False)")
-    parser.add_argument('--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
-    parser.add_argument('--update', default=False, action='store_true', help="Update Subgen (default: False)")
+    parser.add_argument( '-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
+    parser.add_argument('-i', '--install', default=False, action='store_true', help="Install packages (default: False)")
+    parser.add_argument('-p', '--packageupdate', default=False, action='store_true', help="Force update PIP packages (default: False)")
+    parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
+    parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
                   
     args = parser.parse_args()
 
