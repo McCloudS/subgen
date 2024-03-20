@@ -16,6 +16,6 @@ RUN apt-get update \
 ENV PYTHONUNBUFFERED=1
 
 ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen/subgen.py /subgen/subgen.py
+ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py /subgen/subgen.py
 
 CMD [ "bash", "-c", "python3 -u launcher.py" ]
