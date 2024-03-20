@@ -42,7 +42,6 @@ def main():
     # Set environment variables based on the parsed arguments
     os.environ['DEBUG'] = str(args.debug)
     os.environ['APPEND'] = str(args.append)
-    os.environ['UPDATE'] = str(args.update)
 
     # URL to the requirements.txt file on GitHub
     requirements_url = "https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt"
