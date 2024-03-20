@@ -606,8 +606,8 @@ def get_jellyfin_admin(users):
 
 def has_audio(file_path):
     try:
-        with av.open(file_path) as container
-        return any(stream.type == 'audio' for stream in container.streams)
+        with av.open(file_path) as container:
+            return any(stream.type == 'audio' for stream in container.streams)
     except (av.AVError, UnicodeDecodeError):
         return False
 
