@@ -2,7 +2,7 @@
 <details>
 <summary>Updates:</summary>
 
-21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured.  See below in Launcher section.
+21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured.  See below in Launcher section.  Removed 'Transformers' as an option.  While I usually don't like to remove features, I don't think anyone is using this and the results are wildly unpredictable and often cause out of memory errors.  
 
 19 Mar 2024: Added a `MONITOR` environment variable.  Will 'watch' or 'monitor' your `TRANSCRIBE_FOLDERS` for changes and run on them.  Useful if you just want to paste files into a folder and get subtitles.   
 
