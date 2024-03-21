@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured.  See below in Launcher section.
+
 19 Mar 2024: Added a `MONITOR` environment variable.  Will 'watch' or 'monitor' your `TRANSCRIBE_FOLDERS` for changes and run on them.  Useful if you just want to paste files into a folder and get subtitles.   
 
 6 Mar 2024: Added a `/subsync` endpoint that can attempt to align/synchronize subtitles to a file.  Takes audio_file, subtitle_file, language (2 letter code), and outputs an srt.
@@ -60,13 +62,15 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
+Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -b`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
 
 #### Using Launcher
 
 lunacher.py can launch subgen for you and automate the setup and can take the following options:
+![image](https://github.com/McCloudS/subgen/assets/64094529/4b88e804-d52b-4274-8e2a-4f7f14262c43)
 
-![image](https://github.com/McCloudS/subgen/assets/64094529/b2364e22-a586-46d8-b051-e95f11db68c0)
+Using `-b` for Bazarr setup:
+![image](https://github.com/McCloudS/subgen/assets/64094529/ade1b886-3b99-4f80-95ac-bb28608259bb)
 
 
 
