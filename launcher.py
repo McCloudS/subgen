@@ -117,7 +117,7 @@ def main():
     if not args.donotrun:    
         subprocess.run(['python3', '-u', 'subgen.py'], check=True)
     else:
-        print("not running subgen.py: -dnr or --donotrun")
+        print("Not running subgen.py: -dnr or --donotrun set")
 
 if __name__ == "__main__":
     main()
