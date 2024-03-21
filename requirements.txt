@@ -7,7 +7,4 @@ uvicorn
 python-multipart
 python-ffmpeg
 whisper
-transformers
-accelerate
-optimum
 watchdog
