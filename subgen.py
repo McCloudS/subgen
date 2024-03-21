@@ -18,6 +18,7 @@ from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Reques
 from fastapi.responses import StreamingResponse, RedirectResponse
 import numpy as np
 import stable_whisper
+from stable_whisper import Segment
 import requests
 import av
 import ffmpeg
