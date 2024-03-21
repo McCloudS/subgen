@@ -9,6 +9,7 @@ on:
   #    - '**.yml'
     paths:
       - 'requirements.txt'
+      - 'Dockerfile'
   workflow_dispatch:
 
 jobs:
