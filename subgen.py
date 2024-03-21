@@ -53,8 +53,6 @@ monitor = convert_to_bool(os.getenv('MONITOR', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
 force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
-hf_transformers = convert_to_bool(os.getenv('HF_TRANSFORMERS', False))
-hf_batch_size = int(os.getenv('HF_BATCH_SIZE', 24))
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
@@ -334,10 +332,7 @@ def asr(
         start_model()
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        if(hf_transformers):
-            result = model.transcribe(audio_data, task=task, input_sr=16000, language=language, batch_size=hf_batch_size, progress_callback=progress)
-        else:
-            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
+        result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -370,10 +365,7 @@ def detect_language(
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
         files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        if(hf_transformers):
-            detected_lang_code = model.transcribe(whisper.pad_or_trim(audio_data), input_sr=16000, batch_size=hf_batch_size).language
-        else:
-            detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data), input_sr=16000).language
+        detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data), input_sr=16000).language
             
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -389,11 +381,7 @@ def start_model():
     global model
     if model is None:
         logging.debug("Model was purged, need to re-create")
-        if(hf_transformers):
-            logging.debug("Using Hugging Face Transformers, whisper_threads, concurrent_transcriptions, and model_location variables are ignored!")
-            model = stable_whisper.load_hf_whisper(whisper_model, device=transcribe_device)
-        else:
-            model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+        model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
     if clear_vram_on_complete and len(files_to_transcribe) == 0:
@@ -444,10 +432,7 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             if force_detected_language_to:
                 forceLanguage = force_detected_language_to
                 logging.info(f"Forcing language to {forceLanguage}")
-            if(hf_transformers):
-                result = model.transcribe(file_path, language=forceLanguage, batch_size=hf_batch_size, task=transcribe_or_translate, progress_callback=progress)
-            else:
-                result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress)
+            result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress)
             appendLine(result)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
@@ -772,10 +757,7 @@ if __name__ == "__main__":
     logging.info(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
     logging.info(f"Running {str(whisper_threads)} threads per transcription")
     logging.info(f"Using {transcribe_device} to encode")
-    if hf_transformers:
-        logging.info(f"Using Hugging Face Transformers")
-    else:
-        logging.info(f"Using faster-whisper")
+    logging.info(f"Using faster-whisper")
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
     uvicorn.run("subgen:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)
