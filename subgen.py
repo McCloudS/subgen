@@ -27,7 +27,7 @@ import re
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
-    return str(in_bool).lower() in ('true', 'on', '1')
+    return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
 
 # Replace your getenv calls with appropriate default values here
 plextoken = os.getenv('PLEXTOKEN', 'token here')
