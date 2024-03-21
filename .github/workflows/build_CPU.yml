@@ -8,6 +8,7 @@ on:
   #    - '**.md'
   #    - '**.yml'
      paths:
+      - 'requirements.txt'
       - 'Dockerfile.cpu'
   workflow_dispatch:
 
