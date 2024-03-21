@@ -72,6 +72,9 @@ def load_env_variables(env_filename='subgen.env'):
         print(f"{env_filename} file not found. Please run prompt_and_save_env_variables() first.")
 
 def main():
+    #Make sure we're saving subgen.py and subgen.env in the right folder
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    
     # Construct the argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument( '-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
