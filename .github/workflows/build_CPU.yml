@@ -1,12 +1,14 @@
 name: Build_Subgen_Dockerfile_CPU
 
 on:
-  #push:
+  push:
   #  branches:
   #    - 'main'
   #  paths-ignore:
   #    - '**.md'
   #    - '**.yml'
+     paths:
+      - 'Dockerfile.cpu'
   workflow_dispatch:
 
 jobs:
