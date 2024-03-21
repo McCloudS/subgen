@@ -169,8 +169,6 @@ The following environment variables are available in Docker.  They will default 
 | DEBUG                     | True                  | Provides some debug data that can be helpful to troubleshoot path mapping and other issues. Fun fact, if this is set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding).  Useful to make small tweaks without re-downloading the whole file. |
 | FORCE_DETECTED_LANGUAGE_TO | '' | This is to force the model to a language instead of the detected one, takes a 2 letter language code.  For example, your audio is French but keeps detecting as English, you would set it to 'fr' |
 | CLEAR_VRAM_ON_COMPLETE | True | This will delete the model and do garbage collection when queue is empty.  Good if you need to use the VRAM for something else. |
-| HF_TRANSFORMERS | False | Uses Hugging Face Transformers models that should be faster, not tested as of now because HF is down. |
-| HF_BATCH_SIZE | 24 | Batch size to be used with above.  Batch size has a correlation to VRAM, not sure what it is yet and may require tinkering.  
 | UPDATE | False | Will pull latest subgen.py from the repository if True.  False will use the original subgen.py built into the Docker image.  Standalone users can use this with launcher.py to get updates. |
 | APPEND | False | Will add the following at the end of a subtitle: "Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}"
 | MONITOR | False | Will monitor `TRANSCRIBE_FOLDERS` for real-time changes to see if we need to generate subtitles |
