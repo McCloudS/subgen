@@ -138,16 +138,21 @@ TIME_OFFSET = 5
 
 def appendLine(result):
     if append:
-        lastSegment = result.segments[-1].copy()
-        lastSegment.id += 1
-        lastSegment.start += TIME_OFFSET
-        lastSegment.end += TIME_OFFSET
+        lastSegment = result.segments[-1]
         date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
-        lastSegment.text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}"
-        lastSegment.words = []
-        # lastSegment.words[0].word = lastSegment.text
-        # lastSegment.words = lastSegment.words[:len(lastSegment.words)-1]
-        result.segments.append(lastSegment)
+        appended_text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}"
+        
+        # Create a new segment with the updated information
+        newSegment = Segment(
+            start=lastSegment.start + TIME_OFFSET,
+            end=lastSegment.end + TIME_OFFSET,
+            text=appended_text,
+            words=[],  # Empty list for words
+            id=lastSegment.id + 1
+        )
+        
+        # Append the new segment to the result's segments
+        result.segments.append(newSegment)
 
 @app.get("/plex")
 @app.get("/webhook")
