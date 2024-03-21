@@ -5,3 +5,6 @@
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+#ignore our settings
+subgen.env
