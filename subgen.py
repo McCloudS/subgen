@@ -1,4 +1,4 @@
-subgen_version = '2024.3.22.48'
+subgen_version = '2024.3.21.44'
 
 from datetime import datetime
 import subprocess
@@ -57,6 +57,9 @@ clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', Tru
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
 reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
+model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
+custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
+lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -332,7 +335,9 @@ def asr(
         start_model()
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress)
+        if(model_prompt):
+            custom_model_prompt = greetings_translations.get(language, '') or custom_model_prompt
+        result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_model_prompt)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -443,10 +448,10 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             if force_detected_language_to:
                 forceLanguage = force_detected_language_to
                 logging.info(f"Forcing language to {forceLanguage}")
-            result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress)
+            result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress, initial_prompt=custom_model_prompt)
             appendLine(result)
             file_name, file_extension = os.path.splitext(file_path)
-            if isAudioFileExtension(file_extension):
+            if isAudioFileExtension(file_extension) and lrc_for_audio_files:
                 write_lrc(result, file_name + '.lrc')
             else:
                 result.to_srt_vtt(file_name + subextension, word_level=word_level_highlight)
@@ -763,6 +768,108 @@ whisper_languages = {
     "ba": "bashkir",
     "jw": "javanese",
     "su": "sundanese",
+}
+
+greetings_translations = {
+    "en": "Hello, welcome to my lecture.",
+    "zh": "你好，欢迎来到我的讲座。",
+    "de": "Hallo, willkommen zu meiner Vorlesung.",
+    "es": "Hola, bienvenido a mi conferencia.",
+    "ru": "Привет, добро пожаловать на мою лекцию.",
+    "ko": "안녕하세요, 제 강의에 오신 것을 환영합니다.",
+    "fr": "Bonjour, bienvenue à mon cours.",
+    "ja": "こんにちは、私の講義へようこそ。",
+    "pt": "Olá, bem-vindo à minha palestra.",
+    "tr": "Merhaba, dersime hoş geldiniz.",
+    "pl": "Cześć, witaj na mojej wykładzie.",
+    "ca": "Hola, benvingut a la meva conferència.",
+    "nl": "Hallo, welkom bij mijn lezing.",
+    "ar": "مرحبًا، مرحبًا بك في محاضرتي.",
+    "sv": "Hej, välkommen till min föreläsning.",
+    "it": "Ciao, benvenuto alla mia conferenza.",
+    "id": "Halo, selamat datang di kuliah saya.",
+    "hi": "नमस्ते, मेरे व्याख्यान में आपका स्वागत है।",
+    "fi": "Hei, tervetuloa luentooni.",
+    "vi": "Xin chào, chào mừng bạn đến với bài giảng của tôi.",
+    "he": "שלום, ברוך הבא להרצאתי.",
+    "uk": "Привіт, ласкаво просимо на мою лекцію.",
+    "el": "Γεια σας, καλώς ήλθατε στη διάλεξή μου.",
+    "ms": "Halo, selamat datang ke kuliah saya.",
+    "cs": "Ahoj, vítejte na mé přednášce.",
+    "ro": "Bună, bun venit la cursul meu.",
+    "da": "Hej, velkommen til min forelæsning.",
+    "hu": "Helló, üdvözöllek az előadásomon.",
+    "ta": "வணக்கம், என் பாடத்திற்கு வரவேற்கிறேன்.",
+    "no": "Hei, velkommen til foredraget mitt.",
+    "th": "สวัสดีครับ ยินดีต้อนรับสู่การบรรยายของฉัน",
+    "ur": "ہیلو، میری لیکچر میں خوش آمدید۔",
+    "hr": "Pozdrav, dobrodošli na moje predavanje.",
+    "bg": "Здравейте, добре дошли на моята лекция.",
+    "lt": "Sveiki, sveiki atvykę į mano paskaitą.",
+    "la": "Salve, gratias vobis pro eo quod meam lectionem excipitis.",
+    "mi": "Kia ora, nau mai ki aku rorohiko.",
+    "ml": "ഹലോ, എന്റെ പാഠത്തിലേക്ക് സ്വാഗതം.",
+    "cy": "Helo, croeso i fy narlith.",
+    "sk": "Ahoj, vitajte na mojej prednáške.",
+    "te": "హలో, నా పాఠానికి స్వాగతం.",
+    "fa": "سلام، خوش آمدید به سخنرانی من.",
+    "lv": "Sveiki, laipni lūdzam uz manu lekciju.",
+    "bn": "হ্যালো, আমার লেকচারে আপনাকে স্বাগতম।",
+    "sr": "Здраво, добродошли на моје предавање.",
+    "az": "Salam, mənim dərsimə xoş gəlmisiniz.",
+    "sl": "Pozdravljeni, dobrodošli na moje predavanje.",
+    "kn": "ಹಲೋ, ನನ್ನ ಭಾಷಣಕ್ಕೆ ಸುಸ್ವಾಗತ.",
+    "et": "Tere, tere tulemast minu loengusse.",
+    "mk": "Здраво, добредојдовте на мојата предавање.",
+    "br": "Demat, kroget e oa d'an daol-labour.",
+    "eu": "Kaixo, ongi etorri nire hitzaldi.",
+    "is": "Halló, velkomin á fyrirlestur minn.",
+    "hy": "Բարեւ, ողջույն եկավ իմ դասընթացի.",
+    "ne": "नमस्ते, मेरो प्रवचनमा स्वागत छ।",
+    "mn": "Сайн байна уу, миний хичээлд тавтай морилно уу.",
+    "bs": "Zdravo, dobrodošli na moje predavanje.",
+    "kk": "Сәлеметсіз бе, оқу сабағыма қош келдіңіз.",
+    "sq": "Përshëndetje, mirësevini në ligjëratën time.",
+    "sw": "Habari, karibu kwenye hotuba yangu.",
+    "gl": "Ola, benvido á miña conferencia.",
+    "mr": "नमस्कार, माझ्या व्याख्यानात आपले स्वागत आहे.",
+    "pa": "ਸਤ ਸ੍ਰੀ ਅਕਾਲ, ਮੇਰੀ ਵਾਰਤਾ ਵਿੱਚ ਤੁਹਾਨੂੰ ਜੀ ਆਇਆ ਨੂੰ ਸੁਆਗਤ ਹੈ।",
+    "si": "හෙලෝ, මගේ වාර්තාවට ඔබේ ස්වාදයට සාමාජිකත්වයක්.",
+    "km": "សួស្តី, សូមស្វាគមន៍មកកាន់អារម្មណ៍របស់ខ្ញុំ។",
+    "sn": "Mhoro, wakaribisha kumusoro wangu.",
+    "yo": "Bawo, ku isoro si wa orin mi.",
+    "so": "Soo dhawoow, soo dhawoow marka laga hadlo kulambanayaashaaga.",
+    "af": "Hallo, welkom by my lesing.",
+    "oc": "Bonjorn, benvenguda a ma conferéncia.",
+    "ka": "გამარჯობა, მესწარმეტყველება ჩემი ლექციაზე.",
+    "be": "Прывітанне, запрашаем на маю лекцыю.",
+    "tg": "Салом, ба лаҳзаи мавзӯъати ман хуш омадед.",
+    "sd": "هيلو، ميري ليڪڪي ۾ خوش آيو.",
+    "gu": "નમસ્તે, મારી પાઠશાળામાં આપનું સ્વાગત છે.",
+    "am": "ሰላም፣ ለአንድነት የተመረጠን ትምህርት በመሆን እናመሰግናለን።",
+    "yi": "העלאָ, ווילקומן צו מיין לעקטשער.",
+    "lo": "ສະບາຍດີ, ຍິນດີນາງຂອງຂ້ອຍໄດ້ຍິນດີ.",
+    "uz": "Salom, darsimda xush kelibsiz.",
+    "fo": "Halló, vælkomin til mína fyrilestrar.",
+    "ht": "Bonjou, byenveni nan leson mwen.",
+    "ps": "سلام، مې لومړۍ کې خوش آمدید.",
+    "tk": "Salam, dersimiňe hoş geldiňiz.",
+    "nn": "Hei, velkomen til førelesinga mi.",
+    "mt": "Hello, merħba għall-lezzjoni tiegħi.",
+    "sa": "नमस्ते, मम उपन्यासे स्वागतं.",
+    "lb": "Hallo, wëllkomm zu menger Lektioun.",
+    "my": "မင်္ဂလာပါ၊ ကျေးဇူးတင်သည့်ကိစ္စသည်။",
+    "bo": "བཀྲ་ཤིས་བདེ་ལེགས་འབད་བཅོས། ངའི་འཛིན་གྱི་སློབ་མའི་མིང་གི་འཕྲོད།",
+    "tl": "Kamusta, maligayang pagdating sa aking leksyon.",
+    "mg": "Manao ahoana, tonga soa sy tonga soa eto amin'ny lesona.",
+    "as": "নমস্কাৰ, মোৰ পাঠলৈ আপোনাক স্বাগতম।",
+    "tt": "Сәлам, лекциямга рәхмәт киләсез.",
+    "haw": "Aloha, welina me ke kipa ana i ko'u ha'i 'ōlelo.",
+    "ln": "Mbote, tango na zongisa mwa kilela yandi.",
+    "ha": "Sannu, ka ci gaba da tattalin arziki na.",
+    "ba": "Сәләм, лекцияғыма ҡуш тиңләгәнһүҙ.",
+    "jw": "Halo, sugeng datang marang kulawargané.",
+    "su": "Wilujeng, hatur nuhun ka lékturing abdi.",
 }
 
 if __name__ == "__main__":
