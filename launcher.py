@@ -10,11 +10,16 @@ def convert_to_bool(in_bool):
 
 def install_packages_from_requirements(requirements_file):
     try:
-        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt", "requirements.txt")
+        # Try installing with pip3
         subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
-        print(f"Requirements from {requirements_file} have been successfully installed.")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install requirements: {e}")
+        print("Packages installed successfully using pip3.")
+    except subprocess.CalledProcessError:
+        try:
+            # If pip3 fails, try installing with pip
+            subprocess.run(['pip', 'install', '-r', requirements_file, '--upgrade'], check=True)
+            print("Packages installed successfully using pip.")
+        except subprocess.CalledProcessError:
+            print("Failed to install packages using both pip3 and pip.")
 
 def download_from_github(url, output_file):
     try:
