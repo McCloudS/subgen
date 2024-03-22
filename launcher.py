@@ -104,17 +104,17 @@ def main():
     parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
-    parser.add_argument('-dnr', '--donotrun', default=False, action='store_true', help="Do not run subgen.py (default: False)")
-    parser.add_argument('-b', '--bazarrsetup', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
-    parser.add_argument('--branch', type=str, default='main', help='Specify the branch to download from. (default: main)')
-                  
+    parser.add_argument('-x', '--exitearly', default=False, action='store_true', help="Exit without running subgen.py (default: False)")
+    parser.add_argument('-s', '--setupbazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
+    parser.add_argument('-b', '--branch', type=str, default='main', help='Specify the branch to download from. (default: main)') 
+
     args = parser.parse_args()
 
     # Set environment variables based on the parsed arguments
     os.environ['DEBUG'] = str(args.debug)
     os.environ['APPEND'] = str(args.append)
 
-    if args.bazarrsetup: 
+    if args.setupbazarr: 
         prompt_and_save_bazarr_env_variables()
     load_env_variables()
 
@@ -124,6 +124,7 @@ def main():
 
     # Install packages from requirements.txt if the install or packageupdate argument is True
     if args.install:
+        download_from_github(requirements_url, requirements_file)
         install_packages_from_requirements(requirements_file)
     
     # Get the branch name from the BRANCH environment variable or default to 'main'
@@ -145,7 +146,7 @@ def main():
         else:
             subprocess.run([f'{python_cmd}', '-u', 'subgen.py'], check=True)
     else:
-        print("Not running subgen.py: -dnr or --donotrun set")
+        print("Not running subgen.py: -x or --exitearly set")
 
 if __name__ == "__main__":
     main()
