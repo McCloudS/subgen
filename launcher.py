@@ -100,7 +100,7 @@ def main():
     
     # Construct the argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument( '-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
+    parser.add_argument('-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
     parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
