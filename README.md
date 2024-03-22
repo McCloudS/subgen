@@ -175,6 +175,7 @@ The following environment variables are available in Docker.  They will default 
 | MONITOR | False | Will monitor `TRANSCRIBE_FOLDERS` for real-time changes to see if we need to generate subtitles |
 | USE_MODEL_PROMPT | False | When set to `True`, will use the default prompt stored in greetings_translations "Hello, welcome to my lecture." to try and force the use of punctuation in transcriptions that don't. |
 | CUSTOM_MODEL_PROMPT | '' | If `USE_MODEL_PROMPT` is `True`, you can override the default prompt (See: https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d for great examples). |
+| LRC_FOR_AUDIO_FILES' | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' | 
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
