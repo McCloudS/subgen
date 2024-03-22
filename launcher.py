@@ -83,8 +83,7 @@ def main():
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
     parser.add_argument('-dnr', '--donotrun', default=False, action='store_true', help="Do not run subgen.py (default: False)")
     parser.add_argument('-b', '--bazarrsetup', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
-
-    
+    parser.add_argument('--branch', type=str, default='main', help='Specify the branch to download from. (default: main)')
                   
     args = parser.parse_args()
 
@@ -104,18 +103,24 @@ def main():
     if args.install:
         install_packages_from_requirements(requirements_file)
     
-    subgen_script_name = "./subgen.py"
-    
-    if not os.path.exists(subgen_script_name):
-        print(f"File {subgen_script_name} does not exist. Downloading from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
-    elif convert_to_bool(os.getenv("UPDATE", "False")) or args.update:
-        print(f"File exists, but UPDATE is set to True. Downloading {subgen_script_name} from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
+    # Get the branch name from the BRANCH environment variable or default to 'main'
+    branch_name = args.branch or os.getenv("BRANCH", "main")
+
+    # Determine the script name based on the branch name
+    subgen_script_name = f"subgen-{branch_name}.py" if branch_name != "main" else "subgen.py"
+
+    # Check if the script exists or if the UPDATE environment variable is set to True
+    if not os.path.exists(subgen_script_name) or convert_to_bool(os.getenv("UPDATE", "False")):
+        print(f"Downloading {subgen_script_name} from GitHub branch {branch_name}...")
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", subgen_script_name)
     else:
-        print("Environment variable UPDATE is not set or set to False, skipping download.")
-    if not args.donotrun:    
-        subprocess.run(['python3', '-u', 'subgen.py'], check=True)
+        print("File exists and UPDATE is not set to True, skipping download.")
+        
+    if not args.donotrun:
+        if branch_name:
+            subprocess.run(['python3', '-u', f'subgen-{branch_name}.py'], check=True)
+        else:
+            subprocess.run(['python3', '-u', 'subgen.py'], check=True)
     else:
         print("Not running subgen.py: -dnr or --donotrun set")
 
