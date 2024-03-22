@@ -59,7 +59,7 @@ append = convert_to_bool(os.getenv('APPEND', False))
 reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
 model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
 custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
-custom_regroup = os.getenv('CUSTOM_REGROUP', '')
+custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
