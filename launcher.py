@@ -140,7 +140,7 @@ def main():
     else:
         print("File exists and UPDATE is not set to True, skipping download.")
         
-    if not args.donotrun:
+    if not args.exitearly:
         if branch_name:
             subprocess.run([f'{python_cmd}', '-u', f'subgen-{branch_name}.py'], check=True)
         else:
