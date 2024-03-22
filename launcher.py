@@ -1,5 +1,6 @@
 import os
-import requests
+import sys
+import urllib.request
 import subprocess
 import argparse
 
@@ -9,19 +10,24 @@ def convert_to_bool(in_bool):
 
 def install_packages_from_requirements(requirements_file):
     try:
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt", "requirements.txt")
         subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
         print(f"Requirements from {requirements_file} have been successfully installed.")
     except subprocess.CalledProcessError as e:
         print(f"Failed to install requirements: {e}")
 
 def download_from_github(url, output_file):
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(output_file, 'wb') as f:
-            f.write(response.content)
+    try:
+        with urllib.request.urlopen(url) as response, open(output_file, 'wb') as out_file:
+            data = response.read()  # a `bytes` object
+            out_file.write(data)
         print(f"File downloaded successfully to {output_file}")
-    else:
-        print(f"Failed to download file from {url}")
+    except urllib.error.HTTPError as e:
+        print(f"Failed to download file from {url}. HTTP Error Code: {e.code}")
+    except urllib.error.URLError as e:
+        print(f"URL Error: {e.reason}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 def prompt_and_save_bazarr_env_variables():
     """
@@ -72,6 +78,18 @@ def load_env_variables(env_filename='subgen.env'):
         print(f"{env_filename} file not found. Please run prompt_and_save_env_variables() first.")
 
 def main():
+    # Check if the script is run with 'python' or 'python3'
+    if 'python3' in sys.executable:
+        python_cmd = 'python3'
+    elif 'python' in sys.executable:
+        python_cmd = 'python'
+    else:
+        print("Script started with an unknown command")
+        sys.exit(1)
+    if sys.version_info[0] < 3:
+        print(f"This script requires Python 3 or higher, you are running {sys.version}")
+        sys.exit(1)  # Terminate the script
+    
     #Make sure we're saving subgen.py and subgen.env in the right folder
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
@@ -118,9 +136,9 @@ def main():
         
     if not args.donotrun:
         if branch_name:
-            subprocess.run(['python3', '-u', f'subgen-{branch_name}.py'], check=True)
+            subprocess.run([f'{python_cmd}', '-u', f'subgen-{branch_name}.py'], check=True)
         else:
-            subprocess.run(['python3', '-u', 'subgen.py'], check=True)
+            subprocess.run([f'{python_cmd}', '-u', 'subgen.py'], check=True)
     else:
         print("Not running subgen.py: -dnr or --donotrun set")
 
