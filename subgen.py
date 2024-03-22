@@ -59,6 +59,7 @@ append = convert_to_bool(os.getenv('APPEND', False))
 reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
 model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
 custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
+custom_parameters = os.getenv('CUSTOM_PARAMETERS', '')
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -334,9 +335,12 @@ def asr(
         start_model()
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        if(model_prompt):
+        if model_prompt:
             custom_model_prompt = greetings_translations.get(language, '') or custom_model_prompt
-        result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_model_prompt)
+        if custom_parameters: 
+            # Convert the string to a dictionary
+            params_dict = dict(param.split('=') for param in custom_parameters.split(', '))
+        result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_model_prompt, **params_dict)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -436,7 +440,10 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             if force_detected_language_to:
                 forceLanguage = force_detected_language_to
                 logging.info(f"Forcing language to {forceLanguage}")
-            result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress, initial_prompt=custom_model_prompt)
+            if custom_parameters: 
+                # Convert the string to a dictionary
+                params_dict = dict(param.split('=') for param in custom_parameters.split(', '))
+            result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress, initial_prompt=custom_model_prompt, **params_dict)
             appendLine(result)
             result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
