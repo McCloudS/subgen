@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+22 Mar 2024: Added LRC capability via see: `'LRC_FOR_AUDIO_FILES' | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' |`
+
 21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured.  See below in Launcher section.  Removed 'Transformers' as an option.  While I usually don't like to remove features, I don't think anyone is using this and the results are wildly unpredictable and often cause out of memory errors.  Added two new environment variables called `USE_MODEL_PROMPT` and `CUSTOM_MODEL_PROMPT`.  If `USE_MODEL_PROMPT` is `True` it will use `CUSTOM_MODEL_PROMPT` if set, otherwise will default to using the pre-configured language pairings, such as: `"en": "Hello, welcome to my lecture.",
     "zh": "你好，欢迎来到我的讲座。"`  These pre-configurated translations are geared towards fixing some audio that may not have punctionation.  We can prompt it to try to force the use of punctuation during transcription.
 
