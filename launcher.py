@@ -156,6 +156,7 @@ def main():
         print("subgen.py exists and UPDATE is set to False, skipping download.")
         
     if not args.exit_early:
+        print(f'Launching subgen{script_name}')
         if branch_name != 'main':
             subprocess.run([f'{python_cmd}', '-u', f'subgen{script_name}'], check=True)
         else:
