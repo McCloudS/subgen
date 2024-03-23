@@ -60,6 +60,7 @@ reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', F
 model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
 custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
@@ -398,6 +399,17 @@ def delete_model():
         model = None
         gc.collect()
 
+def isAudioFileExtension(file_extension):
+    return file_extension.casefold() in \
+        [ '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' ]
+
+def write_lrc(result, file_path):
+    with open(file_path, "w") as file:
+        for segment in result.segments:
+            minutes, seconds = divmod(int(segment.start), 60)
+            fraction = int((segment.start - int(segment.start)) * 100)
+            file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}] {segment.text}\n")
+
 def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forceLanguage=None) -> None:
     """Generates subtitles for a video file.
 
@@ -445,7 +457,11 @@ def gen_subtitles(file_path: str, transcribe_or_translate: str, front=True, forc
             else:
                 result = model.transcribe_stable(file_path, language=forceLanguage, task=transcribe_or_translate, progress_callback=progress, initial_prompt=custom_model_prompt)
             appendLine(result)
-            result.to_srt_vtt(get_file_name_without_extension(file_path) + subextension, word_level=word_level_highlight)
+            file_name, file_extension = os.path.splitext(file_path)
+            if isAudioFileExtension(file_extension) and lrc_for_audio_files:
+                write_lrc(result, file_name + '.lrc')
+            else:
+                result.to_srt_vtt(file_name + subextension, word_level=word_level_highlight)
             elapsed_time = time.time() - start_time
             minutes, seconds = divmod(int(elapsed_time), 60)
             logging.info(f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
