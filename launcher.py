@@ -104,17 +104,41 @@ def main():
     parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
-    parser.add_argument('-x', '--exitearly', default=False, action='store_true', help="Exit without running subgen.py (default: False)")
-    parser.add_argument('-s', '--setupbazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
+    parser.add_argument('-x', '--exit-early', default=False, action='store_true', help="Exit without running subgen.py (default: False)")
+    parser.add_argument('-s', '--setup-bazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
     parser.add_argument('-b', '--branch', type=str, default='main', help='Specify the branch to download from. (default: main)') 
+    parser.add_argument('-l', '--launcher-update', default=False, action='store_true', help="Update launcher.py and re-launch (default: False)")
 
     args = parser.parse_args()
+
+    # Get the branch name from the BRANCH environment variable or default to 'main'
+    branch_name = args.branch or os.getenv("BRANCH", "main")
+
+    # Determine the script name based on the branch name
+    script_name = f"-{branch_name}.py" if branch_name != "main" else ".py"
+
+    # Check if the script exists or if the UPDATE environment variable is set to True
+    if not os.path.exists(script_name) or convert_to_bool(os.getenv("UPDATE", "False")):
+        print(f"Downloading launcher.py from GitHub branch {branch_name}...")
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/launcher.py", f'launcher{script_name}')
+    else:
+        print("File exists and UPDATE is not set to True, skipping download.")
+
+    # Prepare the arguments to exclude update triggers
+    excluded_args = ['--launcher-update', '-l']
+    new_args = [arg for arg in sys.argv[1:] if arg not in excluded_args]
+    if branch_name == 'main' and args.launcher_update:
+        print("Running launcher.py for the 'main' branch.")
+        os.execl(sys.executable, sys.executable, "launcher.py", *new_args)
+    else:
+        print(f"Running launcher-{branch_name}.py for the '{branch_name}' branch.")
+        os.execl(sys.executable, sys.executable, f"launcher-{branch_name}.py", *new_args)
 
     # Set environment variables based on the parsed arguments
     os.environ['DEBUG'] = str(args.debug)
     os.environ['APPEND'] = str(args.append)
 
-    if args.setupbazarr: 
+    if args.setup_bazarr: 
         prompt_and_save_bazarr_env_variables()
     load_env_variables()
 
@@ -126,21 +150,15 @@ def main():
     if args.install:
         download_from_github(requirements_url, requirements_file)
         install_packages_from_requirements(requirements_file)
-    
-    # Get the branch name from the BRANCH environment variable or default to 'main'
-    branch_name = args.branch or os.getenv("BRANCH", "main")
-
-    # Determine the script name based on the branch name
-    subgen_script_name = f"subgen-{branch_name}.py" if branch_name != "main" else "subgen.py"
 
     # Check if the script exists or if the UPDATE environment variable is set to True
-    if not os.path.exists(subgen_script_name) or convert_to_bool(os.getenv("UPDATE", "False")):
-        print(f"Downloading {subgen_script_name} from GitHub branch {branch_name}...")
-        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", subgen_script_name)
+    if not os.path.exists(script_name) or convert_to_bool(os.getenv("UPDATE", "False")):
+        print(f"Downloading subgen.py from GitHub branch {branch_name}...")
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", f'subgen{script_name}')
     else:
         print("File exists and UPDATE is not set to True, skipping download.")
         
-    if not args.exitearly:
+    if not args.exit_early:
         if branch_name:
             subprocess.run([f'{python_cmd}', '-u', f'subgen-{branch_name}.py'], check=True)
         else:
