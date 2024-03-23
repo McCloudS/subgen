@@ -2,6 +2,8 @@
 <details>
 <summary>Updates:</summary>
 
+23 Mar 2024: Added `CUSTOM_REGROUP` to try to 'clean up' subtitles a bit.  
+
 22 Mar 2024: Added LRC capability via see: `'LRC_FOR_AUDIO_FILES' | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' |`
 
 21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured.  See below in Launcher section.  Removed 'Transformers' as an option.  While I usually don't like to remove features, I don't think anyone is using this and the results are wildly unpredictable and often cause out of memory errors.  Added two new environment variables called `USE_MODEL_PROMPT` and `CUSTOM_MODEL_PROMPT`.  If `USE_MODEL_PROMPT` is `True` it will use `CUSTOM_MODEL_PROMPT` if set, otherwise will default to using the pre-configured language pairings, such as: `"en": "Hello, welcome to my lecture.",
@@ -65,14 +67,14 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ### Standalone/Without Docker
 
-Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -b`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
+Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -s`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr.
 
 #### Using Launcher
 
 lunacher.py can launch subgen for you and automate the setup and can take the following options:
-![image](https://github.com/McCloudS/subgen/assets/64094529/4b88e804-d52b-4274-8e2a-4f7f14262c43)
+![image](https://github.com/McCloudS/subgen/assets/64094529/081f95b2-7a09-498f-a39e-5ea66e0bc7e1)
 
-Using `-b` for Bazarr setup:
+Using `-s` for Bazarr setup:
 ![image](https://github.com/McCloudS/subgen/assets/64094529/ade1b886-3b99-4f80-95ac-bb28608259bb)
 
 
@@ -177,7 +179,8 @@ The following environment variables are available in Docker.  They will default 
 | MONITOR | False | Will monitor `TRANSCRIBE_FOLDERS` for real-time changes to see if we need to generate subtitles |
 | USE_MODEL_PROMPT | False | When set to `True`, will use the default prompt stored in greetings_translations "Hello, welcome to my lecture." to try and force the use of punctuation in transcriptions that don't. |
 | CUSTOM_MODEL_PROMPT | '' | If `USE_MODEL_PROMPT` is `True`, you can override the default prompt (See: https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d for great examples). |
-| LRC_FOR_AUDIO_FILES' | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' | 
+| LRC_FOR_AUDIO_FILES | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' | 
+| CUSTOM_REGROUP | 'cm_sl=84_sl=42++++++1' | Attempts to regroup some of the segments to make a cleaner looking subtitle.  See https://github.com/McCloudS/subgen/issues/68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of `cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？` |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
