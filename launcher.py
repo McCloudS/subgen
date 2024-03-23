@@ -99,15 +99,15 @@ def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
     # Construct the argument parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
-    parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
-    parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
-    parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
-    parser.add_argument('-x', '--exit-early', default=False, action='store_true', help="Exit without running subgen.py (default: False)")
-    parser.add_argument('-s', '--setup-bazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
-    parser.add_argument('-b', '--branch', type=str, default='main', help='Specify the branch to download from. (default: main)') 
-    parser.add_argument('-l', '--launcher-update', default=False, action='store_true', help="Update launcher.py and re-launch (default: False)")
+    parser = argparse.ArgumentParser(prog="python launcher.py", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-d', '--debug', default=False, action='store_true', help="Enable console debugging")
+    parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages")
+    parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle")
+    parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen")
+    parser.add_argument('-x', '--exit-early', default=False, action='store_true', help="Exit without running subgen.py")
+    parser.add_argument('-s', '--setup-bazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs")
+    parser.add_argument('-b', '--branch', type=str, default='main', help='Specify the branch to download from') 
+    parser.add_argument('-l', '--launcher-update', default=False, action='store_true', help="Update launcher.py and re-launch")
 
     args = parser.parse_args()
 
@@ -162,7 +162,7 @@ def main():
         else:
             subprocess.run([f'{python_cmd}', '-u', 'subgen.py'], check=True)
     else:
-        print("Not running subgen.py: -x or --exitearly set")
+        print("Not running subgen.py: -x or --exit-early set")
 
 if __name__ == "__main__":
     main()
