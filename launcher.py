@@ -1,5 +1,6 @@
 import os
-import requests
+import sys
+import urllib.request
 import subprocess
 import argparse
 
@@ -9,19 +10,29 @@ def convert_to_bool(in_bool):
 
 def install_packages_from_requirements(requirements_file):
     try:
+        # Try installing with pip3
         subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
-        print(f"Requirements from {requirements_file} have been successfully installed.")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install requirements: {e}")
+        print("Packages installed successfully using pip3.")
+    except subprocess.CalledProcessError:
+        try:
+            # If pip3 fails, try installing with pip
+            subprocess.run(['pip', 'install', '-r', requirements_file, '--upgrade'], check=True)
+            print("Packages installed successfully using pip.")
+        except subprocess.CalledProcessError:
+            print("Failed to install packages using both pip3 and pip.")
 
 def download_from_github(url, output_file):
-    response = requests.get(url)
-    if response.status_code == 200:
-        with open(output_file, 'wb') as f:
-            f.write(response.content)
+    try:
+        with urllib.request.urlopen(url) as response, open(output_file, 'wb') as out_file:
+            data = response.read()  # a `bytes` object
+            out_file.write(data)
         print(f"File downloaded successfully to {output_file}")
-    else:
-        print(f"Failed to download file from {url}")
+    except urllib.error.HTTPError as e:
+        print(f"Failed to download file from {url}. HTTP Error Code: {e.code}")
+    except urllib.error.URLError as e:
+        print(f"URL Error: {e.reason}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 def prompt_and_save_bazarr_env_variables():
     """
@@ -72,27 +83,59 @@ def load_env_variables(env_filename='subgen.env'):
         print(f"{env_filename} file not found. Please run prompt_and_save_env_variables() first.")
 
 def main():
+    # Check if the script is run with 'python' or 'python3'
+    if 'python3' in sys.executable:
+        python_cmd = 'python3'
+    elif 'python' in sys.executable:
+        python_cmd = 'python'
+    else:
+        print("Script started with an unknown command")
+        sys.exit(1)
+    if sys.version_info[0] < 3:
+        print(f"This script requires Python 3 or higher, you are running {sys.version}")
+        sys.exit(1)  # Terminate the script
+    
     #Make sure we're saving subgen.py and subgen.env in the right folder
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     
     # Construct the argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument( '-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
+    parser.add_argument('-d', '--debug', default=False, action='store_true', help="Enable console debugging (default: False)")
     parser.add_argument('-i', '--install', default=False, action='store_true', help="Install/update all necessary packages (default: False)")
     parser.add_argument('-a', '--append', default=False, action='store_true', help="Append 'Transcribed by whisper' to generated subtitle (default: False)")
     parser.add_argument('-u', '--update', default=False, action='store_true', help="Update Subgen (default: False)")
-    parser.add_argument('-dnr', '--donotrun', default=False, action='store_true', help="Do not run subgen.py (default: False)")
-    parser.add_argument('-b', '--bazarrsetup', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
+    parser.add_argument('-x', '--exit-early', default=False, action='store_true', help="Exit without running subgen.py (default: False)")
+    parser.add_argument('-s', '--setup-bazarr', default=False, action='store_true', help="Prompt for common Bazarr setup parameters and save them for future runs (default: False)")
+    parser.add_argument('-b', '--branch', type=str, default='main', help='Specify the branch to download from. (default: main)') 
+    parser.add_argument('-l', '--launcher-update', default=False, action='store_true', help="Update launcher.py and re-launch (default: False)")
 
-    
-                  
     args = parser.parse_args()
+
+    # Get the branch name from the BRANCH environment variable or default to 'main'
+    branch_name = args.branch if args.branch != 'main' else os.getenv('BRANCH', 'main')
+    # Determine the script name based on the branch name
+    script_name = f"-{branch_name}.py" if branch_name != "main" else ".py"
+    # Check we need to update the launcher
+    
+    if args.launcher_update or convert_to_bool(os.getenv('LAUNCHER_UPDATE')):
+        print(f"Updating launcher.py from GitHub branch {branch_name}...")
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/launcher.py", f'launcher{script_name}')
+
+    # Prepare the arguments to exclude update triggers
+    excluded_args = ['--launcher-update', '-l']
+    new_args = [arg for arg in sys.argv[1:] if arg not in excluded_args]
+    if branch_name == 'main' and args.launcher_update:
+        print("Running launcher.py for the 'main' branch.")
+        os.execl(sys.executable, sys.executable, "launcher.py", *new_args)
+    elif args.launcher_update:
+        print(f"Running launcher-{branch_name}.py for the '{branch_name}' branch.")
+        os.execl(sys.executable, sys.executable, f"launcher{script_name}", *new_args)
 
     # Set environment variables based on the parsed arguments
     os.environ['DEBUG'] = str(args.debug)
     os.environ['APPEND'] = str(args.append)
 
-    if args.bazarrsetup: 
+    if args.setup_bazarr: 
         prompt_and_save_bazarr_env_variables()
     load_env_variables()
 
@@ -102,22 +145,24 @@ def main():
 
     # Install packages from requirements.txt if the install or packageupdate argument is True
     if args.install:
+        download_from_github(requirements_url, requirements_file)
         install_packages_from_requirements(requirements_file)
-    
-    subgen_script_name = "./subgen.py"
-    
-    if not os.path.exists(subgen_script_name):
-        print(f"File {subgen_script_name} does not exist. Downloading from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
-    elif convert_to_bool(os.getenv("UPDATE", "False")) or args.update:
-        print(f"File exists, but UPDATE is set to True. Downloading {subgen_script_name} from GitHub...")
-        download_from_github("https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py", subgen_script_name)
+
+    # Check if the script exists or if the UPDATE environment variable is set to True
+    if not os.path.exists(f'subgen{script_name}') or args.update or convert_to_bool(os.getenv('UPDATE')):
+        print(f"Downloading subgen.py from GitHub branch {branch_name}...")
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", f'subgen{script_name}')
     else:
-        print("Environment variable UPDATE is not set or set to False, skipping download.")
-    if not args.donotrun:    
-        subprocess.run(['python3', '-u', 'subgen.py'], check=True)
+        print("subgen.py exists and UPDATE is set to False, skipping download.")
+        
+    if not args.exit_early:
+        print(f'Launching subgen{script_name}')
+        if branch_name != 'main':
+            subprocess.run([f'{python_cmd}', '-u', f'subgen{script_name}'], check=True)
+        else:
+            subprocess.run([f'{python_cmd}', '-u', 'subgen.py'], check=True)
     else:
-        print("Not running subgen.py: -dnr or --donotrun set")
+        print("Not running subgen.py: -x or --exitearly set")
 
 if __name__ == "__main__":
     main()
