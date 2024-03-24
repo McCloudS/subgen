@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<Container version="2">
+    <Name>subgen</Name>
+  <ExtraParams>--gpus all</ExtraParams>
+	<Beta>false</Beta>
+	<Category>CATEGORY:</Category>
+    <Repository>mccloud/subgen</Repository>
+    <Registry>https://github.com/McCloudS/subgen</Registry>
+    <DonateText>If you appreciate my work, then please consider donating</DonateText>
+    <DonateLink>https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6</DonateLink>
+    <DonateImg>https://www.paypal.com/en_US/i/btn/btn_donate_SM.gif</DonateImg>
+    <Network>bridge</Network>
+    <Privileged>false</Privileged>
+    <Support>https://github.com/McCloudS/subgen/issues</Support>
+    <Shell>bash</Shell>
+    <GitHub>https://github.com/McCloudS/subgen</GitHub>
+    <ReadMe>https://github.com/McCloudS/subgen/blob/main/README.md</ReadMe>
+    <Project>https://github.com/McCloudS/subgen</Project>
+    <Overview>subgen will transcribe your personal media on a Plex, Emby, or Jellyfin server to create subtitles (.srt) from audio/video files, it can also be used as a Whisper Provider in Bazarr</Overview>
+    <WebUI>http://[IP]:[PORT:9000]/docs</WebUI>
+    <TemplateURL>https://github.com/McCloudS/subgen/blob/main/subgen.xml</TemplateURL>
+    <Icon>https://raw.githubusercontent.com/McCloudS/subgen/main/icon.png</Icon>
+    <Date>2024-03-23</Date>
+    <Changes></Changes>
+    <Config Name="Port: Webhook Port" Target="9000" Default="9000" Mode="tcp" Description="This is the port for the webhook" Type="Port" Display="always" Required="true" Mask="false"/>
+    <Config Name="Path: /subgen" Target="/subgen" Default="/mnt/user/appdata/subgen" Mode="rw" Description="This is the container path to your configuration files." Type="Path" Display="always" Required="true" Mask="false"/>
+    <Config Name="Variable: TRANSCRIBE_DEVICE" Target="TRANSCRIBE_DEVICE" Default="gpu" Description="Can transcribe via gpu (Cuda only) or cpu. Takes option of 'cpu', 'gpu', 'cuda'." Type="Variable" Display="always" Required="false" Mask="false"/>
+    <Config Name="Variable: WHISPER_MODEL" Target="WHISPER_MODEL" Default="medium" Description="Can be:'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-medium.en', 'distil-small.en'" Type="Variable" Display="always" Required="false" Mask="false"/>
+    <Config Name="Variable: CONCURRENT_TRANSCRIPTIONS" Target="CONCURRENT_TRANSCRIPTIONS" Default="2" Description="Number of files it will transcribe in parallel" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: WHISPER_THREADS" Target="WHISPER_THREADS" Default="4" Description="number of threads to use during computation" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: MODEL_PATH" Target="MODEL_PATH" Default="./models" Description="This is where the WHISPER_MODEL will be stored. This defaults to placing it where you execute the script in the folder 'models'" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: PROCADDEDMEDIA" Target="PROCADDEDMEDIA" Default="True" Description="will gen subtitles for all media added regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: PROCMEDIAONPLAY" Target="PROCMEDIAONPLAY" Default="True" Description="will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: NAMESUBLANG" Target="NAMESUBLANG" Default="aa" Description="allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with exiting external EN subs, and AA will populate higher on the list in Plex." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: SKIPIFINTERNALSUBLANG" Target="SKIPIFINTERNALSUBLANG" Default="eng" Description="Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable (See https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: WORD_LEVEL_HIGHLIGHT" Target="WORD_LEVEL_HIGHLIGHT" Default="False" Description="Highlights each words as it's spoken in the subtitle. See example video @ https://github.com/jianfch/stable-ts" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: PLEXSERVER" Target="PLEXSERVER" Default="http://plex:32400" Description="This needs to be set to your local plex server address/port" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: PLEXTOKEN" Target="PLEXTOKEN" Default="token here" Description="This needs to be set to your plex token found by https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: JELLYFINSERVER" Target="JELLYFINSERVER" Default="http://jellyfin:8096" Description="Set to your Jellyfin server address/port" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: JELLYFINTOKEN" Target="JELLYFINTOKEN" Default="token here" Description="Generate a token inside the Jellyfin interface" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: WEBHOOKPORT" Target="WEBHOOKPORT" Default="9000" Description="Change this if you need a different port for your webhook" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: TRANSCRIBE_FOLDERS" Target="TRANSCRIBE_FOLDERS" Default="" Description="Takes a pipe '|' separated list (For example: /tv|/movies|/familyvideos) and iterates through and adds those files to be queued for subtitle generation if they don't have internal subtitles" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: TRANSCRIBE_OR_TRANSLATE" Target="TRANSCRIBE_OR_TRANSLATE" Default="transcribe" Description="Takes either 'transcribe' or 'translate'. Transcribe will transcribe the audio in the same language as the input. Translate will transcribe and translate into English." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: COMPUTE_TYPE" Target="COMPUTE_TYPE" Default="auto" Description="Set compute-type using the following information: https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: DEBUG" Target="DEBUG" Default="True" Description="Provides some debug data that can be helpful to troubleshoot path mapping and other issues." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: FORCE_DETECTED_LANGUAGE_TO" Target="FORCE_DETECTED_LANGUAGE_TO" Default="" Description="This is to force the model to a language instead of the detected one, takes a 2 letter language code. For example, your audio is French but keeps detecting as English, you would set it to 'fr'" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: CLEAR_VRAM_ON_COMPLETE" Target="CLEAR_VRAM_ON_COMPLETE" Default="False" Description="This will delete the model and do garbage collection when queue is empty. Good if you need to use the VRAM for something else." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: UPDATE" Target="UPDATE" Default="True" Description="Will pull latest subgen.py from the repository if True. False will use the original subgen.py built into the Docker image. Standalone users can use this with launcher.py to get updates." Type="Variable" Display="always" Required="false" Mask="false"/>
+    <Config Name="Variable: APPEND" Target="APPEND" Default="False" Description="Will add the following at the end of a subtitle: 'Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}'" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: MONITOR" Target="MONITOR" Default="False" Description="Will monitor TRANSCRIBE_FOLDERS for real-time changes to see if we need to generate subtitles" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: USE_MODEL_PROMPT" Target="USE_MODEL_PROMPT" Default="False" Description="When set to True, will use the default prompt stored in greetings_translations 'Hello, welcome to my lecture.' to try and force the use of punctuation in transcriptions that don't." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: CUSTOM_MODEL_PROMPT" Target="CUSTOM_MODEL_PROMPT" Default="" Description="If USE_MODEL_PROMPT is True, you can override the default prompt (See: https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d for great examples)." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: LRC_FOR_AUDIO_FILES" Target="LRC_FOR_AUDIO_FILES" Default="True" Description="Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+    <Config Name="Variable: CUSTOM_REGROUP" Target="CUSTOM_REGROUP" Default="cm_sl=84_sl=42++++++1" Description="Attempts to regroup some of the segments to make a cleaner looking subtitle. See Issue #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？'" Type="Variable" Display="advanced" Required="false" Mask="false"/>
+
+</Container>
