@@ -29,41 +29,76 @@ def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
 
-# Replace your getenv calls with appropriate default values here
-plextoken = os.getenv('PLEXTOKEN', 'token here')
-plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
-jellyfintoken = os.getenv('JELLYFINTOKEN', 'token here')
-jellyfinserver = os.getenv('JELLYFINSERVER', 'http://192.168.1.111:8096')
-whisper_model = os.getenv('WHISPER_MODEL', 'medium')
-whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
-concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
-transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
-procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
-procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
-namesublang = os.getenv('NAMESUBLANG', 'aa')
-skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
-webhookport = int(os.getenv('WEBHOOKPORT', 9000))
-word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
-debug = convert_to_bool(os.getenv('DEBUG', True))
-use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
-path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
-path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
-model_location = os.getenv('MODEL_PATH', './models')
-monitor = convert_to_bool(os.getenv('MONITOR', False))
-transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
-transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
-force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
-clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
-compute_type = os.getenv('COMPUTE_TYPE', 'auto')
-append = convert_to_bool(os.getenv('APPEND', False))
-reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
-model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
-custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
-lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
-custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+# Function to read environment variables from a file and return them as a dictionary
+def get_env_variables_from_file(filename):
+    env_vars = {}
+    try:
+        with open(filename, 'r') as file:
+            for line in file:
+                if line.strip() and not line.startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+    except FileNotFoundError:
+        print(f"File {filename} not found. Using default values.")
+    return env_vars
+    
+def set_env_variables_from_file(filename):
+    try:
+        with open(filename, 'r') as file:
+            for line in file:
+                if line.strip() and not line.startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    os.environ[key.strip()] = value.strip().strip('\"').strip("'")
+    except FileNotFoundError:
+        print(f"File {filename} not found. Environment variables not set.")
 
-if transcribe_device == "gpu":
-    transcribe_device = "cuda"
+def update_env_variables():
+    global plextoken, plexserver, jellyfintoken, jellyfinserver, whisper_model, whisper_threads
+    global concurrent_transcriptions, transcribe_device, procaddedmedia, procmediaonplay
+    global namesublang, skipifinternalsublang, webhookport, word_level_highlight, debug
+    global use_path_mapping, path_mapping_from, path_mapping_to, model_location, monitor
+    global transcribe_folders, transcribe_or_translate, force_detected_language_to
+    global clear_vram_on_complete, compute_type, append, reload_script_on_change
+    global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
+    
+    plextoken = os.getenv('PLEXTOKEN', 'token here')
+    plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
+    jellyfintoken = os.getenv('JELLYFINTOKEN', 'token here')
+    jellyfinserver = os.getenv('JELLYFINSERVER', 'http://192.168.1.111:8096')
+    whisper_model = os.getenv('WHISPER_MODEL', 'medium')
+    whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
+    concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
+    transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
+    procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
+    procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
+    namesublang = os.getenv('NAMESUBLANG', 'aa')
+    skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
+    webhookport = int(os.getenv('WEBHOOKPORT', 9000))
+    word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
+    debug = convert_to_bool(os.getenv('DEBUG', True))
+    use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
+    path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
+    path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
+    model_location = os.getenv('MODEL_PATH', './models')
+    monitor = convert_to_bool(os.getenv('MONITOR', False))
+    transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
+    transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
+    force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
+    clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
+    compute_type = os.getenv('COMPUTE_TYPE', 'auto')
+    append = convert_to_bool(os.getenv('APPEND', False))
+    reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
+    model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
+    custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
+    lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
+    custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+
+    if transcribe_device == "gpu":
+        transcribe_device = "cuda"
+
+    set_env_variables_from_file('subgen.env')
+
+update_env_variables()
 
 if monitor:
     from watchdog.observers.polling import PollingObserver as Observer
@@ -167,37 +202,11 @@ def appendLine(result):
 def handle_get_request(request: Request):
     return {"You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"}
 
-# Assuming 'env_variables' is a dictionary containing your environment variables
-# and their default values, as well as descriptions.
-
-# Function to read environment variables from a file and return them as a dictionary
-def get_env_variables_from_file(filename):
-    env_vars = {}
-    try:
-        with open(filename, 'r') as file:
-            for line in file:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    env_vars[key.strip()] = value.strip()
-    except FileNotFoundError:
-        print(f"File {filename} not found. Using default values.")
-    return env_vars
-    
-def set_env_variables_from_file(filename):
-    try:
-        with open(filename, 'r') as file:
-            for line in file:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    os.environ[key.strip()] = value.strip().strip('\"').strip("'")
-    except FileNotFoundError:
-        print(f"File {filename} not found. Environment variables not set.")
-
 # Function to generate HTML form with values filled from the environment file
 @app.get("/", response_class=HTMLResponse)
 def form_get():
     # Read the environment variables from the file
-    env_values = get_env_variables_from_file('subgen2.env')
+    env_values = get_env_variables_from_file('subgen.env')
     html_content = "<html><head><title>Subgen settings!</title></head><body>"
     html_content += '<img src="https://raw.githubusercontent.com/McCloudS/subgen/main/icon.png" alt="Header Image" style="display: block; margin-left: auto; margin-right: auto; width: 10%;">'
     html_content += "<html><body><form action=\"/submit\" method=\"post\">"
@@ -231,7 +240,7 @@ def form_get():
 
 @app.post("/submit")
 async def form_post(request: Request):
-    env_path = 'subgen2.env'
+    env_path = 'subgen.env'
     form_data = await request.form()
     # Read the existing content of the file
     try:
@@ -275,7 +284,6 @@ async def form_post(request: Request):
         for var, val in existing_vars.items():
             file.write(f"{var}={val}\n")
     update_env_variables()
-    print_global_variables()
     return(f"Configuration saved to {env_path}, reloading your subgen with your new values!")
 
 @app.get("/status")
@@ -1025,6 +1033,7 @@ env_variables = {
 
 if __name__ == "__main__":
     import uvicorn
+    update_env_variables()
     logging.info(f"Subgen v{subgen_version}")
     logging.info("Starting Subgen with listening webhooks!")
     logging.info(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
