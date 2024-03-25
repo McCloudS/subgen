@@ -1,6 +1,10 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6)
+![image](https://github.com/McCloudS/subgen/assets/64094529/99d8e81c-bce9-4850-b7c3-5c9f8f1495db)
+
 <details>
 <summary>Updates:</summary>
+
+24 Mar 2024: Added a 'webui' to configure environment variables.  You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want).  The config will prioritize OS Env Variables, then the .env file, then the defaults.  You can access it at `http://subgen:9000/`
 
 23 Mar 2024: Added `CUSTOM_REGROUP` to try to 'clean up' subtitles a bit.  
 
@@ -64,6 +68,10 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 # How do I set it up?
 
 ## Install/Setup
+
+You can now configure all environment variables via `http://subgen:9000/` (fill in your appropriate IP and port).  You can still use Docker variables or OS Env Variables if you prefer.  A small snapshot of it below:
+![image](https://github.com/McCloudS/subgen/assets/64094529/02d6ed2a-5319-4991-858c-10f9baa77e82)
+
 
 ### Standalone/Without Docker
 
