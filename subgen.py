@@ -96,8 +96,6 @@ def update_env_variables():
     if transcribe_device == "gpu":
         transcribe_device = "cuda"
 
-    set_env_variables('subgen.env')
-
 update_env_variables()
 
 if monitor:
@@ -212,34 +210,22 @@ def form_get():
     html_content += "<html><body><form action=\"/submit\" method=\"post\">"
     
     for var_name, var_info in env_variables.items():
-        # First, check if the variable is set in the OS environment
-        os_value = os.getenv(var_name)
-        # If not, use the value from the .env file
-        if os_value is None:
-            os_value = env_values.get(var_name, '')
-        # Convert the value to a boolean if necessary
-        value_bool = convert_to_bool(os_value) if isinstance(var_info['default'], bool) else os_value
+        value = os.getenv(var_name, env_values.get(var_name, var_info['default'])) if not isinstance(var_info['default'], bool) else convert_to_bool(os.getenv(var_name, env_values.get(var_name, var_info['default'])))
         # Generate the HTML content
         html_content += f"<br><div><strong>{var_name}</strong>: {var_info['description']} (<strong>default: {var_info['default']}</strong>)<br>"
         if var_name == "TRANSCRIBE_OR_TRANSLATE":
-            selected_value = value_bool if value_bool in ['transcribe', 'translate'] else var_info['default']
             html_content += f"<select name=\"{var_name}\">"
-            html_content += f"<option value=\"transcribe\"{' selected' if selected_value == 'transcribe' else ''}>Transcribe</option>"
-            html_content += f"<option value=\"translate\"{' selected' if selected_value == 'translate' else ''}>Translate</option>"
+            html_content += f"<option value=\"transcribe\"{' selected' if value == 'transcribe' else ''}>Transcribe</option>"
+            html_content += f"<option value=\"translate\"{' selected' if value == 'translate' else ''}>Translate</option>"
             html_content += "</select><br>"
         elif isinstance(var_info['default'], bool):
-            if os.getenv(var_name):
-                env_value = os.getenv(var_name)
-            elif env_values.get(var_name):
-                env_value = env_values.get(var_name)
-            else:
-                env_value = var_info['default']
             html_content += f"<select name=\"{var_name}\">"
-            html_content += f"<option value=\"True\"{' selected' if env_value else ''}>True</option>"
-            html_content += f"<option value=\"False\"{' selected' if not env_value else ''}>False</option>"
+            html_content += f"<option value=\"True\"{' selected' if value else ''}>True</option>"
+            html_content += f"<option value=\"False\"{' selected' if not value else ''}>False</option>"
             html_content += "</select><br>"
         else:
-            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{value_bool}\" placeholder=\"{var_info['default']}\" style=\"width: 200px;\"/></div>"
+            value = value if value != var_info['default'] else ''
+            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{value}\" placeholder=\"{var_info['default']}\" style=\"width: 200px;\"/></div>"
 
     html_content += "<br><input type=\"submit\" value=\"Save as subgen.env and reload\"/></form></body></html>"
     return html_content
@@ -264,34 +250,29 @@ async def form_post(request: Request):
             existing_vars[var.strip()] = val.strip()
 
     # Update the file with new values from the form
-    with open(f"{env_path}", "w") as file:
+    with open(env_path, "w") as file:
         for key, value in form_data.items():
             # Normalize the key to uppercase
             key = key.upper()
             # Convert the value to the correct type (boolean or string)
-            if isinstance(env_variables[key]['default'], bool):
-                value = value.strip().lower() == 'true'
-            else:
-                value = value.strip()
-            # Write to file only if the value is different from the default
-            if env_variables[key]["default"] != value and value:
-                # Check if the variable already exists and if the value is different
-                if key in existing_vars and existing_vars[key] != str(value):
-                    # Update the existing variable with the new value
-                    existing_vars[key] = str(value)
-                elif key not in existing_vars:
-                    # Add the new variable to the dictionary
-                    existing_vars[key] = str(value)
-            elif key in existing_vars:
-                # Remove the entry from the existing variables if the value is empty
-                del existing_vars[key]
+            value = value.strip() if not isinstance(env_variables[key]["default"], bool) else convert_to_bool(value.strip())
+            # Retrieve the current environment variable value
+            env_value = os.getenv(key)
+            if key in os.environ:
                 del os.environ[key]
+            # Write to file only if the value is different from the os.getenv and has a value
+            if env_value != value and (value is not None and value != '') and (env_variables[key]["default"] != value):
+                # Update the existing variable with the new value
+                existing_vars[key] = str(value)
+                # Update the environment variable
+                os.environ[key] = str(value)
 
         # Write the updated variables to the file
         for var, val in existing_vars.items():
             file.write(f"{var}={val}\n")
+
     update_env_variables()
-    return(f"Configuration saved to {env_path}, reloading your subgen with your new values!")
+    return f"Configuration saved to {env_path}, reloading your subgen with your new values!"
 
 @app.get("/status")
 def status():
