@@ -212,29 +212,36 @@ def form_get():
     html_content += "<html><body><form action=\"/submit\" method=\"post\">"
     
     for var_name, var_info in env_variables.items():
-        # Use the value from the environment file if it exists, otherwise use the default
-        value = env_values.get(var_name, str(var_info['default']))
+        # First, check if the variable is set in the OS environment
+        os_value = os.getenv(var_name)
+        # If not, use the value from the .env file
+        if os_value is None:
+            os_value = env_values.get(var_name, '')
+        # Convert the value to a boolean if necessary
+        value_bool = convert_to_bool(os_value) if isinstance(var_info['default'], bool) else os_value
+        # Generate the HTML content
         html_content += f"<br><div><strong>{var_name}</strong>: {var_info['description']} (<strong>default: {var_info['default']}</strong>)<br>"
         if var_name == "TRANSCRIBE_OR_TRANSLATE":
-        # Add a dropdown for TRANSCRIBE_OR_TRANSLATE with options 'Transcribe' and 'Translate'
-        	selected_value = value if value in ['transcribe', 'translate'] else var_info['default']
-        	html_content += f"<select name=\"{var_name}\">"
-        	html_content += f"<option value=\"transcribe\"{' selected' if selected_value == 'transcribe' else ''}>Transcribe</option>"
-        	html_content += f"<option value=\"translate\"{' selected' if selected_value == 'translate' else ''}>Translate</option>"
-        	html_content += "</select><br>"
-        elif isinstance(var_info['default'], bool):
-            # Convert the value to a boolean
-            value_bool = value.lower() == 'true'
-            # Determine the selected value based on the current value or the default value
-            selected_value = value_bool if value in ['True', 'False'] else var_info['default']
+            selected_value = value_bool if value_bool in ['transcribe', 'translate'] else var_info['default']
             html_content += f"<select name=\"{var_name}\">"
-            html_content += f"<option value=\"True\"{' selected' if selected_value else ''}>True</option>"
-            html_content += f"<option value=\"False\"{' selected' if not selected_value else ''}>False</option>"
+            html_content += f"<option value=\"transcribe\"{' selected' if selected_value == 'transcribe' else ''}>Transcribe</option>"
+            html_content += f"<option value=\"translate\"{' selected' if selected_value == 'translate' else ''}>Translate</option>"
+            html_content += "</select><br>"
+        elif isinstance(var_info['default'], bool):
+            if os.getenv(var_name):
+                env_value = os.getenv(var_name)
+            elif env_values.get(var_name):
+                env_value = env_values.get(var_name)
+            else:
+                env_value = var_info['default']
+            html_content += f"<select name=\"{var_name}\">"
+            html_content += f"<option value=\"True\"{' selected' if env_value else ''}>True</option>"
+            html_content += f"<option value=\"False\"{' selected' if not env_value else ''}>False</option>"
             html_content += "</select><br>"
         else:
-            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{os.getenv(var_name) if os.getenv(var_name) else env_values.get(var_name, '')}\" placeholder=\"{var_info['default']}\"/></div>"
+            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{value_bool}\" placeholder=\"{var_info['default']}\" style=\"width: 200px;\"/></div>"
 
-    html_content += "<br><input type=\"submit\" value=\"Save\"/></form></body></html>"
+    html_content += "<br><input type=\"submit\" value=\"Save as subgen.env and reload\"/></form></body></html>"
     return html_content
 
 
