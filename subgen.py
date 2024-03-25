@@ -42,7 +42,7 @@ def get_env_variables_from_file(filename):
         print(f"File {filename} not found. Using default values.")
     return env_vars
     
-def set_env_variables_from_file(filename):
+def set_env_variables(filename):
     try:
         with open(filename, 'r') as file:
             for line in file:
@@ -96,7 +96,7 @@ def update_env_variables():
     if transcribe_device == "gpu":
         transcribe_device = "cuda"
 
-    set_env_variables_from_file('subgen.env')
+    set_env_variables('subgen.env')
 
 update_env_variables()
 
@@ -232,7 +232,7 @@ def form_get():
             html_content += f"<option value=\"False\"{' selected' if not selected_value else ''}>False</option>"
             html_content += "</select><br>"
         else:
-            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{env_values.get(var_name, '') if var_name in env_values else ''}\" placeholder=\"{var_info['default']}\"/></div>"
+            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{os.getenv(var_name) if os.getenv(var_name) else env_values.get(var_name, '')}\" placeholder=\"{var_info['default']}\"/></div>"
 
     html_content += "<br><input type=\"submit\" value=\"Save\"/></form></body></html>"
     return html_content
