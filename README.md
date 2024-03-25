@@ -79,7 +79,7 @@ Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi reque
 
 #### Using Launcher
 
-lunacher.py can launch subgen for you and automate the setup and can take the following options:
+launcher.py can launch subgen for you and automate the setup and can take the following options:
 ![image](https://github.com/McCloudS/subgen/assets/64094529/081f95b2-7a09-498f-a39e-5ea66e0bc7e1)
 
 Using `-s` for Bazarr setup:
