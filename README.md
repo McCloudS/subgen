@@ -1,5 +1,5 @@
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=SU4QQP6LH5PF6)
-![image](https://github.com/McCloudS/subgen/assets/64094529/99d8e81c-bce9-4850-b7c3-5c9f8f1495db)
+<img src="https://raw.githubusercontent.com/McCloudS/subgen/main/icon.png" width="200">
 
 <details>
 <summary>Updates:</summary>
