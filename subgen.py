@@ -93,6 +93,8 @@ def update_env_variables():
     lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
     custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 
+    set_env_variables('subgen.env')
+    
     if transcribe_device == "gpu":
         transcribe_device = "cuda"
 
@@ -443,11 +445,11 @@ def asr(
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if model_prompt:
-            custom_model_prompt = greetings_translations.get(language, '') or custom_model_prompt
+            custom_prompt = greetings_translations.get(language, '') or custom_model_prompt
         if custom_regroup:
-            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_model_prompt, regroup=custom_regroup)
+            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_prompt, regroup=custom_regroup)
         else:
-            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_model_prompt)
+            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_prompt)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
