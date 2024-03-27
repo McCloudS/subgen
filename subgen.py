@@ -24,6 +24,8 @@ import av
 import ffmpeg
 import whisper
 import re
+from watchdog.observers.polling import PollingObserver as Observer
+from watchdog.events import FileSystemEventHandler
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
@@ -60,6 +62,7 @@ def update_env_variables():
     global transcribe_folders, transcribe_or_translate, force_detected_language_to
     global clear_vram_on_complete, compute_type, append, reload_script_on_change
     global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
+    global subextension, subextensionSDH
     
     plextoken = os.getenv('PLEXTOKEN', 'token here')
     plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
@@ -97,18 +100,15 @@ def update_env_variables():
     
     if transcribe_device == "gpu":
         transcribe_device = "cuda"
+        
+    subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
+    subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
 update_env_variables()
-
-if monitor:
-    from watchdog.observers.polling import PollingObserver as Observer
-    from watchdog.events import FileSystemEventHandler
 
 app = FastAPI()
 model = None
 files_to_transcribe = []
-subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
-subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
 in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
