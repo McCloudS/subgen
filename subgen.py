@@ -299,8 +299,8 @@ def receive_tautulli_webhook(
 
 @app.post("/plex")
 def receive_plex_webhook(
-        user_agent: Optional[str] = Header(None),
-        payload: Optional[str] = Form(),
+        user_agent: Union[str] = Header(None),
+        payload: Union[str] = Form(),
 ):
     try:
         plex_json = json.loads(payload)
