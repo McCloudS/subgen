@@ -202,6 +202,10 @@ def appendLine(result):
 def handle_get_request(request: Request):
     return {"You accessed this request incorrectly via a GET request.  See https://github.com/McCloudS/subgen for proper configuration"}
 
+@app.get("/status")
+def status():
+    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__} ({docker_status})"}
+
 # Function to generate HTML form with values filled from the environment file
 @app.get("/", response_class=HTMLResponse)
 def form_get():
