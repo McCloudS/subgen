@@ -62,7 +62,7 @@ def update_env_variables():
     global transcribe_folders, transcribe_or_translate, force_detected_language_to
     global clear_vram_on_complete, compute_type, append, reload_script_on_change
     global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
-    global subextension, subextensionSDH
+    global subextension, subextensionSDH, detect_language_length
     
     plextoken = os.getenv('PLEXTOKEN', 'token here')
     plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
@@ -95,6 +95,7 @@ def update_env_variables():
     custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
     lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
     custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+    detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
 
     set_env_variables('subgen.env')
     
@@ -408,7 +409,7 @@ def asr(
 
         if force_detected_language_to:
             language = force_detected_language_to
-        
+
         start_time = time.time()
         start_model()
         files_to_transcribe.insert(0, f"Bazarr-asr-{random_name}")
@@ -446,12 +447,14 @@ def detect_language(
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
     detected_lang_code = ""  # Initialize with an empty string
+    if detect_language_length != 30:
+        logging.info(f"Detect language is set to detect on the first {detect_language_length} seconds of the audio.")
     try:
         start_model()
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
         files_to_transcribe.insert(0, f"Bazarr-detect-language-{random_name}")
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data), input_sr=16000).language
+        detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data, detect_language_length * 16000), input_sr=16000).language
             
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -998,7 +1001,8 @@ env_variables = {
     "USE_MODEL_PROMPT": {"description": "When set to True, will use the default prompt stored in greetings_translations 'Hello, welcome to my lecture.' to try and force the use of punctuation in transcriptions that don't.","default": False,"value": ""},
     "CUSTOM_MODEL_PROMPT": {"description": "If USE_MODEL_PROMPT is True, you can override the default prompt (See: [prompt engineering in whisper](https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d%29) for great examples).","default": "","value": ""},
     "LRC_FOR_AUDIO_FILES": {"description": "Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'","default": True,"value": ""},
-    "CUSTOM_REGROUP": {"description": "Attempts to regroup some of the segments to make a cleaner looking subtitle. See #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？","default": "cm_sl=84_sl=42++++++1","value": ""}
+    "CUSTOM_REGROUP": {"description": "Attempts to regroup some of the segments to make a cleaner looking subtitle. See #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？","default": "cm_sl=84_sl=42++++++1","value": ""},
+    "DETECT_LANGUAGE_LENGTH": {"description": "Detect language on the first x seconds of the audio.","default": 30,"value": ""},
 }
 
 if __name__ == "__main__":
