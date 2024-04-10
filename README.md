@@ -191,6 +191,7 @@ The following environment variables are available in Docker.  They will default 
 | CUSTOM_MODEL_PROMPT | '' | If `USE_MODEL_PROMPT` is `True`, you can override the default prompt (See: https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d for great examples). |
 | LRC_FOR_AUDIO_FILES | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' | 
 | CUSTOM_REGROUP | 'cm_sl=84_sl=42++++++1' | Attempts to regroup some of the segments to make a cleaner looking subtitle.  See https://github.com/McCloudS/subgen/issues/68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of `cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？` |
+| DETECT_LANGUAGE_LENGTH | 30 | Detect language on the first x seconds of the audio. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
