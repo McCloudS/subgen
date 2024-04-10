@@ -405,6 +405,9 @@ def asr(
         logging.info(f"Transcribing file from Bazarr/ASR webhook")
         result = None
         random_name = random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6)
+
+        if force_detected_language_to:
+            language = force_detected_language_to
         
         start_time = time.time()
         start_model()
