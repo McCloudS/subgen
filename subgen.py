@@ -86,7 +86,7 @@ def update_env_variables():
     monitor = convert_to_bool(os.getenv('MONITOR', False))
     transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
     transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
-    force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '')
+    force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '').lower()
     clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
     compute_type = os.getenv('COMPUTE_TYPE', 'auto')
     append = convert_to_bool(os.getenv('APPEND', False))
