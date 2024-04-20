@@ -115,6 +115,21 @@ in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
+#start queue
+global task_queue
+task_queue = queue.Queue()
+
+def transcription_worker():
+    while True:
+        task = task_queue.get()
+        gen_subtitles(task['path'], task['transcribe_or_translate'], task['force'],task['force_language'])
+        task_queue.task_done()
+        # show queue
+        logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
+
+for _ in range(concurrent_transcriptions):
+    threading.Thread(target=transcription_worker, daemon=True).start()
+
 # Define a filter class
 class MultiplePatternsFilter(logging.Filter):
     def filter(self, record):
@@ -294,7 +309,8 @@ def receive_tautulli_webhook(
             fullpath = file
             logging.debug("Path of file: " + fullpath)
 
-            gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            # gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
     else:
         return {
             "message": "This doesn't appear to be a properly configured Tautulli webhook, please review the instructions again!"}
@@ -321,7 +337,8 @@ def receive_plex_webhook(
             fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.debug("Path of file: " + fullpath)
 
-            gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            # gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
             refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
     except Exception as e:
@@ -346,7 +363,8 @@ def receive_jellyfin_webhook(
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Path of file: {fullpath}")
 
-            gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            # gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
             try:
                 refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
                 logging.info(f"Metadata for item {ItemId} refreshed successfully.")
@@ -379,7 +397,8 @@ def receive_emby_webhook(
 
     if event == "library.new" and procaddedmedia or event == "playback.start" and procmediaonplay:
         logging.debug("Path of file: " + fullpath)
-        gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+        # gen_subtitles(path_mapping(fullpath), transcribe_or_translate, True)
+        gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
 
     return ""
     
@@ -565,6 +584,15 @@ def gen_subtitles(file_path: str, transcription_type: str, add_to_front=True, fo
             files_to_transcribe.remove(file_path)
         delete_model()
 
+def gen_subtitles_queue(file_path: str, transcription_type: str, add_to_front=True, force_language=None) -> None:
+    global task_queue
+    task = {
+        'path': file_path,
+        'transcribe_or_translate': transcription_type,
+        'force': add_to_front,
+        'force_language':force_language
+    }
+    task_queue.put(task)
 
 def get_file_name_without_extension(file_path):
     file_name, file_extension = os.path.splitext(file_path)
@@ -736,7 +764,8 @@ if monitor:
                 if has_audio(file_path):
                 # Call the gen_subtitles function
                     logging.info(f"File: {path_mapping(file_path)} was added")
-                    gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+                    # gen_subtitles(path_mapping(file_path), transcribe_or_translate, False)
+                    gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, False)
         def on_created(self, event):
             self.create_subtitle(event)
         def on_modified(self, event):
@@ -751,11 +780,13 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
         for root, dirs, files in os.walk(path):
             for file in files:
                 file_path = os.path.join(root, file)
-                gen_subtitles(path_mapping(file_path), transcribe_or_translate, False, forceLanguage)
+                # gen_subtitles(path_mapping(file_path), transcribe_or_translate, False, forceLanguage)
+                gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, False, forceLanguage)
     # if the path specified was actually a single file and not a folder, process it
     if os.path.isfile(path):
         if has_audio(path):
-            gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
+            # gen_subtitles(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
+            gen_subtitles_queue(path_mapping(path), transcribe_or_translate, False, forceLanguage) 
      # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
