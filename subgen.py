@@ -75,7 +75,7 @@ def update_env_variables():
     procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
     procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
     namesublang = os.getenv('NAMESUBLANG', 'aa')
-    skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'aa')
+    skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
     webhookport = int(os.getenv('WEBHOOKPORT', 9000))
     word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
     debug = convert_to_bool(os.getenv('DEBUG', True))
