@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+21 Apr 2024: Fixed queuing with thanks to https://github.com/xhzhu0628 @ https://github.com/McCloudS/subgen/pull/85.  Bazarr intentionally doesn't follow `CONCURRENT_TRANSCRIPTIONS` because it needs a time sensitive response.
+
 31 Mar 2024: Removed `/subsync` endpoint and general refactoring.  Open an issue if you were using it!
 
 24 Mar 2024: Added a 'webui' to configure environment variables.  You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want).  The config will prioritize OS Env Variables, then the .env file, then the defaults.  You can access it at `http://subgen:9000/`
