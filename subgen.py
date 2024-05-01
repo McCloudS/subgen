@@ -122,7 +122,7 @@ def transcription_worker():
     while True:
         task = task_queue.get()
         if 'Bazarr-' in task['path']:
-            logging.info(f"Skipping processing for {task['path']} as it is handled by ASR.")
+            logging.info(f"{task['path']} is being handled handled by ASR.")
         else:
             gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
             task_queue.task_done()
