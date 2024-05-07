@@ -311,7 +311,7 @@ def receive_tautulli_webhook(
             fullpath = file
             logging.debug("Path of file: " + fullpath)
 
-            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
     else:
         return {
             "message": "This doesn't appear to be a properly configured Tautulli webhook, please review the instructions again!"}
@@ -338,7 +338,7 @@ def receive_plex_webhook(
             fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.debug("Path of file: " + fullpath)
 
-            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
             refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.info(f"Metadata for item {plex_json['Metadata']['ratingKey']} refreshed successfully.")
     except Exception as e:
@@ -363,7 +363,7 @@ def receive_jellyfin_webhook(
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Path of file: {fullpath}")
 
-            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
+            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
             try:
                 refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
                 logging.info(f"Metadata for item {ItemId} refreshed successfully.")
@@ -396,7 +396,7 @@ def receive_emby_webhook(
 
     if event == "library.new" and procaddedmedia or event == "playback.start" and procmediaonplay:
         logging.debug("Path of file: " + fullpath)
-        gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate, True)
+        gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
 
     return ""
     
