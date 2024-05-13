@@ -26,6 +26,7 @@ import whisper
 import re
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
+import faster_whisper
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
@@ -222,7 +223,7 @@ def handle_get_request(request: Request):
 
 @app.get("/status")
 def status():
-    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, whisper {whisper.__version__} ({docker_status})"}
+    return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
 
 # Function to generate HTML form with values filled from the environment file
 @app.get("/", response_class=HTMLResponse)
@@ -1031,6 +1032,7 @@ if __name__ == "__main__":
     logging.info(f"Running {str(whisper_threads)} threads per transcription")
     logging.info(f"Using {transcribe_device} to encode")
     logging.info(f"Using faster-whisper")
+    os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)
