@@ -28,6 +28,10 @@ from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 import faster_whisper
 
+def get_key_by_value(d, value):
+    reverse_dict = {v: k for k, v in d.items()}
+    return reverse_dict.get(value)
+
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
@@ -466,7 +470,8 @@ def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
-    detected_lang_code = ""  # Initialize with an empty string
+    detected_language = ""  # Initialize with an empty string
+    language_code = ""  # Initialize with an empty string
     if int(detect_language_length) != 30:
         logging.info(f"Detect language is set to detect on the first {detect_language_length} seconds of the audio.")
     try:
@@ -477,8 +482,10 @@ def detect_language(
         task_queue.put(task_id)
         
         audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        detected_lang_code = model.transcribe_stable(whisper.pad_or_trim(audio_data, int(detect_language_length) * 16000), input_sr=16000).language
-            
+        detected_language = model.transcribe_stable(whisper.pad_or_trim(audio_data, int(detect_language_length) * 16000), input_sr=16000).language
+        # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
+        language_code = get_key_by_value(whisper_languages, detected_language)
+
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
         
@@ -486,7 +493,7 @@ def detect_language(
         task_queue.task_done()
         delete_model()
 
-        return {"detected_language": whisper_languages.get(detected_lang_code, detected_lang_code) , "language_code": detected_lang_code}
+        return {"detected_language": detected_language, "language_code": language_code}
 
 def start_model():
     global model
