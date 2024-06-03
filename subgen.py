@@ -110,6 +110,9 @@ def update_env_variables():
     subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
     subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
+    if transcribe_folders:
+        transcribe_existing(transcribe_folders)
+
 update_env_variables()
 
 app = FastAPI()
