@@ -113,8 +113,6 @@ def update_env_variables():
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
 
-update_env_variables()
-
 app = FastAPI()
 model = None
 
