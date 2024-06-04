@@ -572,15 +572,15 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
     if not has_audio(file_path):
         logging.debug(f"{file_path} doesn't have any audio to transcribe!")
         return
-
+    
     message = None
     if has_subtitle_language(file_path, skipifinternalsublang):
         message = f"{file_path} already has an internal subtitle we want, skipping generation"
-    elif os.path.exists(file_path.rsplit('.', 1)[0] + subextension):
+    elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
         message = f"{file_path} already has a subtitle created for this, skipping it"
-    elif os.path.exists(file_path.rsplit('.', 1)[0] + subextensionSDH):
+    elif os.path.exists(get_file_name_without_extension(file_path) + subextensionSDH):
         message = f"{file_path} already has a SDH subtitle created for this, skipping it"
-    elif os.path.exists(file_path.rsplit('.', 1)[0] + '.lrc'):
+    elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
         message = f"{file_path} already has a LRC created for this, skipping it"
     if message:
         logging.info(message)
