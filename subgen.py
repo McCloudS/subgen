@@ -1,4 +1,4 @@
-subgen_version = '2024.6.3.80'
+subgen_version = '2024.5.15.78'
 
 from datetime import datetime
 import subprocess
@@ -110,8 +110,7 @@ def update_env_variables():
     subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
     subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
-    if transcribe_folders:
-        transcribe_existing(transcribe_folders)
+update_env_variables()
 
 app = FastAPI()
 model = None
