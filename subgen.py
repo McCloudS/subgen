@@ -580,6 +580,8 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         message = f"{file_path} already has a subtitle created for this, skipping it"
     elif os.path.exists(file_path.rsplit('.', 1)[0] + subextensionSDH):
         message = f"{file_path} already has a SDH subtitle created for this, skipping it"
+    elif os.path.exists(file_path.rsplit('.', 1)[0] + '.lrc'):
+        message = f"{file_path} already has a LRC created for this, skipping it"
     if message:
         logging.info(message)
         return
