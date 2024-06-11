@@ -67,7 +67,7 @@ def update_env_variables():
     global transcribe_folders, transcribe_or_translate, force_detected_language_to
     global clear_vram_on_complete, compute_type, append, reload_script_on_change
     global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
-    global subextension, subextensionSDH, detect_language_length
+    global subextension, subextensionSDH, detect_language_length, skipifexternalsub
     
     plextoken = os.getenv('PLEXTOKEN', 'token here')
     plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
@@ -101,6 +101,7 @@ def update_env_variables():
     lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
     custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
     detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
+    skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 
     set_env_variables('subgen.env')
     
@@ -578,6 +579,8 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         message = f"{file_path} already has an internal subtitle we want, skipping generation"
     elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
         message = f"{file_path} already has a subtitle created for this, skipping it"
+    elif skipifexternalsub and os.path.exists(get_file_name_without_extension(file_path) + f".{namesublang}.srt"):
+        message = f"{file_path} already has an external {namesublang} subtitle created for this, skipping it"
     elif os.path.exists(get_file_name_without_extension(file_path) + subextensionSDH):
         message = f"{file_path} already has a SDH subtitle created for this, skipping it"
     elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
@@ -1030,6 +1033,8 @@ env_variables = {
     "LRC_FOR_AUDIO_FILES": {"description": "Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'","default": True,"value": ""},
     "CUSTOM_REGROUP": {"description": "Attempts to regroup some of the segments to make a cleaner looking subtitle. See #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？","default": "cm_sl=84_sl=42++++++1","value": ""},
     "DETECT_LANGUAGE_LENGTH": {"description": "Detect language on the first x seconds of the audio.","default": 30,"value": ""},
+    "SKIPIFEXTERNALSUB": {"description": "Skip subtitle generation if an external subtitle with the same language code as namesublang is present" "default": "False", "value": ""},
+
 }
 
 if __name__ == "__main__":
