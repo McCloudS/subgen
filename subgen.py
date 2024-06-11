@@ -1033,7 +1033,7 @@ env_variables = {
     "LRC_FOR_AUDIO_FILES": {"description": "Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'","default": True,"value": ""},
     "CUSTOM_REGROUP": {"description": "Attempts to regroup some of the segments to make a cleaner looking subtitle. See #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？","default": "cm_sl=84_sl=42++++++1","value": ""},
     "DETECT_LANGUAGE_LENGTH": {"description": "Detect language on the first x seconds of the audio.","default": 30,"value": ""},
-    "SKIPIFEXTERNALSUB": {"description": "Skip subtitle generation if an external subtitle with the same language code as namesublang is present" "default": "False", "value": ""},
+    "SKIPIFEXTERNALSUB": {"description": "Skip subtitle generation if an external subtitle with the same language code as namesublang is present.", "default": "False", "value": ""},
 
 }
 
