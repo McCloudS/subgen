@@ -438,8 +438,10 @@ def asr(
         
         task_id = { 'path': f"Bazarr-asr-{random_name}" }        
         task_queue.put(task_id)
-        
-        audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
+
+        audio_data = (np.concatenate([av.audio.resampler.AudioResampler(format='s16', layout='mono', rate=16000).resample(frame).to_ndarray().flatten() for frame in av.open(audio_file.file).decode(audio=0)]).astype(np.float32) / 32768.0) if encode else np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
+
+        #audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
         if model_prompt:
             custom_prompt = greetings_translations.get(language, '') or custom_model_prompt
         if custom_regroup:
