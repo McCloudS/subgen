@@ -219,7 +219,7 @@ def appendLine(result):
 @app.get("/plex")
 @app.get("/webhook")
 @app.get("/jellyfin")
-@app.get("/")
+@app.get("/asr")
 @app.get("/emby")
 @app.get("/detect-language")
 @app.get("/tautulli")
