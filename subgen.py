@@ -504,11 +504,11 @@ def start_model():
         model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
+    gc.collect()
     if clear_vram_on_complete and task_queue.qsize() == 0:
         global model
         logging.debug("Queue is empty, clearing/releasing VRAM")
         model = None
-        gc.collect()
 
 def isAudioFileExtension(file_extension):
     return file_extension.casefold() in \
