@@ -219,7 +219,7 @@ def appendLine(result):
 @app.get("/plex")
 @app.get("/webhook")
 @app.get("/jellyfin")
-@app.get("/asr")
+@app.get("/")
 @app.get("/emby")
 @app.get("/detect-language")
 @app.get("/tautulli")
@@ -416,7 +416,7 @@ def batch(
 # idea and some code for asr and detect language from https://github.com/ahmetoner/whisper-asr-webservice
 @app.post("//asr")
 @app.post("/asr")
-def asr(
+async def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
         language: Union[str, None] = Query(default=None),
         initial_prompt: Union[str, None] = Query(default=None),  #not used by Bazarr
@@ -454,7 +454,7 @@ def asr(
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
     finally:
-        audio_file.close()
+        await audio_file.close()
         task_queue.task_done()
         delete_model()
     if result:
@@ -469,7 +469,7 @@ def asr(
 
 @app.post("//detect-language")
 @app.post("/detect-language")
-def detect_language(
+async def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
 ):    
@@ -493,7 +493,7 @@ def detect_language(
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
         
     finally:
-        audio_file.close()
+        await audio_file.close()
         task_queue.task_done()
         delete_model()
 
