@@ -454,6 +454,7 @@ def asr(
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
     finally:
+        audio_file.close()
         task_queue.task_done()
         delete_model()
     if result:
@@ -492,6 +493,7 @@ def detect_language(
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
         
     finally:
+        audio_file.close()
         task_queue.task_done()
         delete_model()
 
