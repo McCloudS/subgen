@@ -103,7 +103,7 @@ def update_env_variables():
     custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
     detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
     skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
-    kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', ''))
+    kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
 
     set_env_variables('subgen.env')
     
