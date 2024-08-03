@@ -69,6 +69,7 @@ def update_env_variables():
     global clear_vram_on_complete, compute_type, append, reload_script_on_change
     global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
     global subextension, subextensionSDH, detect_language_length, skipifexternalsub
+    global kwargs
     
     plextoken = os.getenv('PLEXTOKEN', 'token here')
     plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
