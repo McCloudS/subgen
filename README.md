@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from whisper, faster-whisper, or stable-ts.  This won't be exposed via the webui, it's best to set directly.
+
 21 Apr 2024: Fixed queuing with thanks to https://github.com/xhzhu0628 @ https://github.com/McCloudS/subgen/pull/85.  Bazarr intentionally doesn't follow `CONCURRENT_TRANSCRIPTIONS` because it needs a time sensitive response.
 
 31 Mar 2024: Removed `/subsync` endpoint and general refactoring.  Open an issue if you were using it!
@@ -195,6 +197,7 @@ The following environment variables are available in Docker.  They will default 
 | CUSTOM_REGROUP | 'cm_sl=84_sl=42++++++1' | Attempts to regroup some of the segments to make a cleaner looking subtitle.  See https://github.com/McCloudS/subgen/issues/68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of `cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？` |
 | DETECT_LANGUAGE_LENGTH | 30 | Detect language on the first x seconds of the audio. |
 | SKIPIFEXTERNALSUB | False | Skip subtitle generation if an external subtitle with the same language code as NAMESUBLANG is present. Used for the case of not regenerating subtitles if I already have `Movie (2002).NAMESUBLANG.srt` from a non-subgen source. |
+| SUBGEN_KWARGS | '{}' | Takes a kwargs python dictionary of options you would like to add/override.  For advanced users.  An example would be `{'vad': 'True','prompt_reset_on_temperature': '0.35'}` |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
