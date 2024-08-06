@@ -546,7 +546,9 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         start_time = time.time()
         start_model()
 
-        if force_detected_language_to:
+        if force_language:
+            break
+        elif force_detected_language_to:
             force_language = force_detected_language_to
             logging.info(f"Forcing language to {force_language}")
 
@@ -585,16 +587,27 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         return
     
     message = None
-    if has_subtitle_language(file_path, skipifinternalsublang):
-        message = f"{file_path} already has an internal subtitle we want, skipping generation"
-    elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
-        message = f"{file_path} already has a subtitle created for this, skipping it"
-    elif skipifexternalsub and os.path.exists(get_file_name_without_extension(file_path) + f".{namesublang}.srt"):
-        message = f"{file_path} already has an external {namesublang} subtitle created for this, skipping it"
-    elif os.path.exists(get_file_name_without_extension(file_path) + subextensionSDH):
-        message = f"{file_path} already has a SDH subtitle created for this, skipping it"
-    elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
-        message = f"{file_path} already has a LRC created for this, skipping it"
+
+    # Check if force_language is set
+    if force_language:
+        # Check if an internal subtitle with the force_language already exists
+        if has_subtitle_language(file_path, force_language):
+            message = f"{file_path} already has an internal subtitle for {force_language}, skipping generation"
+        # Check if an external subtitle with the force_language already exists
+        elif os.path.exists(get_file_name_without_extension(file_path) + f".{force_language}.srt"):
+            message = f"{file_path} already has an external {force_language} subtitle created for this, skipping it"
+    else:
+        if has_subtitle_language(file_path, skipifinternalsublang):
+            message = f"{file_path} already has an internal subtitle we want, skipping generation"
+        elif os.path.exists(get_file_name_without_extension(file_path) + subextension):
+            message = f"{file_path} already has a subtitle created for this, skipping it"
+        elif skipifexternalsub and os.path.exists(get_file_name_without_extension(file_path) + f".{namesublang}.srt"):
+            message = f"{file_path} already has an external {namesublang} subtitle created for this, skipping it"
+        elif os.path.exists(get_file_name_without_extension(file_path) + subextensionSDH):
+            message = f"{file_path} already has a SDH subtitle created for this, skipping it"
+        elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
+            message = f"{file_path} already has a LRC created for this, skipping it"
+
     if message:
         logging.info(message)
         return
