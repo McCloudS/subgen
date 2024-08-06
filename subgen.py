@@ -547,7 +547,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         start_model()
 
         if force_language:
-            break
+            logging.info(f"Forcing language to {force_language}")
         elif force_detected_language_to:
             force_language = force_detected_language_to
             logging.info(f"Forcing language to {force_language}")
