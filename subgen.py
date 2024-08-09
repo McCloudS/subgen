@@ -6,7 +6,7 @@ import os
 import json
 import xml.etree.ElementTree as ET
 import threading
-import sys
+import sysforce_detected_language_tofor
 import time
 import queue
 import logging
@@ -439,7 +439,7 @@ async def asr(
 
         if force_detected_language_to:
             language = force_detected_language_to
-            logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_language}")
+            logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
 
         start_time = time.time()
         start_model()
@@ -483,7 +483,7 @@ async def detect_language(
 ):    
     detected_language = ""  # Initialize with an empty string
     language_code = ""  # Initialize with an empty string
-    logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set to {force_language}, the language detected from this call will be ignored in /ASR calls")
+    logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set to {force_detected_language_to}, the language detected from this call will be ignored in /ASR calls")
     if int(detect_language_length) != 30:
         logging.info(f"Detect language is set to detect on the first {detect_language_length} seconds of the audio.")
     try:
