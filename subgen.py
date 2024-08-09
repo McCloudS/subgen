@@ -6,7 +6,7 @@ import os
 import json
 import xml.etree.ElementTree as ET
 import threading
-import sysforce_detected_language_tofor
+import sys
 import time
 import queue
 import logging
