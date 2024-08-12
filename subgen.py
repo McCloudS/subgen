@@ -780,12 +780,15 @@ def get_jellyfin_admin(users):
 
 def has_audio(file_path):
     try:
+        if has_image_extension(file_path):
+            logging.debug("{file_path} is an image, skipping processing")
+            return False
         with av.open(file_path) as container:
-            if has_image_extension(file_path):
-                return False
             return any(stream.type == 'audio' for stream in container.streams)
     except (av.AVError, UnicodeDecodeError):
         return False
+
+
 
 def path_mapping(fullpath):
     if use_path_mapping:
