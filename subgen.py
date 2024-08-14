@@ -456,14 +456,23 @@ async def asr(
         task_id = { 'path': f"Bazarr-asr-{random_name}" }        
         task_queue.put(task_id)
 
-        audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
+        args = {}
+        args['progress_callback'] = progress
         
-        if model_prompt:
-            custom_prompt = greetings_translations.get(language, '') or custom_model_prompt
-        if custom_regroup:
-            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_prompt, regroup=custom_regroup, **kwargs)
+        if not encode:
+            args['audio'] = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
+            args['input_sr'] = 16000
         else:
-            result = model.transcribe_stable(audio_data, task=task, input_sr=16000, language=language, progress_callback=progress, initial_prompt=custom_prompt, **kwargs)
+            args['audio'] = audio_file.file.read()
+            
+        if model_prompt:
+            args['initial_prompt'] = greetings_translations.get(language, '') or custom_model_prompt
+        if custom_regroup:
+            args['regroup'] = custom_regroup
+            
+        kwargs.update(args)
+        
+        result = model.transcribe_stable(task=task, language=language, **kwargs)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
