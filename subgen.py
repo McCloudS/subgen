@@ -1,4 +1,4 @@
-subgen_version = '2024.8.15.105'
+subgen_version = '2024.8.12.103'
 
 from datetime import datetime
 import subprocess
@@ -584,13 +584,17 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
             force_language = force_detected_language_to
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_language}")
 
+        args = {}
+        args['progress_callback'] = progress
+            
+        if model_prompt:
+            args['initial_prompt'] = greetings_translations.get(language, '') or custom_model_prompt
         if custom_regroup:
-            result = model.transcribe_stable(file_path, language=force_language, task=transcription_type,
-                                             progress_callback=progress, initial_prompt=custom_model_prompt,
-                                             regroup=custom_regroup, **kwargs)
-        else:
-            result = model.transcribe_stable(file_path, language=force_language, task=transcription_type,
-                                             progress_callback=progress, initial_prompt=custom_model_prompt, **kwargs)
+            args['regroup'] = custom_regroup
+            
+        args.update(kwargs)
+
+        result = model.transcribe_stable(file_path, language=force_language, task=transcription_type, **args)
 
         appendLine(result)
         file_name, file_extension = os.path.splitext(file_path)
