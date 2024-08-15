@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+14 Aug 2024: Cleaned up usage of kwargs across the board a bit.  Added ability for /asr to encode or not, so you don't need to worry about what files/formats you upload.
+
 3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from whisper, faster-whisper, or stable-ts.  This won't be exposed via the webui, it's best to set directly.
 
 21 Apr 2024: Fixed queuing with thanks to https://github.com/xhzhu0628 @ https://github.com/McCloudS/subgen/pull/85.  Bazarr intentionally doesn't follow `CONCURRENT_TRANSCRIPTIONS` because it needs a time sensitive response.
