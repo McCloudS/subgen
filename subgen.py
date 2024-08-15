@@ -1,4 +1,4 @@
-subgen_version = '2024.8.14.104'
+subgen_version = '2024.8.12.103'
 
 from datetime import datetime
 import subprocess
@@ -470,9 +470,9 @@ async def asr(
         if custom_regroup:
             args['regroup'] = custom_regroup
             
-        kwargs.update(args)
+        args.update(kwargs)
         
-        result = model.transcribe_stable(task=task, language=language, **kwargs)
+        result = model.transcribe_stable(task=task, language=language, **args)
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -498,10 +498,16 @@ async def asr(
 async def detect_language(
         audio_file: UploadFile = File(...),
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
+        detect_lang_length: int = Query(default=30, description="Detect language on the first X seconds of the file")
 ):    
     detected_language = ""  # Initialize with an empty string
     language_code = ""  # Initialize with an empty string
-    logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set to {force_detected_language_to}, the language detected from this call will be ignored in /ASR calls")
+    if force_detected_language_to:
+            language = force_detected_language_to
+            logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
+    if int(detect_lang_length) != 30:
+        global detect_language_length 
+        detect_language_length = detect_lang_length
     if int(detect_language_length) != 30:
         logging.info(f"Detect language is set to detect on the first {detect_language_length} seconds of the audio.")
     try:
@@ -510,9 +516,15 @@ async def detect_language(
         
         task_id = { 'path': f"Bazarr-detect-language-{random_name}" }        
         task_queue.put(task_id)
-        
-        audio_data = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-        detected_language = model.transcribe_stable(whisper.pad_or_trim(audio_data, int(detect_language_length) * 16000), input_sr=16000, **kwargs).language
+        args = {}
+        #sample_rate = next(stream.rate for stream in av.open(audio_file.file).streams if stream.type == 'audio')
+        audio_file.file.seek(0)
+        args['progress_callback'] = progress
+        args['input_sr'] = 16000
+        args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
+
+        args.update(kwargs)
+        detected_language = model.transcribe_stable(**args).language
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
         language_code = get_key_by_value(whisper_languages, detected_language)
 
