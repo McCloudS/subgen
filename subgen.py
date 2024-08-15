@@ -1,4 +1,4 @@
-subgen_version = '2024.8.15.106'
+subgen_version = '2024.8.12.103'
 
 from datetime import datetime
 import subprocess
@@ -588,7 +588,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         args['progress_callback'] = progress
             
         if model_prompt:
-            args['initial_prompt'] = greetings_translations.get(language, '') or custom_model_prompt
+            args['initial_prompt'] = greetings_translations.get(force_language, '') or custom_model_prompt
         if custom_regroup:
             args['regroup'] = custom_regroup
             
