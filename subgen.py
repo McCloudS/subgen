@@ -201,7 +201,7 @@ def progress(seek, total):
             # Update the last print time
             last_print_time = current_time
             # Log the message
-            logging.info("Force Update...")
+            logging.debug("Force Update...")
 
 TIME_OFFSET = 5
 
@@ -646,7 +646,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         
 
     if message:
-        logging.info(message)
+        logging.debug(message)
         return
     
     task = {
