@@ -412,11 +412,16 @@ def receive_emby_webhook(
         return ""
 
     data_dict = json.loads(data)
-    fullpath = data_dict['Item']['Path']
     event = data_dict['Event']
     logging.debug("Emby event detected is: " + event)
 
-    if event == "library.new" and procaddedmedia or event == "playback.start" and procmediaonplay:
+    # Check if it's a notification test event
+    if event == "system.notificationtest":
+        logging.info("Emby test message received!")
+        return {"message": "Notification test received successfully!"}
+
+    if (event == "library.new" and procaddedmedia) or (event == "playback.start" and procmediaonplay):
+        fullpath = data_dict['Item']['Path']
         logging.debug("Path of file: " + fullpath)
         gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
 
@@ -806,7 +811,7 @@ def get_jellyfin_admin(users):
 def has_audio(file_path):
     try:
         if has_image_extension(file_path):
-            logging.debug("{file_path} is an image, skipping processing")
+            logging.debug(f"{file_path} is an image, skipping processing")
             return False
         with av.open(file_path) as container:
             return any(stream.type == 'audio' for stream in container.streams)
