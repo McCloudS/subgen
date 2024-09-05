@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+5 Sept 2024: Fixed Emby response to a test message/notification.  Clarified Emby/Plex/Jellyfin instructions for paths.
+
 14 Aug 2024: Cleaned up usage of kwargs across the board a bit.  Added ability for /asr to encode or not, so you don't need to worry about what files/formats you upload.
 
 3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from whisper, faster-whisper, or stable-ts.  This won't be exposed via the webui, it's best to set directly.
@@ -109,13 +111,15 @@ If you want to use a GPU, you need to map it accordingly.
 
 ## Plex
 
-Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:9000/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.
+Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:9000/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.  Remember, Plex and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
 
 ## Emby
 
 All you need to do is create a webhook in Emby pointing to your subgen IE: http://192.168.154:9000/emby
 
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
+
+Remember, Emby and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
 
 ## Bazarr
 
@@ -158,6 +162,8 @@ Data:
 ## Jellyfin
 
 First, you need to install the Jellyfin webhooks plugin.  Then you need to click "Add Generic Destination", name it anything you want, webhook url is your subgen info (IE http://192.168.1.154:9000/jellyfin).  Next, check Item Added, Playback Start, and Send All Properties.  Last, "Add Request Header" and add the Key: `Content-Type` Value: `application/json`<br><br>Click Save and you should be all set!
+
+Remember, Jellyfin and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
 
 ## Variables
 
