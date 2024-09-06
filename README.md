@@ -109,13 +109,17 @@ If using Subgen without Bazarr, you MUST mount your media volumes in subgen the 
 
 If you want to use a GPU, you need to map it accordingly.  
 
+#### Unraid
+
+While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See https://github.com/McCloudS/subgen/issues/37 for pictures and steps.
+
 ## Plex
 
 Create a webhook in Plex that will call back to your subgen address, IE: http://192.168.1.111:9000/plex see: https://support.plex.tv/articles/115002267687-webhooks/  You will also need to generate the token to use it.  Remember, Plex and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
 
 ## Emby
 
-All you need to do is create a webhook in Emby pointing to your subgen IE: http://192.168.154:9000/emby
+All you need to do is create a webhook in Emby pointing to your subgen IE: `http://192.168.154:9000/emby`, set `Request content type` to `multipart/form-data` and configure your desired events (Usually, `New Media Added`, `Start`, and `Unpause`).  See https://github.com/McCloudS/subgen/discussions/115#discussioncomment-10569277 for screenshot examples.
 
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
