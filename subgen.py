@@ -819,7 +819,7 @@ def has_audio(file_path):
             for stream in container.streams:
                 if stream.type == 'audio':
                     # Check if the stream has a codec and if it is valid
-                    if stream.codec and stream.codec.name != 'none':
+                    if stream.codec_context and stream.codec_context.name != 'none':
                         return True
                     else:
                         logging.debug(f"Unsupported or missing codec for audio stream in {file_path}")
