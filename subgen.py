@@ -813,12 +813,21 @@ def has_audio(file_path):
         if has_image_extension(file_path):
             logging.debug(f"{file_path} is an image, skipping processing")
             return False
+
         with av.open(file_path) as container:
-            return any(stream.type == 'audio' for stream in container.streams)
+            # Check for an audio stream and ensure it has a valid codec
+            for stream in container.streams:
+                if stream.type == 'audio':
+                    # Check if the codec is supported (not 'none')
+                    if stream.codec.name != 'none':
+                        return True
+                    else:
+                        logging.debug(f"Unsupported codec for audio stream in {file_path}")
+            return False
+
     except (av.AVError, UnicodeDecodeError):
+        logging.debug(f"Error processing file {file_path}")
         return False
-
-
 
 def path_mapping(fullpath):
     if use_path_mapping:
