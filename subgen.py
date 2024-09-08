@@ -818,11 +818,11 @@ def has_audio(file_path):
             # Check for an audio stream and ensure it has a valid codec
             for stream in container.streams:
                 if stream.type == 'audio':
-                    # Check if the codec is supported (not 'none')
-                    if stream.codec.name != 'none':
+                    # Check if the stream has a codec and if it is valid
+                    if stream.codec and stream.codec.name != 'none':
                         return True
                     else:
-                        logging.debug(f"Unsupported codec for audio stream in {file_path}")
+                        logging.debug(f"Unsupported or missing codec for audio stream in {file_path}")
             return False
 
     except (av.AVError, UnicodeDecodeError):
