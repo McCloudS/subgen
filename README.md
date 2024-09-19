@@ -85,7 +85,7 @@ You can now configure all environment variables via `http://subgen:9000/` (fill 
 
 ### Standalone/Without Docker
 
-Install python3 and ffmpeg ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -s`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr. You will need the appropriate NVIDIA drivers installed (12.2.0): https://developer.nvidia.com/cuda-12-2-0-download-archive?target_os=Windows&target_arch=x86_64
+Install python3 and ffmpeg, and download launcher.py from this repository. ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -s`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr. You will need the appropriate NVIDIA drivers installed (12.2.0): https://developer.nvidia.com/cuda-12-2-0-download-archive?target_os=Windows&target_arch=x86_64
 
 #### Using Launcher
 
