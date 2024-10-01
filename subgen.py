@@ -697,7 +697,7 @@ def get_jellyfin_admin(users):
 def has_audio(file_path):
     try:
         if has_image_extension(file_path):
-            logging.debug(f"{file_path} is an image, skipping processing")
+            logging.debug(f"{file_path} is an image or is an invalid file or path (are your volumes correct?), skipping processing")
             return False
 
         with av.open(file_path) as container:
