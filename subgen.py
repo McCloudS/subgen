@@ -36,64 +36,51 @@ def get_key_by_value(d, value):
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
-
-def update_env_variables():
-    global plextoken, plexserver, jellyfintoken, jellyfinserver, whisper_model, whisper_threads
-    global concurrent_transcriptions, transcribe_device, procaddedmedia, procmediaonplay
-    global namesublang, skipifinternalsublang, webhookport, word_level_highlight, debug
-    global use_path_mapping, path_mapping_from, path_mapping_to, model_location, monitor
-    global transcribe_folders, transcribe_or_translate, force_detected_language_to
-    global clear_vram_on_complete, compute_type, append, reload_script_on_change
-    global model_prompt, custom_model_prompt, lrc_for_audio_files, custom_regroup
-    global subextension, subextensionSDH, detect_language_length, skipifexternalsub
-    global kwargs
     
-    plextoken = os.getenv('PLEXTOKEN', 'token here')
-    plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
-    jellyfintoken = os.getenv('JELLYFINTOKEN', 'token here')
-    jellyfinserver = os.getenv('JELLYFINSERVER', 'http://192.168.1.111:8096')
-    whisper_model = os.getenv('WHISPER_MODEL', 'medium')
-    whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
-    concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
-    transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
-    procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
-    procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
-    namesublang = os.getenv('NAMESUBLANG', 'aa')
-    skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
-    webhookport = int(os.getenv('WEBHOOKPORT', 9000))
-    word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
-    debug = convert_to_bool(os.getenv('DEBUG', True))
-    use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
-    path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
-    path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
-    model_location = os.getenv('MODEL_PATH', './models')
-    monitor = convert_to_bool(os.getenv('MONITOR', False))
-    transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
-    transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
-    force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '').lower()
-    clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
-    compute_type = os.getenv('COMPUTE_TYPE', 'auto')
-    append = convert_to_bool(os.getenv('APPEND', False))
-    reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
-    model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
-    custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
-    lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
-    custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
-    detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
-    skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
-    try:
-        kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
-    except ValueError:
-        kwargs = {}
-        logging.info("kwargs (SUBGEN_KWARGS) is an invalid dictionary, defaulting to empty '{}'")
+plextoken = os.getenv('PLEXTOKEN', 'token here')
+plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
+jellyfintoken = os.getenv('JELLYFINTOKEN', 'token here')
+jellyfinserver = os.getenv('JELLYFINSERVER', 'http://192.168.1.111:8096')
+whisper_model = os.getenv('WHISPER_MODEL', 'medium')
+whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
+concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
+transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
+procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
+procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
+namesublang = os.getenv('NAMESUBLANG', 'aa')
+skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
+webhookport = int(os.getenv('WEBHOOKPORT', 9000))
+word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
+debug = convert_to_bool(os.getenv('DEBUG', True))
+use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
+path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
+path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
+model_location = os.getenv('MODEL_PATH', './models')
+monitor = convert_to_bool(os.getenv('MONITOR', False))
+transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
+transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
+force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '').lower()
+clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
+compute_type = os.getenv('COMPUTE_TYPE', 'auto')
+append = convert_to_bool(os.getenv('APPEND', False))
+reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
+model_prompt = os.getenv('USE_MODEL_PROMPT', 'False')
+custom_model_prompt = os.getenv('CUSTOM_MODEL_PROMPT', '')
+lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
+custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
+skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
+try:
+    kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
+except ValueError:
+    kwargs = {}
+    logging.info("kwargs (SUBGEN_KWARGS) is an invalid dictionary, defaulting to empty '{}'")
     
-    if transcribe_device == "gpu":
-        transcribe_device = "cuda"
+if transcribe_device == "gpu":
+    transcribe_device = "cuda"
         
-    subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
-    subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
-
-update_env_variables()
+subextension =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.srt"
+subextensionSDH =  f".subgen.{whisper_model.split('.')[0]}.{namesublang}.sdh.srt"
 
 app = FastAPI()
 model = None
@@ -103,7 +90,7 @@ docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
 #start queue
-global task_queue
+task_queue
 task_queue = queue.Queue()
 
 def transcription_worker():
