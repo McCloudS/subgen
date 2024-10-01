@@ -37,29 +37,6 @@ def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
 
-# Function to read environment variables from a file and return them as a dictionary
-def get_env_variables_from_file(filename):
-    env_vars = {}
-    try:
-        with open(filename, 'r') as file:
-            for line in file:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    env_vars[key.strip()] = value.strip()
-    except FileNotFoundError:
-        print(f"File {filename} not found. Using default values.")
-    return env_vars
-    
-def set_env_variables(filename):
-    try:
-        with open(filename, 'r') as file:
-            for line in file:
-                if line.strip() and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    os.environ[key.strip()] = value.strip().strip('\"').strip("'")
-    except FileNotFoundError:
-        print(f"File {filename} not found. Environment variables not set.")
-
 def update_env_variables():
     global plextoken, plexserver, jellyfintoken, jellyfinserver, whisper_model, whisper_threads
     global concurrent_transcriptions, transcribe_device, procaddedmedia, procmediaonplay
@@ -109,8 +86,6 @@ def update_env_variables():
     except ValueError:
         kwargs = {}
         logging.info("kwargs (SUBGEN_KWARGS) is an invalid dictionary, defaulting to empty '{}'")
-
-    set_env_variables('subgen.env')
     
     if transcribe_device == "gpu":
         transcribe_device = "cuda"
@@ -245,81 +220,6 @@ def handle_get_request(request: Request):
 @app.get("/status")
 def status():
     return {"version" : f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
-
-# Function to generate HTML form with values filled from the environment file
-@app.get("/", response_class=HTMLResponse)
-def form_get():
-    # Read the environment variables from the file
-    env_values = get_env_variables_from_file('subgen.env')
-    html_content = "<html><head><title>Subgen settings!</title></head><body>"
-    html_content += '<img src="https://raw.githubusercontent.com/McCloudS/subgen/main/icon.png" alt="Header Image" style="display: block; margin-left: auto; margin-right: auto; width: 10%;">'
-    html_content += "<html><body><form action=\"/submit\" method=\"post\">"
-    
-    for var_name, var_info in env_variables.items():
-        value = os.getenv(var_name, env_values.get(var_name, var_info['default'])) if not isinstance(var_info['default'], bool) else convert_to_bool(os.getenv(var_name, env_values.get(var_name, var_info['default'])))
-        # Generate the HTML content
-        html_content += f"<br><div><strong>{var_name}</strong>: {var_info['description']} (<strong>default: {var_info['default']}</strong>)<br>"
-        if var_name == "TRANSCRIBE_OR_TRANSLATE":
-            html_content += f"<select name=\"{var_name}\">"
-            html_content += f"<option value=\"transcribe\"{' selected' if value == 'transcribe' else ''}>Transcribe</option>"
-            html_content += f"<option value=\"translate\"{' selected' if value == 'translate' else ''}>Translate</option>"
-            html_content += "</select><br>"
-        elif isinstance(var_info['default'], bool):
-            html_content += f"<select name=\"{var_name}\">"
-            html_content += f"<option value=\"True\"{' selected' if value else ''}>True</option>"
-            html_content += f"<option value=\"False\"{' selected' if not value else ''}>False</option>"
-            html_content += "</select><br>"
-        else:
-            value = value if value != var_info['default'] else ''
-            html_content += f"<input type=\"text\" name=\"{var_name}\" value=\"{value}\" placeholder=\"{var_info['default']}\" style=\"width: 200px;\"/></div>"
-
-    html_content += "<br><input type=\"submit\" value=\"Save as subgen.env and reload\"/></form></body></html>"
-    return html_content
-
-
-@app.post("/submit")
-async def form_post(request: Request):
-    env_path = 'subgen.env'
-    form_data = await request.form()
-    # Read the existing content of the file
-    try:
-        with open(env_path, "r") as file:
-            lines = file.readlines()
-    except FileNotFoundError:
-        lines = []
-
-    # Create a dictionary of existing variables
-    existing_vars = {}
-    for line in lines:
-        if "=" in line:
-            var, val = line.split("=", 1)
-            existing_vars[var.strip()] = val.strip()
-
-    # Update the file with new values from the form
-    with open(env_path, "w") as file:
-        for key, value in form_data.items():
-            # Normalize the key to uppercase
-            key = key.upper()
-            # Convert the value to the correct type (boolean or string)
-            value = value.strip() if not isinstance(env_variables[key]["default"], bool) else convert_to_bool(value.strip())
-            # Retrieve the current environment variable value
-            env_value = os.getenv(key)
-            if key in os.environ:
-                del os.environ[key]
-            # Write to file only if the value is different from the os.getenv and has a value
-            if env_value != value and (value is not None and value != '') and (env_variables[key]["default"] != value):
-                # Update the existing variable with the new value
-                existing_vars[key] = str(value)
-                # Update the environment variable
-                os.environ[key] = str(value)
-
-        # Write the updated variables to the file
-        for var, val in existing_vars.items():
-            file.write(f"{var}={val}\n")
-
-    update_env_variables()
-    return f"Configuration saved to {env_path}, reloading your subgen with your new values!"
-
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
@@ -1077,43 +977,6 @@ greetings_translations = {
     "ba": "Сәләм, лекцияғыма ҡуш тиңләгәнһүҙ.",
     "jw": "Halo, sugeng datang marang kulawargané.",
     "su": "Wilujeng, hatur nuhun ka lékturing abdi.",
-}
-
-env_variables = {
-    "TRANSCRIBE_DEVICE": {"description": "Can transcribe via gpu (Cuda only) or cpu. Takes option of 'cpu', 'gpu', 'cuda'.", "default": "cpu", "value": ""},
-    "WHISPER_MODEL": {"description": "Can be: 'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-medium.en', 'distil-small.en'", "default": "medium", "value": ""},
-    "CONCURRENT_TRANSCRIPTIONS": {"description": "Number of files it will transcribe in parallel", "default": "2", "value": ""},
-    "WHISPER_THREADS": {"description": "Number of threads to use during computation", "default": "4", "value": ""},
-    "MODEL_PATH": {"description": "This is where the WHISPER_MODEL will be stored. This defaults to placing it where you execute the script in the folder 'models'", "default": "./models", "value": ""},
-    "PROCADDEDMEDIA": {"description": "Will gen subtitles for all media added regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)", "default": True, "value": ""},
-    "PROCMEDIAONPLAY": {"description": "Will gen subtitles for all played media regardless of existing external/embedded subtitles (based off of SKIPIFINTERNALSUBLANG)", "default": True, "value": ""},
-    "NAMESUBLANG": {"description": "Allows you to pick what it will name the subtitle. Instead of using EN, I'm using AA, so it doesn't mix with existing external EN subs, and AA will populate higher on the list in Plex.", "default": "aa", "value": ""},
-    "SKIPIFINTERNALSUBLANG": {"description": "Will not generate a subtitle if the file has an internal sub matching the 3 letter code of this variable", "default": "eng", "value": ""},
-    "WORD_LEVEL_HIGHLIGHT": {"description": "Highlights each word as it's spoken in the subtitle.", "default": False, "value": ""},
-    "PLEXSERVER": {"description": "This needs to be set to your local plex server address/port", "default": "http://plex:32400", "value": ""},
-    "PLEXTOKEN": {"description": "This needs to be set to your plex token", "default": "token here", "value": ""},
-    "JELLYFINSERVER": {"description": "Set to your Jellyfin server address/port", "default": "http://jellyfin:8096", "value": ""},
-    "JELLYFINTOKEN": {"description": "Generate a token inside the Jellyfin interface", "default": "token here", "value": ""},
-    "WEBHOOKPORT": {"description": "Change this if you need a different port for your webhook", "default": "9000", "value": ""},
-    "USE_PATH_MAPPING": {"description": "Similar to sonarr and radarr path mapping, this will attempt to replace paths on file systems that don't have identical paths. Currently only support for one path replacement.", "default": False, "value": ""},
-    "PATH_MAPPING_FROM": {"description": "This is the path of my media relative to my Plex server", "default": "/tv", "value": ""},
-    "PATH_MAPPING_TO": {"description": "This is the path of that same folder relative to my Mac Mini that will run the script", "default": "/Volumes/TV", "value": ""},
-    "TRANSCRIBE_FOLDERS": {"description": "Takes a pipe '|' separated list and iterates through and adds those files to be queued for subtitle generation if they don't have internal subtitles", "default": "", "value": ""},
-    "TRANSCRIBE_OR_TRANSLATE": {"description": "Takes either 'transcribe' or 'translate'. Transcribe will transcribe the audio in the same language as the input. Translate will transcribe and translate into English.", "default": "transcribe", "value": ""},
-    "COMPUTE_TYPE": {"description": "Set compute-type using the following information: https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md", "default": "auto", "value": ""},
-    "DEBUG": {"description": "Provides some debug data that can be helpful to troubleshoot path mapping and other issues. If set to true, any modifications to the script will auto-reload it (if it isn't actively transcoding). Useful to make small tweaks without re-downloading the whole file.", "default": True, "value": ""},
-    "FORCE_DETECTED_LANGUAGE_TO": {"description": "This is to force the model to a language instead of the detected one, takes a 2 letter language code.", "default": "", "value": ""},
-    "CLEAR_VRAM_ON_COMPLETE": {"description": "This will delete the model and do garbage collection when queue is empty. Good if you need to use the VRAM for something else.", "default": True, "value": ""},
-    "UPDATE": {"description": "Will pull latest subgen.py from the repository if True. False will use the original subgen.py built into the Docker image. Standalone users can use this with launcher.py to get updates.","default": False,"value": ""},
-    "APPEND": {"description": "Will add the following at the end of a subtitle: 'Transcribed by whisperAI with faster-whisper ({whisper_model}) on {datetime.now()}'","default": False,"value": ""},
-    "MONITOR": {"description": "Will monitor TRANSCRIBE_FOLDERS for real-time changes to see if we need to generate subtitles","default": False,"value": ""},
-    "USE_MODEL_PROMPT": {"description": "When set to True, will use the default prompt stored in greetings_translations 'Hello, welcome to my lecture.' to try and force the use of punctuation in transcriptions that don't.","default": False,"value": ""},
-    "CUSTOM_MODEL_PROMPT": {"description": "If USE_MODEL_PROMPT is True, you can override the default prompt (See: [prompt engineering in whisper](https://medium.com/axinc-ai/prompt-engineering-in-whisper-6bb18003562d%29) for great examples).","default": "","value": ""},
-    "LRC_FOR_AUDIO_FILES": {"description": "Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'","default": True,"value": ""},
-    "CUSTOM_REGROUP": {"description": "Attempts to regroup some of the segments to make a cleaner looking subtitle. See #68 for discussion. Set to blank if you want to use Stable-TS default regroups algorithm of cm_sp=,* /，_sg=.5_mg=.3+3_sp=.* /。/?/？","default": "cm_sl=84_sl=42++++++1","value": ""},
-    "DETECT_LANGUAGE_LENGTH": {"description": "Detect language on the first x seconds of the audio.","default": 30,"value": ""},
-    "SKIPIFEXTERNALSUB": {"description": "Skip subtitle generation if an external subtitle with the same language code as namesublang is present.", "default": "False", "value": ""},
-
 }
 
 if __name__ == "__main__":
