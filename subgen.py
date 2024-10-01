@@ -246,7 +246,7 @@ def receive_plex_webhook(
         event = plex_json["event"]
         logging.debug(f"Plex event detected is: {event}")
 
-        if (event in ["library.new", "media.play"] and (procaddedmedia or procmediaonplay)):
+        if (event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay):
             fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             logging.debug("Path of file: " + fullpath)
 
@@ -270,8 +270,7 @@ def receive_jellyfin_webhook(
         logging.debug(f"Jellyfin event detected is: {NotificationType}")
         logging.debug(f"itemid is: {ItemId}")
 
-        if (NotificationType == "ItemAdded" and procaddedmedia) or (
-                NotificationType == "PlaybackStart" and procmediaonplay):
+        if (NotificationType == "ItemAdded" and procaddedmedia) or (NotificationType == "PlaybackStart" and procmediaonplay):
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Path of file: {fullpath}")
 
