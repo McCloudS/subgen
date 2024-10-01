@@ -132,8 +132,10 @@ def main():
         os.execl(sys.executable, sys.executable, f"launcher{script_name}", *new_args)
 
     # Set environment variables based on the parsed arguments
-    os.environ['DEBUG'] = str(args.debug)
-    os.environ['APPEND'] = str(args.append)
+    if convert_to_bool(os.environ['DEBUG']) not True:
+        os.environ['DEBUG'] = str(args.debug)
+    if convert_to_bool(os.environ['APPEND']) not True:
+        os.environ['DEBUG'] = str(args.append)
 
     if args.setup_bazarr: 
         prompt_and_save_bazarr_env_variables()
