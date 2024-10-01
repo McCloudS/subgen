@@ -131,11 +131,11 @@ def main():
         print(f"Running launcher-{branch_name}.py for the '{branch_name}' branch.")
         os.execl(sys.executable, sys.executable, f"launcher{script_name}", *new_args)
 
-    # Set environment variables based on the parsed arguments
-    if convert_to_bool(os.environ['DEBUG']) not True:
-        os.environ['DEBUG'] = str(args.debug)
-    if convert_to_bool(os.environ['APPEND']) not True:
-        os.environ['DEBUG'] = str(args.append)
+# Set environment variables based on the parsed arguments
+if not convert_to_bool(os.environ.get('DEBUG', '')):
+    os.environ['DEBUG'] = str(args.debug)
+if not convert_to_bool(os.environ.get('APPEND', '')):
+    os.environ['APPEND'] = str(args.append)
 
     if args.setup_bazarr: 
         prompt_and_save_bazarr_env_variables()
