@@ -90,7 +90,6 @@ docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
 #start queue
-task_queue
 task_queue = queue.Queue()
 
 def transcription_worker():
