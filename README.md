@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+30 Sept 2024: Removed webui
+
 5 Sept 2024: Fixed Emby response to a test message/notification.  Clarified Emby/Plex/Jellyfin instructions for paths.
 
 14 Aug 2024: Cleaned up usage of kwargs across the board a bit.  Added ability for /asr to encode or not, so you don't need to worry about what files/formats you upload.
@@ -14,7 +16,7 @@
 
 31 Mar 2024: Removed `/subsync` endpoint and general refactoring.  Open an issue if you were using it!
 
-24 Mar 2024: Added a 'webui' to configure environment variables.  You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want).  The config will prioritize OS Env Variables, then the .env file, then the defaults.  You can access it at `http://subgen:9000/`
+24 Mar 2024: ~~Added a 'webui' to configure environment variables.  You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want).  The config will prioritize OS Env Variables, then the .env file, then the defaults.  You can access it at `http://subgen:9000/`~~
 
 23 Mar 2024: Added `CUSTOM_REGROUP` to try to 'clean up' subtitles a bit.  
 
