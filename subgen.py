@@ -967,7 +967,6 @@ greetings_translations = {
 
 if __name__ == "__main__":
     import uvicorn
-    update_env_variables()
     logging.info(f"Subgen v{subgen_version}")
     logging.info("Starting Subgen with listening webhooks!")
     logging.info(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
