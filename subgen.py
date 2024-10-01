@@ -205,7 +205,7 @@ def handle_get_request(request: Request):
 
 @app.get("/")
 def webui():
-    return {"The webui for configuration was removed on 1 October 2025, please configure via environment variables or in your Docker settings."}
+    return {"The webui for configuration was removed on 1 October 2024, please configure via environment variables or in your Docker settings."}
 
 @app.get("/status")
 def status():
