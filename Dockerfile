@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
 
 WORKDIR /subgen
 
@@ -9,9 +9,12 @@ RUN apt-get update \
         python3 \
         python3-pip \
         ffmpeg \
+        deep-translator \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install -r requirements.txt
+
+RUN pip install googletrans==4.0.0-rc1
 
 ENV PYTHONUNBUFFERED=1
 
