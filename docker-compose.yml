@@ -23,7 +23,7 @@ services:
        - "USE_PATH_MAPPING=False"
        - "PATH_MAPPING_FROM=/tv"
        - "PATH_MAPPING_TO=/Volumes/TV"
-       - "TRANSCRIBE_DEVICE=cpu"
+       - "TRANSCRIBE_DEVICE=gpu"
        - "CLEAR_VRAM_ON_COMPLETE=True"
        - "MODEL_PATH=./models"
        - "UPDATE=False"
@@ -38,3 +38,10 @@ services:
        - "${APPDATA}/subgen/models:/subgen/models"
     ports:
        - "9000:9000"
+    deploy:
+        resources:
+           reservations:
+             devices:
+               - driver: nvidia
+                 count: 1
+                 capabilities: [gpu]
