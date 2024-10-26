@@ -28,6 +28,13 @@ import ast
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 import faster_whisper
+import googletrans
+import sys
+from typing import Tuple
+from pathlib import Path
+from googletrans import Translator
+from googletrans import LANGUAGES
+from time import sleep
 
 def get_key_by_value(d, value):
     reverse_dict = {v: k for k, v in d.items()}
@@ -48,6 +55,7 @@ transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
 procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
 procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
 namesublang = os.getenv('NAMESUBLANG', 'aa')
+translatelanguages = os.getenv('TRANSLATELANGUAGES', '')
 skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', 'eng')
 webhookport = int(os.getenv('WEBHOOKPORT', 9000))
 word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
@@ -184,6 +192,7 @@ def appendLine(result):
         # Append the new segment to the result's segments
         result.segments.append(newSegment)
 
+
 def has_image_extension(file_path):
     valid_extensions = ['.rgb', '.gif', '.pbm', '.pgm', '.ppm', '.tiff', '.rast', '.xbm', '.jpg', '.jpeg', '.bmp', '.png', '.webp', '.exr', '.bif'] # taken from the extensions detected by the imghdr module & added Emby's '.bif' files
     
@@ -230,7 +239,6 @@ def receive_tautulli_webhook(
 
     return ""
 
-
 @app.post("/plex")
 def receive_plex_webhook(
         user_agent: Union[str] = Header(None),
@@ -257,7 +265,6 @@ def receive_plex_webhook(
         logging.error(f"Failed to process Plex webhook: {e}")
 
     return ""
-
 
 @app.post("/jellyfin")
 def receive_jellyfin_webhook(
@@ -484,10 +491,9 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         if model_prompt:
             args['initial_prompt'] = greetings_translations.get(force_language, '') or custom_model_prompt
         if custom_regroup:
-            args['regroup'] = custom_regroup
-            
-        args.update(kwargs)
+            args['regroup'] = custom_regroup        
 
+        args.update(kwargs)
         result = model.transcribe_stable(file_path, language=force_language, task=transcription_type, **args)
 
         appendLine(result)
@@ -502,9 +508,20 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         minutes, seconds = divmod(int(elapsed_time), 60)
         logging.info(
             f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+                
+        filenoext = get_file_name_without_extension(file_path)        
+        trans_file = f"{filenoext}{subextension}"
+        languages = translatelanguages.split(",")
+        logging.info(f"Translating file {trans_file} to: [{translatelanguages}] ...")        
+        for lang in languages: 
+            translate_file(trans_file, lang)
+        
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path}: {e}")
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
 
     finally:
         delete_model()
@@ -720,8 +737,8 @@ def has_audio(file_path):
 
 def path_mapping(fullpath):
     if use_path_mapping:
-        logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to))
-        return fullpath.replace(path_mapping_from, path_mapping_to)
+        logging.debug("Updated path: " + fullpath.replace(path_mapping_from, path_mapping_to).replace("\\", "/"))
+        return fullpath.replace(path_mapping_from, path_mapping_to).replace("\\", "/")
     return fullpath
 
 if monitor:
@@ -739,6 +756,35 @@ if monitor:
             self.create_subtitle(event)
         def on_modified(self, event):
             self.create_subtitle(event)
+
+def translate_file(infn: str, destlang: str) -> Tuple[int, int]:    
+    try:
+        outfn = infn.replace(subextension, f".subgen.{destlang}.srt")        
+        inf = Path(infn)
+        outf = Path(outfn)
+        translated = 0
+        skipped = 0
+        translator = Translator()    
+        
+        with inf.open() as inf, outf.open("w") as outf:
+            for line in inf:
+                if not line.strip():
+                    outf.write("\n")
+                elif line[0].isdigit():
+                    outf.write(line)                    
+                    skipped += 1              
+                else:
+                    result = translator.translate(line.rstrip(), dest=destlang)
+                    outf.write(result.text)                    
+                    outf.write("\n")
+                    print(result.text)
+                    time.sleep(1)
+                    translated += 1
+
+        return translated, skipped
+    
+    except Exception as e:
+        logging.info(f"Error translating file {inf}: {e}")          
 
 def transcribe_existing(transcribe_folders, forceLanguage=None):
     transcribe_folders = transcribe_folders.split("|")
