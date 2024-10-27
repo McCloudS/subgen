@@ -21,13 +21,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set Calver Version
-        uses: Nelyx/action-calver@v1.0.0
-        id: setcalver
-        with:
-          default_branch: 'refs/heads/main'
-          format: 'YYYY.M.D'
-          version_prefix: ''
+      - name: Get version from subgen.py
+        id: get_version
+        run: |
+          version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
+          echo "version=$version" >> $GITHUB_ENV
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -50,4 +48,4 @@ jobs:
           push: true
           tags: |
             mccloud/subgen:cpu
-            mccloud/subgen:${{ steps.setcalver.outputs.package_version }}-cpu
+            mccloud/subgen:${{ env.version }}-cpu
