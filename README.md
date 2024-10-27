@@ -81,10 +81,6 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 ## Install/Setup
 
-You can now configure all environment variables via `http://subgen:9000/` (fill in your appropriate IP and port).  You can still use Docker variables or OS Env Variables if you prefer.  A small snapshot of it below:
-![image](https://github.com/McCloudS/subgen/assets/64094529/02d6ed2a-5319-4991-858c-10f9baa77e82)
-
-
 ### Standalone/Without Docker
 
 Install python3 and ffmpeg, and download launcher.py from this repository. ~~and run `pip3 install numpy stable-ts fastapi requests faster-whisper uvicorn python-multipart python-ffmpeg whisper transformers optimum accelerate watchdog`~~.  Then run it: `python3 launcher.py -u -i -s`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr. You will need the appropriate NVIDIA drivers installed (12.2.0): https://developer.nvidia.com/cuda-12-2-0-download-archive?target_os=Windows&target_arch=x86_64
