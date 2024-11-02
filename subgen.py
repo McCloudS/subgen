@@ -1,4 +1,4 @@
-subgen_version = '2024.11.2.125'
+subgen_version = '2024.10.27.124'
 
 from datetime import datetime
 import subprocess
@@ -531,8 +531,11 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         message = f"{file_path} already has a Subgen SDH subtitle created for this, skipping it"
     elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
         message = f"{file_path} already has a LRC created for this, skipping it"
-    elif should_skip_language(get_video_audio_languages(video_path)):
-        message = f"Skipping subtitle generation for language: {video_language}")
+    elif skip_lang_codes_list:
+        # Check if any language in the audio streams matches a skip language
+        should_skip, skip_language = should_skip_languages(get_audio_languages(file_path))
+        if should_skip:
+            message = f"Language '{skip_language}' detected in {file_path} and is in the skip list {skip_lang_codes_list}, skipping subtitle generation"
         
     if message:
         logging.debug(message)
@@ -548,11 +551,12 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
 def should_skip_languages(language_codes):
     """
     Check if any language in language_codes matches a code in skip_lang_codes_list.
+    :return: (True, language_code) if a match is found, otherwise (False, None)
     """
     for code in language_codes:
         if code in skip_lang_codes_list:
-            return True
-    return False
+            return True, code
+    return False, None
 
 def get_audio_languages(video_path):
     """
