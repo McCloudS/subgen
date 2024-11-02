@@ -70,6 +70,9 @@ lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
+skip_lang_codes = os.getenv("SKIP_LANG_CODES", "")
+skip_lang_codes_list = skip_lang_codes.split("|") if skip_lang_codes else []
+
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
 except ValueError:
@@ -528,6 +531,8 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         message = f"{file_path} already has a Subgen SDH subtitle created for this, skipping it"
     elif os.path.exists(get_file_name_without_extension(file_path) + '.lrc'):
         message = f"{file_path} already has a LRC created for this, skipping it"
+    elif should_skip_language(get_video_audio_languages(video_path)):
+        message = f"Skipping subtitle generation for language: {video_language}")
         
     if message:
         logging.debug(message)
@@ -539,6 +544,37 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
         'force_language':force_language
     }
     task_queue.put(task)
+
+def should_skip_languages(language_codes):
+    """
+    Check if any language in language_codes matches a code in skip_lang_codes_list.
+    """
+    for code in language_codes:
+        if code in skip_lang_codes_list:
+            return True
+    return False
+
+def get_audio_languages(video_path):
+    """
+    Extract language codes from each audio stream in the video file using pyav.
+    :param video_path: Path to the video file
+    :return: List of language codes for each audio stream
+    """
+    languages = []
+
+    # Open the video file
+    with av.open(video_path) as container:
+        # Iterate through each audio stream
+        for stream in container.streams.audio:
+            # Access the metadata for each audio stream
+            lang_code = stream.metadata.get('language')
+            if lang_code:
+                languages.append(lang_code)
+            else:
+                # Append 'und' (undefined) if no language metadata is present
+                languages.append('und')
+    
+    return languages
 
 def get_file_name_without_extension(file_path):
     file_name, file_extension = os.path.splitext(file_path)
