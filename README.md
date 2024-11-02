@@ -208,6 +208,7 @@ The following environment variables are available in Docker.  They will default 
 | DETECT_LANGUAGE_LENGTH | 30 | Detect language on the first x seconds of the audio. |
 | SKIPIFEXTERNALSUB | False | Skip subtitle generation if an external subtitle with the same language code as NAMESUBLANG is present. Used for the case of not regenerating subtitles if I already have `Movie (2002).NAMESUBLANG.srt` from a non-subgen source. |
 | SUBGEN_KWARGS | '{}' | Takes a kwargs python dictionary of options you would like to add/override.  For advanced users.  An example would be `{'vad': 'True','prompt_reset_on_temperature': '0.35'}` |
+| SKIP_LANG_CODES | '' | Takes a pipe separated '|' list of 3 letter language codes to not generate subtitles for |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
