@@ -297,9 +297,6 @@ def receive_emby_webhook(
 ):
     logging.debug("Raw response: %s", data)
 
-    if "Emby Server" not in user_agent:
-        return {"This doesn't appear to be a properly configured Emby webhook, please review the instructions again!"}
-
     if not data:
         return ""
 
