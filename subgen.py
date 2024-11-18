@@ -329,6 +329,7 @@ def batch(
 async def asr(
         task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
         language: Union[str, None] = Query(default=None),
+        video_file: Union[str, None] = Query(default="Name not supplied"),
         initial_prompt: Union[str, None] = Query(default=None),  #not used by Bazarr
         audio_file: UploadFile = File(...),
         encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),  #not used by Bazarr/always False
@@ -336,7 +337,7 @@ async def asr(
         word_timestamps: bool = Query(default=False, description="Word level timestamps") #not used by Bazarr
 ):
     try:
-        logging.info(f"Transcribing file from Bazarr/ASR webhook")
+        logging.info(f"Transcribing file '{video_file}' from Bazarr/ASR webhook")
         result = None
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
 
@@ -370,9 +371,9 @@ async def asr(
         appendLine(result)
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
-        logging.info(f"Bazarr transcription is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+        logging.info(f"Transcription of '{video_file}' from Bazarr complete, it took {minutes} minutes and {seconds} seconds to complete.")
     except Exception as e:
-        logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
+        logging.info(f"Error processing or transcribing Bazarr file: {video_file} -- Exception: {e}")
     finally:
         await audio_file.close()
         task_queue.task_done()
