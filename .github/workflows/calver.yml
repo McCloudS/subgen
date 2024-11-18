@@ -18,17 +18,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Generate Monthly Commit Count
+        id: commit_count
+        run: |
+          # Get the current year and month
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+
+          # Count commits from the start of the current month
+          COMMIT_COUNT=$(git rev-list --count HEAD --since="$YEAR-$MONTH-01")
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_ENV
+
       - name: Set Calver Version
-        uses: Nelyx/action-calver@v1.0.0
         id: setcalver
-        with:
-          default_branch: 'refs/heads/main'
-          format: 'YYYY.M.D'
-          version_prefix: ''
+        run: |
+          # Combine year, month, and commit count for the version
+          VERSION=$(date +%Y.%m).${{ env.commit_count }}
+          echo "package_version=$VERSION" >> $GITHUB_ENV
 
       - name: Update version file
         run: |
-          sed -i "s/subgen_version =.*/subgen_version = '${{ steps.setcalver.outputs.package_version }}'/" subgen.py
+          sed -i "s/subgen_version =.*/subgen_version = '${{ env.package_version }}'/" subgen.py
 
       - name: Amend commit with version update
         env:
