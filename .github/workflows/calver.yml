@@ -14,31 +14,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          # Fetch only the latest commit initially
+          fetch-depth: 1
+          ref: main
 
-      - name: Generate Monthly Commit Count
-        id: commit_count
+      - name: Fetch commits for this month
         run: |
-          # Get the current year and month
+          # Fetch commits starting from the first day of the current month
           YEAR=$(date +%Y)
           MONTH=$(date +%m)
+          git fetch --shallow-since="$YEAR-$MONTH-01"
 
-          # Count commits from the start of the current month
-          COMMIT_COUNT=$(git rev-list --count HEAD --since="$YEAR-$MONTH-01")
-          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_ENV
-
-      - name: Set Calver Version
-        id: setcalver
+      - name: Calculate version
+        id: version
         run: |
-          # Combine year, month, and commit count for the version
-          VERSION=$(date +%Y.%m).${{ env.commit_count }}
-          echo "package_version=$VERSION" >> $GITHUB_ENV
+          # Calculate the commit count for this month
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          COMMIT_COUNT=$(git rev-list --count HEAD --since="$YEAR-$MONTH-01")
+          echo "COMMIT_COUNT=$COMMIT_COUNT"
+          echo "VERSION=${YEAR}.${MONTH}.${COMMIT_COUNT}" >> $GITHUB_ENV
 
       - name: Update version file
         run: |
-          sed -i "s/subgen_version =.*/subgen_version = '${{ env.package_version }}'/" subgen.py
+          # Update subgen.py with the calculated version
+          sed -i "s/subgen_version =.*/subgen_version = '${{ env.VERSION }}'/" subgen.py
 
       - name: Amend commit with version update
         env:
