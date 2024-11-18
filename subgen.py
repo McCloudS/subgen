@@ -328,17 +328,18 @@ def batch(
 @app.post("//asr")
 @app.post("/asr")
 async def asr(
-        task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
-        language: Union[str, None] = Query(default=None),
-        video_file: Union[str, None] = Query(default="Name not supplied"),
-        initial_prompt: Union[str, None] = Query(default=None),  #not used by Bazarr
-        audio_file: UploadFile = File(...),
-        encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),  #not used by Bazarr/always False
-        output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
-        word_timestamps: bool = Query(default=False, description="Word level timestamps") #not used by Bazarr
+    task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
+    language: Union[str, None] = Query(default=None),
+    video_file: Union[str, None] = Query(default=None),
+    initial_prompt: Union[str, None] = Query(default=None),  # Not used by Bazarr
+    audio_file: UploadFile = File(...),
+    encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),  # Not used by Bazarr/always False
+    output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
+    word_timestamps: bool = Query(default=False, description="Word-level timestamps"),  # Not used by Bazarr
 ):
     try:
-        logging.info(f"Transcribing file '{video_file}' from Bazarr/ASR webhook")
+        logging.info(f"Transcribing file '{video_file}' from Bazarr/ASR webhook" if video_file else "Transcribing file from Bazarr/ASR webhook")
+        
         result = None
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
 
@@ -348,47 +349,56 @@ async def asr(
 
         start_time = time.time()
         start_model()
-        
-        task_id = { 'path': f"Bazarr-asr-{random_name}" }        
+
+        task_id = {'path': f"Bazarr-asr-{random_name}"}
         task_queue.put(task_id)
 
         args = {}
         args['progress_callback'] = progress
-        
+
         if not encode:
             args['audio'] = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
             args['input_sr'] = 16000
         else:
             args['audio'] = audio_file.file.read()
-            
+
         if model_prompt:
             args['initial_prompt'] = greetings_translations.get(language, '') or custom_model_prompt
         if custom_regroup:
             args['regroup'] = custom_regroup
-            
+
         args.update(kwargs)
-        
+
         result = model.transcribe_stable(task=task, language=language, **args)
         appendLine(result)
+
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
-        logging.info(f"Transcription of '{video_file}' from Bazarr complete, it took {minutes} minutes and {seconds} seconds to complete.")
+        logging.info(
+            f"Transcription of '{video_file}' from Bazarr complete, it took {minutes} minutes and {seconds} seconds to complete." if video_file 
+            else f"Transcription complete, it took {minutes} minutes and {seconds} seconds to complete.")
+    
     except Exception as e:
-        logging.info(f"Error processing or transcribing Bazarr file: {video_file} -- Exception: {e}")
+        logging.error(
+            f"Error processing or transcribing Bazarr file: {video_file} -- Exception: {e}" if video_file
+            else f"Error processing or transcribing Bazarr file Exception: {e}"
+        )
+    
     finally:
         await audio_file.close()
         task_queue.task_done()
         delete_model()
+    
     if result:
         return StreamingResponse(
-            iter(result.to_srt_vtt(filepath = None, word_level=word_level_highlight)),
+            iter(result.to_srt_vtt(filepath=None, word_level=word_level_highlight)),
             media_type="text/plain",
             headers={
                 'Source': 'Transcribed using stable-ts from Subgen!',
-            })
+            }
+        )
     else:
         return
-
 @app.post("//detect-language")
 @app.post("/detect-language")
 async def detect_language(
