@@ -1,4 +1,4 @@
-subgen_version = '2024.11.18.130'
+subgen_version = '2024.11.18.131'
 
 from datetime import datetime
 import subprocess
