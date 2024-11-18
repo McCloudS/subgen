@@ -109,7 +109,7 @@ def transcription_worker():
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
 
-# Define a filter class
+# Define a filter class to hide common logging we don't want to see
 class MultiplePatternsFilter(logging.Filter):
     def filter(self, record):
         # Define the patterns to search for
@@ -127,6 +127,7 @@ class MultiplePatternsFilter(logging.Filter):
             "misdetection possible",
             "srt was added",
             "doesn't have any audio to transcribe",
+            "Calling on_"
         ]
         # Return False if any of the patterns are found, True otherwise
         return not any(pattern in record.getMessage() for pattern in patterns)
