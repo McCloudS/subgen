@@ -2,7 +2,7 @@ numpy
 stable-ts
 fastapi
 requests
-faster-whisper
+faster-whisper==1.0.3
 uvicorn
 python-multipart
 python-ffmpeg
