@@ -1,8 +1,8 @@
 numpy
-stable-ts
+git+https://github.com/jianfch/stable-ts.git
 fastapi
 requests
-faster-whisper==1.0.3
+faster-whisper
 uvicorn
 python-multipart
 python-ffmpeg
