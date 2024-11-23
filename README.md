@@ -87,6 +87,8 @@ Honestly, I built this for me, but saw the utility in other people maybe using i
 
 Install python3, ffmpeg, and git (https://git-scm.com/downloads/win), and download launcher.py from this repository.  Then run it: `python3 launcher.py -u -i -s`. You need to have matching paths relative to your Plex server/folders, or use USE_PATH_MAPPING.  Paths are not needed if you are only using Bazarr. You will need the appropriate NVIDIA drivers installed (12.2.0): https://developer.nvidia.com/cuda-12-2-0-download-archive?target_os=Windows&target_arch=x86_64
 
+Note: If you have previously had Subgen running in standalone, you may need to run `pip install --upgrade --force-reinstall faster-whisper git+https://github.com/jianfch/stable-ts.git` to force the install of the newer stable-ts package.
+
 #### Using Launcher
 
 launcher.py can launch subgen for you and automate the setup and can take the following options:
@@ -111,7 +113,7 @@ If you want to use a GPU, you need to map it accordingly.
 
 #### Unraid
 
-While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See https://github.com/McCloudS/subgen/issues/37 for pictures and steps.
+While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See [https://github.com/McCloudS/subgen/issues/37](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
 
 ## Plex
 
