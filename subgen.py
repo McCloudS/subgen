@@ -26,6 +26,8 @@ import ast
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 import faster_whisper
+import io
+
 
 def get_key_by_value(d, value):
     reverse_dict = {v: k for k, v in d.items()}
@@ -485,12 +487,11 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
         file_name, file_extension = os.path.splitext(file_path)
         is_audio_file = isAudioFileExtension(file_extension)
         
+        data = file_path
         # Extract audio from the file if it has multiple audio tracks
-        has_generated_audio_file = False
         exctracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
         if exctracted_audio_file:
-            has_generated_audio_file = True
-            file_path = exctracted_audio_file
+            data = exctracted_audio_file.read()
         
         args = {}
         args['progress_callback'] = progress
@@ -500,7 +501,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
             
         args.update(kwargs)
         
-        result = model.transcribe_stable(file_path, language=force_language.to_iso_639_1(), task=transcription_type, **args)
+        result = model.transcribe_stable(data, language=force_language.to_iso_639_1(), task=transcription_type, **args)
 
         appendLine(result)
 
@@ -514,10 +515,6 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
         minutes, seconds = divmod(int(elapsed_time), 60)
         logging.info(
             f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
-        
-        # Remove the generated audio file if it was created
-        if has_generated_audio_file:
-            os.remove(file_path)
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path}: {e}")
@@ -560,7 +557,7 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
     """
     return f"{os.path.splitext(file_path)[0]}.subgen.{whisper_model.split('.')[0]}.{define_subtitle_language_naming(language, subtitle_language_naming_type)}.srt"
         
-def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> str | None:
+def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> io.BytesIO | None:
     """
     Handles the possibility of a media file having multiple audio tracks.
     
@@ -568,12 +565,12 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
     
     Parameters:
     file_path (str): The path to the media file.
-    language (str | None): The language of the audio track to search for. If None, it will extract the first audio track.
+    language (LanguageCode | None): The language of the audio track to search for. If None, it will extract the first audio track.
     
     Returns:
-    str | None: The path to the extracted audio file or None if no audio track was exztracted.
+    io.BytesIO  | None: The audio or None if no audio track was extracted.
     """
-    audio_path = None
+    audio_bytes = None
     audio_tracks = get_audio_tracks(file_path)
 
     if len(audio_tracks) > 1:
@@ -588,9 +585,47 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
         if audio_track is None:
             audio_track = audio_tracks[0]
         
-        audio_path = extract_audio_track(file_path, audio_track)
+        audio_bytes = extract_audio_track_to_memory(file_path, audio_track["index"])
+        if audio_bytes is None:
+            logging.error(f"Failed to extract audio track {audio_track['index']} from {file_path}")
+            return None
+    return audio_bytes
 
-    return audio_path
+def extract_audio_track_to_memory(input_video_path, track_index) -> io.BytesIO | None:
+    """
+    Extract a specific audio track from a video file to memory using FFmpeg.
+
+    Args:
+        input_video_path (str): The path to the video file.
+        track_index (int): The index of the audio track to extract. If None, skip extraction.
+
+    Returns:
+        io.BytesIO | None: The audio data as a BytesIO object, or None if extraction failed.
+    """
+    if track_index is None:
+        logging.warning(f"Skipping audio track extraction for {input_video_path} because track index is None")
+        return None
+
+    try:
+        # Use FFmpeg to extract the specific audio track and output to memory
+        out, _ = (
+            ffmpeg.input(input_video_path)
+            .output(
+                "pipe:",  # Direct output to a pipe
+                map=f"0:{track_index}",  # Select the specific audio track
+                format="wav",             # Output format
+                ac=1,                     # Mono audio (optional)
+                ar=16000,                 # Sample rate 16 kHz (recommended for speech models)
+                loglevel="quiet"
+            )
+            .run(capture_stdout=True, capture_stderr=True)  # Capture output in memory
+        )
+        # Return the audio data as a BytesIO object
+        return io.BytesIO(out)
+
+    except ffmpeg.Error as e:
+        print("An error occurred:", e.stderr.decode())
+        return None
 
 def get_audio_track_by_language(audio_tracks, language):
     """
@@ -751,35 +786,7 @@ def find_default_audio_track_language(audio_tracks):
         if track['default'] is True:
             return track['language']
     return None
-
-def extract_audio_track(video_path, audio_track):
-    """
-    Extracts a single audio track from a video file into a separate audio file.
-
-    Args:
-        video_path: The path to the video file.
-        audio_track: A dictionary with information about the audio track to extract.
-            Must contain the keys "index", "codec", and "language".
-
-    Returns:
-        The path to the extracted audio file if successful; otherwise, returns None.
-    """
-    track_index = audio_track["index"]
-    codec_name = audio_track["codec"]
-    language = audio_track["language"]
-    if track_index is None:
-        logging.warning(f"Skipping audio track extraction for {video_path} because track index is None")
-        return None
-
-    audio_output_path = f"{os.path.splitext(video_path)[0]}.{codec_name}"
-    try:
-        ffmpeg.input(video_path).output(
-            audio_output_path, map=f'0:{track_index}', codec='copy', loglevel="quiet"
-        ).run(overwrite_output=True)
-        return audio_output_path
-    except ffmpeg.Error as e:
-        logging.error(f"FFmpeg error while extracting audio track for {video_path}: {e.stderr}")
-        return None
+    
     
 def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode | None = None) -> None:
     global task_queue
