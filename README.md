@@ -4,6 +4,10 @@
 <details>
 <summary>Updates:</summary>
 
+30 Nov 2024: Signifcant refactoring and handling by Muisje.  Added language code class for more robustness and flexibility and ability to separate audio tracks to make sure you get the one you want.  New ENV Variables: SUBTITLE_LANGUAGE_NAMING_TYPE, SKIP_IF_AUDIO_TRACK_IS, PREFERRED_AUDIO_LANGUAGE, SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
+
+    There will be some minor hiccups, so please identify them as we work through this major overhaul.
+
 22 Nov 2024: Updated to support large-v3-turbo
 
 30 Sept 2024: Removed webui
@@ -213,6 +217,10 @@ The following environment variables are available in Docker.  They will default 
 | SKIPIFEXTERNALSUB | False | Skip subtitle generation if an external subtitle with the same language code as NAMESUBLANG is present. Used for the case of not regenerating subtitles if I already have `Movie (2002).NAMESUBLANG.srt` from a non-subgen source. |
 | SUBGEN_KWARGS | '{}' | Takes a kwargs python dictionary of options you would like to add/override.  For advanced users.  An example would be `{'vad': 'True','prompt_reset_on_temperature': '0.35'}` |
 | SKIP_LANG_CODES | '' | Takes a pipe separated `\|` list of 3 letter language codes to not generate subtitles for example 'eng\|deu'|
+| SUBTITLE_LANGUAGE_NAMING_TYPE | 'ISO_639_2_B' | The type of naming format desired, such as 'ISO_639_1', 'ISO_639_2_T', 'ISO_639_2_B', 'NAME', or 'NATIVE', for example: ("es", "spa", "spa", "Spanish", "Español") |
+| SKIP_IF_AUDIO_TRACK_IS | '' | Takes a pipe separated `\|` list of 3 letter language codes to skip if the file has audio in that language.  This could be used to skip generating subtitles for a language you don't want, like, I speak English, don't generate English subtitles (for example: 'eng\|deu')|
+| PREFERRED_AUDIO_LANGUAGE | 'eng' | If there are multiple audio tracks in a file, it will prefer this setting |
+| SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST | True | Skips generation of subtitle if a file matches our desired language already. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
