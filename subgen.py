@@ -1,4 +1,4 @@
-subgen_version = '2024.11.36'
+subgen_version = '2024.11.38'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -489,9 +489,9 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
         
         data = file_path
         # Extract audio from the file if it has multiple audio tracks
-        exctracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
-        if exctracted_audio_file:
-            data = exctracted_audio_file.read()
+        extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
+        if extracted_audio_file:
+            data = extracted_audio_file.read()
         
         args = {}
         args['progress_callback'] = progress
