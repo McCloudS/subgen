@@ -154,6 +154,7 @@ def main():
     if not os.path.exists(f'subgen{script_name}') or args.update or convert_to_bool(os.getenv('UPDATE')):
         print(f"Downloading subgen.py from GitHub branch {branch_name}...")
         download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/subgen.py", f'subgen{script_name}')
+        download_from_github(f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/language_code.py", f'language_code{script_name}')
     else:
         print("subgen.py exists and UPDATE is set to False, skipping download.")
         
