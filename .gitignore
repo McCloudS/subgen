@@ -8,3 +8,5 @@
 
 #ignore our settings
 subgen.env
+
+models/
