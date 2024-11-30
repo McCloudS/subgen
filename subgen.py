@@ -1,5 +1,6 @@
 subgen_version = '2024.11.29'
 
+from language_code import LanguageCode
 from datetime import datetime
 import os
 import json
@@ -45,7 +46,6 @@ transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
 procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
 procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
 namesublang = os.getenv('NAMESUBLANG', '')
-skipifinternalsublang = os.getenv('SKIPIFINTERNALSUBLANG', '')
 webhookport = int(os.getenv('WEBHOOKPORT', 9000))
 word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
 debug = convert_to_bool(os.getenv('DEBUG', True))
@@ -56,7 +56,6 @@ model_location = os.getenv('MODEL_PATH', './models')
 monitor = convert_to_bool(os.getenv('MONITOR', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
-force_detected_language_to = os.getenv('FORCE_DETECTED_LANGUAGE_TO', '').lower()
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
@@ -65,12 +64,15 @@ lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
-skip_lang_codes = os.getenv("SKIP_LANG_CODES", "")
-skip_lang_codes_list = skip_lang_codes.split("|") if skip_lang_codes else []
-preferred_audio_language = os.getenv('PREFERRED_AUDIO_LANGUAGE', 'eng')
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
-skip_if_audio_track_is_in_list = os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|") if skip_lang_codes else []
+skipifinternalsublang = LanguageCode.from_iso_639_2(os.getenv('SKIPIFINTERNALSUBLANG', ''))
+skip_lang_codes_list = [LanguageCode.from_iso_639_2(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
+force_detected_language_to = LanguageCode.from_iso_639_2(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
+preferred_audio_language =  LanguageCode.from_iso_639_2(os.getenv('PREFERRED_AUDIO_LANGUAGE', 'eng'))
+skip_if_audio_track_is_in_list = [LanguageCode.from_iso_639_2(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
 # Maybe just have skip_if_audio_track_is_in_list and skip_lang_codes_list and remove skipifinternalsublang
+# TODO option which iso code to write in the subtitle file1
+subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_639_2_B')
 
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
@@ -401,11 +403,10 @@ async def detect_language(
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
         detect_lang_length: int = Query(default=30, description="Detect language on the first X seconds of the file")
 ):    
-    detected_language = ""  # Initialize with an empty string
-    language_code = ""  # Initialize with an empty string
+    detected_language = LanguageCode.NONE
     if force_detected_language_to:
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}\n Returning without detection")
-            return {"detected_language": whisper_languages[force_detected_language_to], "language_code": force_detected_language_to}
+            return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
     if int(detect_lang_length) != 30:
         global detect_language_length 
         detect_language_length = detect_lang_length
@@ -425,9 +426,9 @@ async def detect_language(
         args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
 
         args.update(kwargs)
-        detected_language = model.transcribe_stable(**args).language
+        detected_language = LanguageCode.from_iso_639_1(model.transcribe_stable(**args).language)
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
-        language_code = get_key_by_value(whisper_languages, detected_language)
+        language_code = get_key_by_value(detected_language.to_name(), detected_language.to_iso_639_1())
 
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -463,7 +464,7 @@ def write_lrc(result, file_path):
             fraction = int((segment.start - int(segment.start)) * 100)
             file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}] {segment.text}\n")
 
-def gen_subtitles(file_path: str, transcription_type: str, force_language=None) -> None:
+def gen_subtitles(file_path: str, transcription_type: str, force_language : LanguageCode | None = None) -> None:
     """Generates subtitles for a video file.
 
     Args:
@@ -499,7 +500,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
             
         args.update(kwargs)
         
-        result = model.transcribe_stable(file_path, language=iso_language_mapping.get(force_language), task=transcription_type, **args)
+        result = model.transcribe_stable(file_path, language=force_language.to_iso_639_1(), task=transcription_type, **args)
 
         appendLine(result)
 
@@ -507,7 +508,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
         if is_audio_file and lrc_for_audio_files:
             write_lrc(result, file_name + '.lrc')
         else:
-            result.to_srt_vtt(file_name + f".subgen.{whisper_model.split('.')[0]}.{namesublang if namesublang else (force_language and force_language or result.language)}.srt", word_level=word_level_highlight)
+            result.to_srt_vtt(name_subtitle(file_path, force_language), word_level=word_level_highlight)
 
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -524,7 +525,42 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language=None) 
     finally:
         delete_model()
         
-def handle_multiple_audio_tracks(file_path: str, language: str | None = None) -> str | None:
+def define_subtitle_language_naming(language: LanguageCode, type):
+    """
+    Determines the naming format for a subtitle language based on the given type.
+
+    Args:
+        language (LanguageCode): The language code object containing methods to get different formats of the language name.
+        type (str): The type of naming format desired, such as 'ISO_639_1', 'ISO_639_2_T', 'ISO_639_2_B', 'NAME', or 'NATIVE'.
+
+    Returns:
+        str: The language name in the specified format. If an invalid type is provided, it defaults to the language's name.
+    """
+    if namesublang:
+        return namesublang
+    switch_dict = {
+        "ISO_639_1": language.to_iso_639_1,
+        "ISO_639_2_T": language.to_iso_639_2_t,
+        "ISO_639_2_B": language.to_iso_639_2_b,
+        "NAME": language.to_name,
+        "NATIVE": lambda : language.to_name(in_english=False)
+    }
+    return switch_dict.get(type, language.to_name)()
+
+def name_subtitle(file_path: str, language: LanguageCode) -> str:
+    """
+    Name the the subtitle file to be written, based on the source file and the language of the subtitle.
+    
+    Args:
+        file_path: The path to the source file.
+        language: The language of the subtitle.
+    
+    Returns:
+        The name of the subtitle file to be written.
+    """
+    return f"{os.path.splitext(file_path)[0]}.subgen.{whisper_model.split('.')[0]}.{define_subtitle_language_naming(language, subtitle_language_naming_type)}.srt"
+        
+def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> str | None:
     """
     Handles the possibility of a media file having multiple audio tracks.
     
@@ -618,7 +654,7 @@ def get_audio_tracks(video_file):
             index (int): The stream index of the audio track.
             codec (str): The name of the audio codec.
             channels (int): The number of audio channels.
-            language (str): The language of the audio track.
+            language (LanguageCode): The language of the audio track.
             title (str): The title of the audio track.
             default (bool): Whether the audio track is the default for the file.
             forced (bool): Whether the audio track is forced.
@@ -632,7 +668,7 @@ def get_audio_tracks(video_file):
                 "index": 0,
                 "codec": "dts",
                 "channels": 6,
-                "language": "fra",
+                "language": LanguageCode.FRENCH,
                 "title": "French",
                 "default": True,
                 "forced": False,
@@ -643,7 +679,7 @@ def get_audio_tracks(video_file):
                 "index": 1,
                 "codec": "aac",
                 "channels": 2,
-                "language": "eng",
+                "language":  LanguageCode.ENGLISH,
                 "title": "English",
                 "default": False,
                 "forced": False,
@@ -659,7 +695,7 @@ def get_audio_tracks(video_file):
         # Probe the file to get audio stream metadata
         probe = ffmpeg.probe(video_file, select_streams='a')
         audio_streams = probe.get('streams', [])
-
+        
         # Extract information for each audio track
         audio_tracks = []
         for stream in audio_streams:
@@ -667,7 +703,7 @@ def get_audio_tracks(video_file):
                 "index": int(stream.get("index", None)),
                 "codec": stream.get("codec_name", "Unknown"),
                 "channels": int(stream.get("channels", None)),
-                "language": stream.get("tags", {}).get("language", "Unknown"),
+                "language": LanguageCode.from_iso_639_2(stream.get("tags", {}).get("language", "Unknown")),
                 "title": stream.get("tags", {}).get("title", "None"),
                 "default": stream.get("disposition", {}).get("default", 0) == 1,
                 "forced": stream.get("disposition", {}).get("forced", 0) == 1,
@@ -735,7 +771,7 @@ def extract_audio_track(video_path, audio_track):
         logging.warning(f"Skipping audio track extraction for {video_path} because track index is None")
         return None
 
-    audio_output_path = f"{os.path.splitext(video_path)[0]}.{language}.{codec_name}"
+    audio_output_path = f"{os.path.splitext(video_path)[0]}.{codec_name}"
     try:
         ffmpeg.input(video_path).output(
             audio_output_path, map=f'0:{track_index}', codec='copy', loglevel="quiet"
@@ -745,7 +781,7 @@ def extract_audio_track(video_path, audio_track):
         logging.error(f"FFmpeg error while extracting audio track for {video_path}: {e.stderr}")
         return None
     
-def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=None) -> None:
+def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode | None = None) -> None:
     global task_queue
     
     if not has_audio(file_path):
@@ -766,7 +802,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language=
     task_queue.put(task)
     logging.info(f"task_queue.put(task)({task['path']}, {task['transcribe_or_translate']}, {task['force_language']})")
 
-def have_to_skip(file_path, transcribe_language):
+def have_to_skip(file_path, transcribe_language : LanguageCode):
     """
     Determines whether subtitle generation should be skipped for a given file.
 
@@ -790,10 +826,10 @@ def have_to_skip(file_path, transcribe_language):
         if has_subtitle_language(file_path, skipifinternalsublang):
             logging.debug(f"{file_path} already has an subtitle we want, skipping subtitle generation")
             return True
-    if skipifexternalsub and has_subtitle_language(file_path, namesublang):
+    if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
         return True
     if any(item in skip_lang_codes_list for item in get_subtitle_languages(file_path)):
-        logging.debug(f"Language a code from {skip_lang_codes} detected in subtitle of {file_path}, skipping subtitle generation")
+        logging.debug(f"Language a code from {skip_lang_codes_list} detected in subtitle of {file_path}, skipping subtitle generation")
         return True
     if any(item in skip_if_audio_track_is_in_list for item in get_audio_languages(file_path)):
         # Maybe add a check if the audio track is the default/ orginal or forced language to not skip it if it is a dubbed track in case of movies with multiple audio tracks.
@@ -816,10 +852,10 @@ def get_subtitle_languages(video_path):
             # Access the metadata for each audio stream
             lang_code = stream.metadata.get('language')
             if lang_code:
-                languages.append(lang_code)
+                languages.append(LanguageCode.from_iso_639_2(lang_code))
             else:
                 # Append 'und' (undefined) if no language metadata is present
-                languages.append('und')
+                languages.append(LanguageCode.NONE)
     
     return languages
 
@@ -837,7 +873,7 @@ def get_audio_languages(video_path):
     audio_tracks = get_audio_tracks(video_path)
     return [track['language'] for track in audio_tracks]    
 
-def has_subtitle_language(video_file, target_language):
+def has_subtitle_language(video_file, target_language: LanguageCode):
     """
     Determines if a subtitle file with the target language is available for a specified video file.
 
@@ -851,9 +887,12 @@ def has_subtitle_language(video_file, target_language):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
+    logging.debug(f"has_subtitle_language({video_file}, {target_language})")
+    if target_language == LanguageCode.NONE:
+        return False
     return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language)
 
-def has_subtitle_language_in_file(video_file, target_language):
+def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
     """
     Checks if a video file contains subtitles with a specific language.
 
@@ -864,12 +903,12 @@ def has_subtitle_language_in_file(video_file, target_language):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    if target_language is None:
-        logging.debug("No target language specified.")
-        return
+    logging.debug(f"has_subtitle_language_in_file({video_file}, {target_language})")
+    if target_language == LanguageCode.NONE:
+        return False
     try:
         with av.open(video_file) as container:
-            subtitle_stream = next((stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata and stream.metadata['language'] == target_language), None)
+            subtitle_stream = next((stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata and LanguageCode.from_string(stream.metadata['language']) == target_language), None)
             
             if subtitle_stream:
                 logging.debug(f"Subtitles in '{target_language}' language found in the video.")
@@ -881,7 +920,7 @@ def has_subtitle_language_in_file(video_file, target_language):
         logging.info(f"An error occurred: {e}")
         return False
 
-def has_subtitle_of_language_in_folder(video_file, target_language, recursion = True):
+def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode, recursion = True):
     """Checks if the given folder has a subtitle file with the given language.
 
     Args:
@@ -907,7 +946,7 @@ def has_subtitle_of_language_in_folder(video_file, target_language, recursion = 
             if root.startswith(video_file_stripped) and ext.lower() in subtitle_extensions:
                 parts = root[len(video_file_stripped):].lstrip(".").split(".")
                 # Check if the target language is one of the parts
-                if target_language in parts:
+                if any(LanguageCode.from_string(part) == target_language for part in parts):
                     # If the language is found, return True
                     return True
         elif os.path.isdir(file_path) and recursion: 
@@ -1091,7 +1130,7 @@ if monitor:
         def on_modified(self, event):
             self.create_subtitle(event)
 
-def transcribe_existing(transcribe_folders, forceLanguage=None):
+def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None = None):
     transcribe_folders = transcribe_folders.split("|")
     logging.info("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
@@ -1114,157 +1153,6 @@ def transcribe_existing(transcribe_folders, forceLanguage=None):
                 observer.schedule(handler, path, recursive=True)
         observer.start()
         logging.info("Finished searching and queueing files for transcription. Now watching for new files.")
-
-# ISO 639-1
-whisper_languages = {
-    "en": "english",
-    "zh": "chinese",
-    "de": "german",
-    "es": "spanish",
-    "ru": "russian",
-    "ko": "korean",
-    "fr": "french",
-    "ja": "japanese",
-    "pt": "portuguese",
-    "tr": "turkish",
-    "pl": "polish",
-    "ca": "catalan",
-    "nl": "dutch",
-    "ar": "arabic",
-    "sv": "swedish",
-    "it": "italian",
-    "id": "indonesian",
-    "hi": "hindi",
-    "fi": "finnish",
-    "vi": "vietnamese",
-    "he": "hebrew",
-    "uk": "ukrainian",
-    "el": "greek",
-    "ms": "malay",
-    "cs": "czech",
-    "ro": "romanian",
-    "da": "danish",
-    "hu": "hungarian",
-    "ta": "tamil",
-    "no": "norwegian",
-    "th": "thai",
-    "ur": "urdu",
-    "hr": "croatian",
-    "bg": "bulgarian",
-    "lt": "lithuanian",
-    "la": "latin",
-    "mi": "maori",
-    "ml": "malayalam",
-    "cy": "welsh",
-    "sk": "slovak",
-    "te": "telugu",
-    "fa": "persian",
-    "lv": "latvian",
-    "bn": "bengali",
-    "sr": "serbian",
-    "az": "azerbaijani",
-    "sl": "slovenian",
-    "kn": "kannada",
-    "et": "estonian",
-    "mk": "macedonian",
-    "br": "breton",
-    "eu": "basque",
-    "is": "icelandic",
-    "hy": "armenian",
-    "ne": "nepali",
-    "mn": "mongolian",
-    "bs": "bosnian",
-    "kk": "kazakh",
-    "sq": "albanian",
-    "sw": "swahili",
-    "gl": "galician",
-    "mr": "marathi",
-    "pa": "punjabi",
-    "si": "sinhala",
-    "km": "khmer",
-    "sn": "shona",
-    "yo": "yoruba",
-    "so": "somali",
-    "af": "afrikaans",
-    "oc": "occitan",
-    "ka": "georgian",
-    "be": "belarusian",
-    "tg": "tajik",
-    "sd": "sindhi",
-    "gu": "gujarati",
-    "am": "amharic",
-    "yi": "yiddish",
-    "lo": "lao",
-    "uz": "uzbek",
-    "fo": "faroese",
-    "ht": "haitian creole",
-    "ps": "pashto",
-    "tk": "turkmen",
-    "nn": "nynorsk",
-    "mt": "maltese",
-    "sa": "sanskrit",
-    "lb": "luxembourgish",
-    "my": "myanmar",
-    "bo": "tibetan",
-    "tl": "tagalog",
-    "mg": "malagasy",
-    "as": "assamese",
-    "tt": "tatar",
-    "haw": "hawaiian",
-    "ln": "lingala",
-    "ha": "hausa",
-    "ba": "bashkir",
-    "jw": "javanese",
-    "su": "sundanese",
-}
-
-# key:ISO 639-2/B, value:ISO 639-1
-iso_language_mapping = {
-    "eng": "en",  # English
-    "spa": "es",  # Spanish
-    "fra": "fr",  # French
-    "deu": "de",  # German
-    "ita": "it",  # Italian
-    "rus": "ru",  # Russian
-    "jpn": "ja",  # Japanese
-    "zho": "zh",  # Chinese
-    "dut": "nl",  # Dutch
-    "por": "pt",  # Portuguese
-    "ara": "ar",  # Arabic
-    "heb": "he",  # Hebrew
-    "tur": "tr",  # Turkish
-    "kor": "ko",  # Korean
-    "hin": "hi",  # Hindi
-    "ben": "bn",  # Bengali
-    "tam": "ta",  # Tamil
-    "tel": "te",  # Telugu
-    "tha": "th",  # Thai
-    "vie": "vi",  # Vietnamese
-    "pol": "pl",  # Polish
-    "ukr": "uk",  # Ukrainian
-    "swe": "sv",  # Swedish
-    "fin": "fi",  # Finnish
-    "dan": "da",  # Danish
-    "nor": "no",  # Norwegian
-    "che": "ce",  # Chechen
-    "cat": "ca",  # Catalan
-    "glv": "gv",  # Manx
-    "eus": "eu",  # Basque
-    "ces": "cs",  # Czech
-    "slk": "sk",  # Slovak
-    "mlg": "mg",  # Malagasy
-    "lvs": "lv",  # Latvian
-    "lit": "lt",  # Lithuanian
-    "est": "et",  # Estonian
-    "bos": "bs",  # Bosnian
-    "alb": "sq",  # Albanian
-    "aze": "az",  # Azerbaijani
-    "tgl": "tl",  # Tagalog
-    "srp": "sr",  # Serbian
-    "mkd": "mk",  # Macedonian
-    "hrv": "hr",  # Croatian
-    "bul": "bg",  # Bulgarian
-}
 
 
 if __name__ == "__main__":
