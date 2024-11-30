@@ -1,4 +1,4 @@
-subgen_version = '2024.11.31'
+subgen_version = '2024.11.32'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -323,7 +323,7 @@ def batch(
         directory: Union[str, None] = Query(default=None),
         forceLanguage: Union[str, None] = Query(default=None)
 ):
-    transcribe_existing(directory, forceLanguage)
+    transcribe_existing(directory, LanguageCode.from_iso_639_2(forceLanguage))
     
 # idea and some code for asr and detect language from https://github.com/ahmetoner/whisper-asr-webservice
 @app.post("//asr")
