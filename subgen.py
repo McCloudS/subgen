@@ -1,4 +1,4 @@
-subgen_version = '2024.11.38'
+subgen_version = '2024.11.39'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -809,7 +809,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     task_queue.put(task)
     logging.info(f"task_queue.put(task)({task['path']}, {task['transcribe_or_translate']}, {task['force_language']})")
 
-def have_to_skip(file_path, transcribe_language : LanguageCode):
+def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
     """
     Determines whether subtitle generation should be skipped for a given file.
 
@@ -818,32 +818,38 @@ def have_to_skip(file_path, transcribe_language : LanguageCode):
         transcribe_language: The language intended for transcription.
 
     Returns:
-        True if subtitle generation should be skipped based on existing subtitles
-        or specified conditions; otherwise, returns False.
-
-    This function helps optimize subtitle processing by preventing redundant
-    subtitle generation for files that already contain subtitles in the desired
-    language or in any language specified in the skip list.
+        True if subtitle generation should be skipped; otherwise, False.
     """
-    if skip_if_to_transcribe_sub_already_exist:
-        if has_subtitle_language(file_path, transcribe_language):
-            logging.debug(f"{file_path} already has the language {transcribe_language} as subtitle we would transcribe, skipping subtitle generation")
-            return True
-    if skipifinternalsublang:
-        if has_subtitle_language(file_path, skipifinternalsublang):
-            logging.debug(f"{file_path} already has an subtitle we want, skipping subtitle generation")
-            return True
-    if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
+    # Check if subtitles in the desired transcription language already exist
+    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, transcribe_language):
+        logging.debug(f"{file_path} already has subtitles in {transcribe_language}, skipping.")
         return True
-    if any(item in skip_lang_codes_list for item in get_subtitle_languages(file_path)):
-        logging.debug(f"Language a code from {skip_lang_codes_list} detected in subtitle of {file_path}, skipping subtitle generation")
-        return True
-    if any(item in skip_if_audio_track_is_in_list for item in get_audio_languages(file_path)):
-        # Maybe add a check if the audio track is the default/ orginal or forced language to not skip it if it is a dubbed track in case of movies with multiple audio tracks.
-        logging.debug(f"Language a code from {skip_if_audio_track_is_in_list} detected in audio track of {file_path}, skipping subtitle generation")
-        return True
-    return False
 
+    # Check if subtitles in the specified internal language(s) should skip processing
+    if skipifinternalsublang and has_subtitle_language(file_path, skipifinternalsublang):
+        logging.debug(f"{file_path} has internal subtitles matching skip condition, skipping.")
+        return True
+
+    # Check if external subtitles exist for the specified language
+    if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
+        logging.debug(f"{file_path} has external subtitles in {namesublang}, skipping.")
+        return True
+
+    # Skip if any language in the skip list is detected in existing subtitles
+    existing_sub_langs = get_subtitle_languages(file_path)
+    if any(lang in skip_lang_codes_list for lang in existing_sub_langs):
+        logging.debug(f"Languages in skip list {skip_lang_codes_list} detected in {file_path}, skipping.")
+        return True
+
+    # Skip if any language in the audio track skip list is detected
+    audio_langs = get_audio_languages(file_path)
+    if any(lang in skip_if_audio_track_is_in_list for lang in audio_langs):
+        logging.debug(f"Audio language in skip list {skip_if_audio_track_is_in_list} detected in {file_path}, skipping.")
+        return True
+
+    # If none of the conditions matched, do not skip
+    return False
+    
 def get_subtitle_languages(video_path):
     """
     Extract language codes from each audio stream in the video file using pyav.
