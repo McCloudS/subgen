@@ -5,6 +5,6 @@ requests
 faster-whisper
 uvicorn
 python-multipart
-python-ffmpeg
+ffmpeg-python
 whisper
 watchdog
