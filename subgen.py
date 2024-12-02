@@ -68,13 +68,21 @@ detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
 skipifinternalsublang = LanguageCode.from_iso_639_2(os.getenv('SKIPIFINTERNALSUBLANG', ''))
-skip_lang_codes_list = [LanguageCode.from_iso_639_2(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
+skip_lang_codes_list = (
+    [LanguageCode.from_iso_639_2(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
+        if os.getenv('SKIP_LANG_CODES')
+    else []
+)
 force_detected_language_to = LanguageCode.from_iso_639_2(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
 preferred_audio_language =  LanguageCode.from_iso_639_2(os.getenv('PREFERRED_AUDIO_LANGUAGE', 'eng'))
-skip_if_audio_track_is_in_list = [LanguageCode.from_iso_639_2(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
-# Maybe just have skip_if_audio_track_is_in_list and skip_lang_codes_list and remove skipifinternalsublang
-# TODO option which iso code to write in the subtitle file1
+skip_if_audio_track_is_in_list = (
+    [LanguageCode.from_iso_639_2(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
+    if os.getenv('SKIP_IF_AUDIO_TRACK_IS')
+    else []
+)
 subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_639_2_B')
+skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False))
+only_skip_if_subgen_subtitle = convert_to_bool(os.getenv('ONLY_SKIP_IF_SUBGEN_SUBTITLE', False))
 
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
@@ -85,6 +93,19 @@ except ValueError:
 if transcribe_device == "gpu":
     transcribe_device = "cuda"
         
+
+VIDEO_EXTENSIONS = (
+    ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mpg", ".mpeg", 
+    ".3gp", ".ogv", ".vob", ".rm", ".rmvb", ".ts", ".m4v", ".f4v", ".svq3", 
+    ".asf", ".m2ts", ".divx", ".xvid"
+)
+
+AUDIO_EXTENSIONS = (
+    ".mp3", ".wav", ".aac", ".flac", ".ogg", ".wma", ".alac", ".m4a", ".opus", 
+    ".aiff", ".aif", ".pcm", ".ra", ".ram", ".mid", ".midi", ".ape", ".wv", 
+    ".amr", ".vox", ".tak", ".spx", '.m4b'
+)
+
 
 app = FastAPI()
 model = None
@@ -345,7 +366,7 @@ async def asr(
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
 
         if force_detected_language_to:
-            language = force_detected_language_to
+            language = force_detected_language_to.from_iso_639_1()
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
 
         start_time = time.time()
@@ -460,7 +481,7 @@ def delete_model():
 
 def isAudioFileExtension(file_extension):
     return file_extension.casefold() in \
-        [ '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff' ]
+        AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
     with open(file_path, "w") as file:
@@ -469,7 +490,7 @@ def write_lrc(result, file_path):
             fraction = int((segment.start - int(segment.start)) * 100)
             file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}] {segment.text}\n")
 
-def gen_subtitles(file_path: str, transcription_type: str, force_language : LanguageCode | None = None) -> None:
+def gen_subtitles(file_path: str, transcription_type: str, force_language : LanguageCode = LanguageCode.NONE) -> None:
     """Generates subtitles for a video file.
 
     Args:
@@ -512,6 +533,8 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
         if is_audio_file and lrc_for_audio_files:
             write_lrc(result, file_name + '.lrc')
         else:
+            if not force_language:
+                force_language = LanguageCode.from_string(result.language)
             result.to_srt_vtt(name_subtitle(file_path, force_language), word_level=word_level_highlight)
 
         elapsed_time = time.time() - start_time
@@ -520,7 +543,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
             f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
 
     except Exception as e:
-        logging.info(f"Error processing or transcribing {file_path}: {e}")
+        logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
 
     finally:
         delete_model()
@@ -663,23 +686,28 @@ def choose_transcribe_language(file_path, forced_language):
         determined.
     """
     
-    # todo handle iso 2/3
+    logger.debug(f"choose_transcribe_language({file_path}, {forced_language})")
+    
     if forced_language:
+        logger.debug(f"ENV FORCE_LANGUAGE is set: Forcing language to {forced_language}")   
         return forced_language
 
     if force_detected_language_to:
+        logger.debug(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
         return force_detected_language_to
 
     audio_tracks = get_audio_tracks(file_path)
     if has_language_audio_track(audio_tracks, preferred_audio_language):
         language = preferred_audio_language
         if language:
+            logger.debug(f"Preferred language found: {language}")
             return language
     default_language = find_default_audio_track_language(audio_tracks)
     if default_language:
+        logger.debug(f"Default language found: {default_language}")
         return default_language
 
-    return None
+    return LanguageCode.NONE 
 
     
 def get_audio_tracks(video_file):
@@ -791,7 +819,7 @@ def find_default_audio_track_language(audio_tracks):
     return None
     
     
-def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode | None = None) -> None:
+def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE) -> None:
     global task_queue
     
     if not has_audio(file_path):
@@ -799,8 +827,10 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         return
     
     force_language = choose_transcribe_language(file_path, force_language)
+    # If no language is set, maybe detect it from the audio with whisper to know if to skip
     
     if have_to_skip(file_path, force_language):
+        logging.debug(f"{file_path} already has subtitles in {force_language}, skipping.")
         return
     
     task = {
@@ -903,9 +933,7 @@ def has_subtitle_language(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    logging.debug(f"has_subtitle_language({video_file}, {target_language})")
-    if target_language == LanguageCode.NONE:
-        return False
+    # logging.debug(f"has_subtitle_language({video_file}, {target_language})")
     return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language)
 
 def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
@@ -919,14 +947,18 @@ def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    logging.debug(f"has_subtitle_language_in_file({video_file}, {target_language})")
-    if target_language == LanguageCode.NONE:
+    # logging.debug(f"has_subtitle_language_in_file({video_file}, {target_language})")
+    if (target_language == LanguageCode.NONE and not skip_if_language_is_not_set_but_subtitles_exist) or only_skip_if_subgen_subtitle: # skip if language is not set or we are only interested in subgen subtitles which are not internal, only external
         return False
     try:
         with av.open(video_file) as container:
-            subtitle_stream = next((stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata and LanguageCode.from_string(stream.metadata['language']) == target_language), None)
+            subtitle_streams = (stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata)
             
-            if subtitle_stream:
+            if skip_if_language_is_not_set_but_subtitles_exist and target_language == LanguageCode.NONE and any(subtitle_streams):
+                logging.debug("Language is not set but internal subtitles exist.")
+                return True
+            
+            if next(stream for stream in subtitle_streams if LanguageCode.from_string(stream.metadata['language']) == target_language):
                 logging.debug(f"Subtitles in '{target_language}' language found in the video.")
                 return True
             else:
@@ -961,9 +993,31 @@ def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode
             root, ext = os.path.splitext(file_name)
             if root.startswith(video_file_stripped) and ext.lower() in subtitle_extensions:
                 parts = root[len(video_file_stripped):].lstrip(".").split(".")
-                # Check if the target language is one of the parts
+                
+                has_subgen = "subgen" in parts  # Checks if "subgen" is in parts
+                
+                #checking this first because e.g  LanguageCode.from_string("subgen") == LanguageCode.NONE is equal to True. Maybe handle this better with a check with a function like is language code. To check if part is a valid language before comparing it to target_language
+                if target_language == LanguageCode.NONE:
+                    if only_skip_if_subgen_subtitle:
+                        if has_subgen:
+                            logger.debug("Subtitles from subgen found in the folder. ")
+                            return skip_if_language_is_not_set_but_subtitles_exist
+                        else:
+                            #might be other subtitles that have subgen in the name
+                            continue
+                    logger.debug("Subtitles exist in the folder. and only_skip_if_subgen_subtitle is False.")
+                    return skip_if_language_is_not_set_but_subtitles_exist                 
+                
                 if any(LanguageCode.from_string(part) == target_language for part in parts):
-                    # If the language is found, return True
+                    # If the subtitle is found, return True
+                    if only_skip_if_subgen_subtitle:
+                        if has_subgen:
+                            logger.debug(f"Subtitles from subgen in '{target_language}' language found in the folder.")
+                            return True
+                        else:
+                            #might be other subtitles that have subgen in the name
+                            continue
+                    logger.debug(f"Subtitles in '{target_language}' language found in the folder.")
                     return True
         elif os.path.isdir(file_path) and recursion: 
             # Looking in the subfolders of the video for subtitles
@@ -1105,8 +1159,11 @@ def get_jellyfin_admin(users):
 
 def has_audio(file_path):
     try:
-        if has_image_extension(file_path):
-            logging.debug(f"{file_path} is an image or is an invalid file or path (are your volumes correct?), skipping processing")
+        if not is_valid_path(file_path):
+            return False
+        
+        if not (has_video_extension(file_path) or  has_audio_extension(file_path)):
+            # logging.debug(f"{file_path} is an not a video or audio file, skipping processing. skipping processing")
             return False
 
         with av.open(file_path) as container:
@@ -1123,6 +1180,28 @@ def has_audio(file_path):
     except (av.AVError, UnicodeDecodeError):
         logging.debug(f"Error processing file {file_path}")
         return False
+
+def is_valid_path(file_path):
+    # Check if the path is a file
+    if not os.path.isfile(file_path):
+        # If it's not a file, check if it's a directory
+        if not os.path.isdir(file_path):
+            logging.warning(f"{file_path} is neither a file nor a directory. Are your volumes correct?")
+            return False
+        else:
+            logging.debug(f"{file_path} is a directory, skipping processing as a file.")
+            return False
+    else:
+        return True    
+
+def has_video_extension(file_name):
+    file_extension = os.path.splitext(file_name)[1].lower()  # Get the file extension
+    return file_extension in VIDEO_EXTENSIONS
+
+def has_audio_extension(file_name):
+    file_extension = os.path.splitext(file_name)[1].lower()  # Get the file extension
+    return file_extension in AUDIO_EXTENSIONS
+
 
 def path_mapping(fullpath):
     if use_path_mapping:
