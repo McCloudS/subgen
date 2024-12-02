@@ -156,6 +156,11 @@ class LanguageCode(Enum):
                 return lang
         return LanguageCode.NONE
     
+    # is valid language
+    @staticmethod
+    def is_valid_language(language: str):
+        return LanguageCode.from_string(language) is not LanguageCode.NONE
+    
     def to_iso_639_1(self):
         return self.iso_639_1
 

@@ -74,15 +74,21 @@ skip_lang_codes_list = (
     else []
 )
 force_detected_language_to = LanguageCode.from_iso_639_2(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
-preferred_audio_language =  LanguageCode.from_iso_639_2(os.getenv('PREFERRED_AUDIO_LANGUAGE', 'eng'))
+preferred_audio_languages = ( 
+    [LanguageCode.from_iso_639_2(code) for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")]
+    if os.getenv('PREFERRED_AUDIO_LANGUAGES')
+    else []
+) # in order of preferrence
+limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
 skip_if_audio_track_is_in_list = (
     [LanguageCode.from_iso_639_2(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
     if os.getenv('SKIP_IF_AUDIO_TRACK_IS')
     else []
 )
 subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_639_2_B')
-skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False))
 only_skip_if_subgen_subtitle = convert_to_bool(os.getenv('ONLY_SKIP_IF_SUBGEN_SUBTITLE', False))
+skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
+skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False)) 
 
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
@@ -697,11 +703,14 @@ def choose_transcribe_language(file_path, forced_language):
         return force_detected_language_to
 
     audio_tracks = get_audio_tracks(file_path)
-    if has_language_audio_track(audio_tracks, preferred_audio_language):
-        language = preferred_audio_language
+    
+    found_track_in_language = find_language_audio_track(audio_tracks, preferred_audio_languages)
+    if found_track_in_language:
+        language = found_track_in_language
         if language:
             logger.debug(f"Preferred language found: {language}")
             return language
+    
     default_language = find_default_audio_track_language(audio_tracks)
     if default_language:
         logger.debug(f"Default language found: {default_language}")
@@ -786,22 +795,23 @@ def get_audio_tracks(video_file):
         logging.error(f"An error occurred while reading audio track information: {str(e)}")
         return []
 
-def has_language_audio_track(audio_tracks, find_language):
+def find_language_audio_track(audio_tracks, find_languages):
     """
-    Checks if an audio track with the given language is present in the list of audio tracks.
+    Checks if an audio track with any of the given languages is present in the list of audio tracks.
+    Returns the first language from `find_languages` that matches.
     
     Args:
         audio_tracks (list): A list of dictionaries containing information about each audio track.
-        find_language (str): The ISO 639-2 code of the language to search for.
+        find_languages (list): A list  language codes to search for.
     
     Returns:
-        bool: True if an audio track with the given language was found, False otherwise.
+        str or None: The first language found from `find_languages`, or None if no match is found.
     """
-    for track in audio_tracks:
-        if track['language'] == find_language:  #ISO 639-2
-            return True
-    return False
-
+    for language in find_languages:
+        for track in audio_tracks:
+            if track['language'] == language:
+                return language
+    return None
 def find_default_audio_track_language(audio_tracks):    
     """
     Finds the language of the default audio track in the given list of audio tracks.
@@ -853,6 +863,10 @@ def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
     Returns:
         True if subtitle generation should be skipped; otherwise, False.
     """
+    if skip_unknown_language and transcribe_language == LanguageCode.NONE:
+        logging.debug(f"{file_path} has unknown language, skipping.")
+        return True
+    
     # Check if subtitles in the desired transcription language already exist
     if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, transcribe_language):
         logging.debug(f"{file_path} already has subtitles in {transcribe_language}, skipping.")
@@ -864,9 +878,11 @@ def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
         return True
 
     # Check if external subtitles exist for the specified language
-    if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
-        logging.debug(f"{file_path} has external subtitles in {namesublang}, skipping.")
-        return True
+    # Probably not use LanguageCode for this, but just check with strings, to be able to skip with custom named languages. 
+    if LanguageCode.is_valid_language(namesublang):
+        if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
+            logging.debug(f"{file_path} has external subtitles in {namesublang}, skipping.")
+            return True
 
     # Skip if any language in the skip list is detected in existing subtitles
     existing_sub_langs = get_subtitle_languages(file_path)
@@ -874,11 +890,17 @@ def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
         logging.debug(f"Languages in skip list {skip_lang_codes_list} detected in {file_path}, skipping.")
         return True
 
-    # Skip if any language in the audio track skip list is detected
     audio_langs = get_audio_languages(file_path)
-    if any(lang in skip_if_audio_track_is_in_list for lang in audio_langs):
-        logging.debug(f"Audio language in skip list {skip_if_audio_track_is_in_list} detected in {file_path}, skipping.")
-        return True
+    if preferred_audio_languages in audio_langs:
+        logging.debug(f"Preferred audio language {preferred_audio_languages} detected in {file_path}.")
+        # maybe not skip if subtitle exist in preferred audio language, but not in another preferred audio language if the file has multiple audio tracks matching the preferred audio languages
+    else:
+        if limit_to_preferred_audio_languages:
+            logging.debug(f"Only non-preferred audio language detected in {file_path}, skipping.")
+            return True
+        if any(lang in skip_if_audio_track_is_in_list for lang in audio_langs):
+            logging.debug(f"Audio language in skip list {skip_if_audio_track_is_in_list} detected in {file_path}, skipping.")
+            return True
 
     # If none of the conditions matched, do not skip
     return False
@@ -933,7 +955,6 @@ def has_subtitle_language(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    # logging.debug(f"has_subtitle_language({video_file}, {target_language})")
     return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language)
 
 def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
@@ -965,7 +986,7 @@ def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
                 logging.debug(f"No subtitles in '{target_language}' language found in the video.")
                 return False
     except Exception as e:
-        logging.info(f"An error occurred: {e}")
+        logging.error(f"An error occurred while checking the file with pyav: {e}") # TODO: figure out why this throws (empty) errors
         return False
 
 def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode, recursion = True):
@@ -997,6 +1018,7 @@ def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode
                 has_subgen = "subgen" in parts  # Checks if "subgen" is in parts
                 
                 #checking this first because e.g  LanguageCode.from_string("subgen") == LanguageCode.NONE is equal to True. Maybe handle this better with a check with a function like is language code. To check if part is a valid language before comparing it to target_language
+                
                 if target_language == LanguageCode.NONE:
                     if only_skip_if_subgen_subtitle:
                         if has_subgen:
