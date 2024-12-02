@@ -168,7 +168,7 @@ class LanguageCode(Enum):
         return self.name_en if in_english else self.name_native
     def __str__(self):
         if self.name_en is None:
-            return "Unkown"
+            return "Unknown"
         return self.name_en
     
     def __bool__(self):
