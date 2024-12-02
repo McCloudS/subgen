@@ -65,6 +65,7 @@ reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', F
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
+detect_language_start_offset = os.getenv('DETECT_LANGUAGE_START_OFFSET', int(0))
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
 skipifinternalsublang = LanguageCode.from_iso_639_2(os.getenv('SKIPIFINTERNALSUBLANG', ''))
@@ -89,6 +90,7 @@ subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_
 only_skip_if_subgen_subtitle = convert_to_bool(os.getenv('ONLY_SKIP_IF_SUBGEN_SUBTITLE', False))
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
 skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False)) 
+should_whiser_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
 
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
@@ -126,8 +128,13 @@ task_queue = queue.Queue()
 def transcription_worker():
     while True:
         task = task_queue.get()
+        
+        logger.info(f"Task {task['path']} is being handled by Subgen.")
+        
         if 'Bazarr-' in task['path']:
             logging.info(f"Task {task['path']} is being handled by ASR.")
+        if "type" in task and task["type"] == "detect_language":
+            detect_language_task(task['path'])
         else:
             gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
             task_queue.task_done()
@@ -462,6 +469,62 @@ async def detect_language(
         delete_model()
 
         return {"detected_language": detected_language.to_name(), "language_code": language_code}
+
+def detect_language_task(path):
+    detected_language = LanguageCode.NONE
+    language_code = 'und'
+    global detect_language_length 
+
+    logger.info(f"Detecting language of file: {path} on the first {detect_language_length} seconds of the file")
+
+    try:
+        start_model()
+
+        audio_segment = extract_audio_segment_to_memory(path, detect_language_start_offset, int(detect_language_length)).read()
+        
+
+        detected_language = LanguageCode.from_name(model.transcribe_stable(audio_segment).language)
+        logging.debug(f"Detected language: {detected_language.to_name()}")
+        # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
+        language_code = detected_language.to_iso_639_1()
+        logging.debug(f"Language Code: {language_code}")
+
+    except Exception as e:
+        logging.info(f"Error detectign language of file with whisper: {e}")
+        
+    finally:
+        task_queue.task_done()
+        delete_model()
+        # put task to transcribe this with the detected language
+        task_id = { 'path': path, "transcribe_or_translate": transcribe_or_translate, 'force_language': detected_language }
+        task_queue.put(task_id)
+        
+        #maybe modify the file to contain detected language so we won't trigger this again
+        
+        return
+    
+def extract_audio_segment_to_memory(input_file, start_time, duration):
+    """
+    Extract a segment of audio from input_file, starting at start_time for duration seconds.
+    
+    :param input_file: Path to the input audio file
+    :param start_time: Start time in seconds (e.g., 60 for 1 minute)
+    :param duration: Duration in seconds (e.g., 30 for 30 seconds)
+    :return: BytesIO object containing the audio segment
+    """
+    try:
+        # Run FFmpeg to extract the desired segment
+        out, _ = (
+            ffmpeg
+            .input(input_file, ss=start_time, t=duration)  # Start time and duration
+            .output('pipe:1', format='wav', acodec='pcm_s16le', ar=16000)  # Output to pipe as WAV
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return io.BytesIO(out)  # Convert output to BytesIO for in-memory processing
+    except ffmpeg.Error as e:
+        print("Error occurred:", e.stderr.decode())
+        return None
+    
 
 def start_model():
     global model
@@ -828,7 +891,15 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         return
     
     force_language = choose_transcribe_language(file_path, force_language)
-    # If no language is set, maybe detect it from the audio with whisper to know if to skip
+    
+    # check if we would like to detect audio language in case of no audio language specified. Will return here again with specified language from whisper
+    if not force_language and should_whiser_detect_audio_language:
+        # make a detect language task
+        task_id = { 'path': file_path, 'type': "detect_language" }
+        task_queue.put(task_id)
+        logging.info(f"task_queue.put(task_id)({file_path}, detect_language)")
+        return
+    
     
     if have_to_skip(file_path, force_language):
         logging.debug(f"{file_path} already has subtitles in {force_language}, skipping.")
