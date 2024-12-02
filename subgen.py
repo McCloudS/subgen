@@ -216,15 +216,6 @@ def appendLine(result):
         # Append the new segment to the result's segments
         result.segments.append(newSegment)
 
-def has_image_extension(file_path):
-    valid_extensions = ['.rgb', '.gif', '.pbm', '.pgm', '.ppm', '.tiff', '.rast', '.xbm', '.jpg', '.jpeg', '.bmp', '.png', '.webp', '.exr', '.bif'] # taken from the extensions detected by the imghdr module & added Emby's '.bif' files
-    
-    if os.path.exists(file_path):
-        file_extension = os.path.splitext(file_path)[1].lower()
-        return file_extension in valid_extensions
-    else:
-        return True # return a value that causes the file to be skipped.
-
 @app.get("/plex")
 @app.get("/webhook")
 @app.get("/jellyfin")
