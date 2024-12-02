@@ -1,4 +1,4 @@
-subgen_version = '2024.11.39'
+subgen_version = '2024.12.3'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -406,6 +406,7 @@ async def detect_language(
         detect_lang_length: int = Query(default=30, description="Detect language on the first X seconds of the file")
 ):    
     detected_language = LanguageCode.NONE
+    language_code = 'und'
     if force_detected_language_to:
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}\n Returning without detection")
             return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
@@ -428,9 +429,11 @@ async def detect_language(
         args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
 
         args.update(kwargs)
-        detected_language = LanguageCode.from_iso_639_1(model.transcribe_stable(**args).language)
+        detected_language = LanguageCode.from_name(model.transcribe_stable(**args).language)
+        logging.debug(f"Detected language: {detected_language.to_name()}")
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
-        language_code = get_key_by_value(detected_language.to_name(), detected_language.to_iso_639_1())
+        language_code = detected_language.to_iso_639_1()
+        logging.debug(f"Language Code: {language_code}")
 
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -440,7 +443,7 @@ async def detect_language(
         task_queue.task_done()
         delete_model()
 
-        return {"detected_language": detected_language, "language_code": language_code}
+        return {"detected_language": detected_language.to_name(), "language_code": language_code}
 
 def start_model():
     global model
