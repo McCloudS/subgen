@@ -68,21 +68,21 @@ detect_language_length = os.getenv('DETECT_LANGUAGE_LENGTH', 30)
 detect_language_start_offset = os.getenv('DETECT_LANGUAGE_START_OFFSET', int(0))
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
-skipifinternalsublang = LanguageCode.from_iso_639_2(os.getenv('SKIPIFINTERNALSUBLANG', ''))
+skipifinternalsublang = LanguageCode.from_string(os.getenv('SKIPIFINTERNALSUBLANG', ''))
 skip_lang_codes_list = (
-    [LanguageCode.from_iso_639_2(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
+    [LanguageCode.from_string(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
         if os.getenv('SKIP_LANG_CODES')
     else []
 )
-force_detected_language_to = LanguageCode.from_iso_639_2(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
+force_detected_language_to = LanguageCode.from_string(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
 preferred_audio_languages = ( 
-    [LanguageCode.from_iso_639_2(code) for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")]
+    [LanguageCode.from_string(code) for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")]
     if os.getenv('PREFERRED_AUDIO_LANGUAGES')
     else []
 ) # in order of preferrence
 limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
 skip_if_audio_track_is_in_list = (
-    [LanguageCode.from_iso_639_2(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
+    [LanguageCode.from_string(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
     if os.getenv('SKIP_IF_AUDIO_TRACK_IS')
     else []
 )
@@ -128,14 +128,13 @@ task_queue = queue.Queue()
 def transcription_worker():
     while True:
         task = task_queue.get()
-        
-        logger.info(f"Task {task['path']} is being handled by Subgen.")
-        
-        if 'Bazarr-' in task['path']:
-            logging.info(f"Task {task['path']} is being handled by ASR.")
+                
         if "type" in task and task["type"] == "detect_language":
             detect_language_task(task['path'])
+        if 'Bazarr-' in task['path']:
+            logging.info(f"Task {task['path']} is being handled by ASR.")
         else:
+            logging.info(f"Task {task['path']} is being handled by Subgen.") 
             gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
             task_queue.task_done()
         # show queue
@@ -370,7 +369,7 @@ async def asr(
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
 
         if force_detected_language_to:
-            language = force_detected_language_to.from_iso_639_1()
+            language = force_detected_language_to.to_iso_639_1()
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
 
         start_time = time.time()
@@ -381,12 +380,15 @@ async def asr(
 
         args = {}
         args['progress_callback'] = progress
+        
+        file_content = audio_file.file.read()
 
-        if not encode:
-            args['audio'] = np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0
-            args['input_sr'] = 16000
+        if encode:
+            args['audio'] = file_content()
         else:
-            args['audio'] = audio_file.file.read()
+            args['audio'] = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+            
+        args['input_sr'] = 16000
 
         if custom_regroup:
             args['regroup'] = custom_regroup
