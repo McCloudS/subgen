@@ -102,7 +102,8 @@ class LanguageCode(Enum):
     YORUBA = ("yo", "yor", "yor", "Yoruba", "Yorùbá")
     CHINESE = ("zh", "zho", "chi", "Chinese", "中文")
     CANTONESE = ("yue", "yue", "yue", "Cantonese", "粵語")
-    NONE = (None, None, None, None, None)  # For unknown languages or no language
+    NONE = (None, None, None, None, None)  # For no language
+    # und for Undetermined aka unknown language https://www.loc.gov/standards/iso639-2/faq.html#25
 
     def __init__(self, iso_639_1, iso_639_2_t, iso_639_2_b, name_en, name_native):
         self.iso_639_1 = iso_639_1
@@ -155,6 +156,11 @@ class LanguageCode(Enum):
                 return lang
         return LanguageCode.NONE
     
+    # is valid language
+    @staticmethod
+    def is_valid_language(language: str):
+        return LanguageCode.from_string(language) is not LanguageCode.NONE
+    
     def to_iso_639_1(self):
         return self.iso_639_1
 
@@ -180,10 +186,10 @@ class LanguageCode(Enum):
         Explicitly handle comparison to None.
         """
         if other is None:
-            # If compared to None, return False
-            # print(other)
-            # print(self)
+            # If compared to None, return False unless self is None
             return self.iso_639_1 is None
+        if isinstance(other, str):  # Allow comparison with a string
+            return self.value == LanguageCode.from_string(other)
         if isinstance(other, LanguageCode):
             # Normal comparison for LanguageCode instances
             return self.iso_639_1 == other.iso_639_1
