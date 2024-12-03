@@ -432,6 +432,15 @@ async def detect_language(
         #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
         detect_lang_length: int = Query(default=30, description="Detect language on the first X seconds of the file")
 ):    
+    
+    if force_detected_language_to:
+        logging.info(f"language is: {force_detected_language_to.to_name()}")
+        logging.debug(f"Skipping detect language, we have forced it as {force_detected_language_to.to_name()}")
+        return {
+            "detected_language": force_detected_language_to.to_name(),
+            "language_code": force_detected_language_to.to_iso_639_1()
+        }
+        
     detected_language = LanguageCode.NONE
     language_code = 'und'
     if force_detected_language_to:
