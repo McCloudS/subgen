@@ -384,11 +384,10 @@ async def asr(
         file_content = audio_file.file.read()
 
         if encode:
-            args['audio'] = file_content()
+            args['audio'] = file_content
         else:
             args['audio'] = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-            
-        args['input_sr'] = 16000
+            args['input_sr'] = 16000
 
         if custom_regroup:
             args['regroup'] = custom_regroup
@@ -429,8 +428,9 @@ async def asr(
 @app.post("/detect-language")
 async def detect_language(
         audio_file: UploadFile = File(...),
-        #encode: bool = Query(default=True, description="Encode audio first through ffmpeg") # This is always false from Bazarr
-        detect_lang_length: int = Query(default=30, description="Detect language on the first X seconds of the file")
+        encode: bool = Query(default=True, description="Encode audio first through ffmpeg"), # This is always false from Bazarr
+        detect_lang_length: int = Query(default=detect_language_length, description="Detect language on X seconds of the file"),
+        detect_lang_offset: int = Query(default=detect_language_start_offset, description="Start Detect language X seconds into the file")
 ):    
     
     if force_detected_language_to:
@@ -441,16 +441,22 @@ async def detect_language(
             "language_code": force_detected_language_to.to_iso_639_1()
         }
         
+    global detect_language_length, detect_language_offset
     detected_language = LanguageCode.NONE
     language_code = 'und'
     if force_detected_language_to:
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}\n Returning without detection")
             return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
-    if int(detect_lang_length) != 30:
-        global detect_language_length 
+            
+    # Log custom detection time settings if modified
+    if detect_lang_length != detect_language_length:
+        logging.info(f"Detecting language on the first {detect_lang_length} seconds of the audio.")
         detect_language_length = detect_lang_length
-    if int(detect_language_length) != 30:
-        logging.info(f"Detect language is set to detect on the first {detect_language_length} seconds of the audio.")
+
+    if detect_lang_offset != detect_language_start_offset:
+        logging.info(f"Offsetting language detection by {detect_language_start_offset} seconds.")
+        detect_language_offset_length = detect_lang_offset
+        audio_file = extract_audio_segment_to_memory(audio_file, detect_language_start_offset, detect_language_length)
     try:
         start_model()
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
@@ -458,11 +464,16 @@ async def detect_language(
         task_id = { 'path': f"Bazarr-detect-language-{random_name}" }        
         task_queue.put(task_id)
         args = {}
-        #sample_rate = next(stream.rate for stream in av.open(audio_file.file).streams if stream.type == 'audio')
+        sample_rate = next(stream.rate for stream in av.open(audio_file.file).streams if stream.type == 'audio')
+        logging.info(f"Sample rate is: {sample_rate}")
         audio_file.file.seek(0)
         args['progress_callback'] = progress
-        args['input_sr'] = 16000
-        args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
+        
+        if encode:
+            args['audio'] = whisper.pad_or_trim(audio_file.file.read() , sample_rate * int(detect_language_length))
+        else:
+            args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
+            args['input_sr'] = 16000
 
         args.update(kwargs)
         detected_language = LanguageCode.from_name(model.transcribe_stable(**args).language)
