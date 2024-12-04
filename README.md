@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+4 Dec: Added more ENV settings: DETECT_LANGUAGE_OFFSET, PREFERRED_AUDIO_LANGUAGES, SKIP_IF_AUDIO_TRACK_IS, ONLY_SKIP_IF_SUBGEN_SUBTITLE, SKIP_UNKNOWN_LANGUAGE, SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST, SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE
+
 30 Nov 2024: Signifcant refactoring and handling by Muisje.  Added language code class for more robustness and flexibility and ability to separate audio tracks to make sure you get the one you want.  New ENV Variables: SUBTITLE_LANGUAGE_NAMING_TYPE, SKIP_IF_AUDIO_TRACK_IS, PREFERRED_AUDIO_LANGUAGE, SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
 
     There will be some minor hiccups, so please identify them as we work through this major overhaul.
@@ -221,6 +223,13 @@ The following environment variables are available in Docker.  They will default 
 | SKIP_IF_AUDIO_TRACK_IS | '' | Takes a pipe separated `\|` list of 3 letter language codes to skip if the file has audio in that language.  This could be used to skip generating subtitles for a language you don't want, like, I speak English, don't generate English subtitles (for example: 'eng\|deu')|
 | PREFERRED_AUDIO_LANGUAGE | 'eng' | If there are multiple audio tracks in a file, it will prefer this setting |
 | SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST | True | Skips generation of subtitle if a file matches our desired language already. |
+| DETECT_LANGUAGE_OFFSET | 0 | Allows you to shift when to run detect_language, geared towards avoiding introductions or songs. |
+| PREFERRED_AUDIO_LANGUAGES | 'eng' | Pipe separated list |
+| SKIP_IF_AUDIO_TRACK_IS | '' | Takes a pipe separated list of ISO 639-2 languages. Skips generation of subtitle if the file has the audio file listed. |
+| ONLY_SKIP_IF_SUBGEN_SUBTITLE | False | Skips generation of subtitles if the file has "subgen" somewhere in the same |
+| SKIP_UNKNOWN_LANGUAGE | False | Skips generation if the file has an unknown language |
+| SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST | False | Skips generation if file doesn't have an audio stream marked with a language |
+| SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE | False | Should Whisper try to detect the language if there is no audio language specified via force langauge |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
