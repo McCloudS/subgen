@@ -1,4 +1,4 @@
-subgen_version = '2024.12.3'
+subgen_version = '2024.12.5'
 
 from language_code import LanguageCode
 from datetime import datetime
