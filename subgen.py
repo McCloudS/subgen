@@ -65,7 +65,7 @@ reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', F
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
-detect_language_offset = int(os.getenv('DETECT_LANGUAGE_START_OFFSET', 90))
+detect_language_offset = int(os.getenv('DETECT_LANGUAGE_START_OFFSET', 0))
 skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
 skipifinternalsublang = LanguageCode.from_string(os.getenv('SKIPIFINTERNALSUBLANG', ''))
@@ -440,7 +440,7 @@ async def detect_language(
             "detected_language": force_detected_language_to.to_name(),
             "language_code": force_detected_language_to.to_iso_639_1()
         }
-
+        
     global detect_language_length, detect_language_offset
     detected_language = LanguageCode.NONE
     language_code = 'und'
@@ -464,8 +464,8 @@ async def detect_language(
         task_id = { 'path': f"Bazarr-detect-language-{random_name}" }        
         task_queue.put(task_id)
         args = {}
-        sample_rate = next(stream.rate for stream in av.open(audio_file.file).streams if stream.type == 'audio')
-        logging.info(f"Sample rate is: {sample_rate}")
+        #sample_rate = next(stream.rate for stream in av.open(audio_file.file).streams if stream.type == 'audio')
+        #logging.info(f"Sample rate is: {sample_rate}")
         audio_file.file.seek(0)
         args['progress_callback'] = progress
         
@@ -474,7 +474,7 @@ async def detect_language(
             args['input_sr'] = 16000
         else:
             #args['audio'] = whisper.pad_or_trim(np.frombuffer(audio_file.file.read(), np.int16).flatten().astype(np.float32) / 32768.0, args['input_sr'] * int(detect_language_length))
-            args['audio'] = extract_audio_segment_to_memory(audio_file, detect_language_offset, detect_language_length).read()
+            args['audio'] = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
             args['input_sr'] = 16000
 
         args.update(kwargs)
@@ -488,11 +488,44 @@ async def detect_language(
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
         
     finally:
-        await audio_file.close()
+        #await audio_file.close()
         task_queue.task_done()
         delete_model()
 
         return {"detected_language": detected_language.to_name(), "language_code": language_code}
+
+async def get_audio_chunk(audio_file, offset=detect_language_offset, length=detect_language_length, sample_rate=16000, audio_format=np.int16):
+    """
+    Extract a chunk of audio from a file, starting at the given offset and of the given length.
+    
+    :param audio_file: The audio file (UploadFile or file-like object).
+    :param offset: The offset in seconds to start the extraction.
+    :param length: The length in seconds for the chunk to be extracted.
+    :param sample_rate: The sample rate of the audio (default 16000).
+    :param audio_format: The audio format to interpret (default int16, 2 bytes per sample).
+    
+    :return: A numpy array containing the extracted audio chunk.
+    """
+    
+    # Number of bytes per sample (for int16, 2 bytes per sample)
+    bytes_per_sample = np.dtype(audio_format).itemsize
+    
+    # Calculate the start byte based on offset and sample rate
+    start_byte = offset * sample_rate * bytes_per_sample
+    
+    # Calculate the length in bytes based on the length in seconds
+    length_in_bytes = length * sample_rate * bytes_per_sample
+    
+    # Seek to the start position (this assumes the audio_file is a file-like object)
+    await audio_file.seek(start_byte)
+    
+    # Read the required chunk of audio (length_in_bytes)
+    chunk = await audio_file.read(length_in_bytes)
+    
+    # Convert the chunk into a numpy array (normalized to float32)
+    audio_data = np.frombuffer(chunk, dtype=audio_format).flatten().astype(np.float32) / 32768.0
+    
+    return audio_data
 
 def detect_language_task(path):
     detected_language = LanguageCode.NONE
@@ -562,6 +595,13 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
             raise ValueError("FFmpeg output is empty, possibly due to invalid input.")
         
         return io.BytesIO(out)  # Convert output to BytesIO for in-memory processing
+
+    except ffmpeg.Error as e:
+        logging.error(f"FFmpeg error: {e.stderr.decode()}")
+        return None
+    except Exception as e:
+        logging.error(f"Error: {str(e)}")
+        return None
 
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr.decode()}")
