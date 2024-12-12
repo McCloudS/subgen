@@ -131,7 +131,7 @@ def transcription_worker():
                 
         if "type" in task and task["type"] == "detect_language":
             detect_language_task(task['path'])
-        if 'Bazarr-' in task['path']:
+        elif 'Bazarr-' in task['path']:
             logging.info(f"Task {task['path']} is being handled by ASR.")
         else:
             logging.info(f"Task {task['path']} is being handled by Subgen.") 
