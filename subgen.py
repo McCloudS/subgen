@@ -1,4 +1,4 @@
-subgen_version = '2024.12.6'
+subgen_version = '2024.12.7'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1345,7 +1345,7 @@ def has_audio(file_path):
                         logging.debug(f"Unsupported or missing codec for audio stream in {file_path}")
             return False
 
-    except (av.AVError, UnicodeDecodeError):
+    except (av.FFmpegError, UnicodeDecodeError):
         logging.debug(f"Error processing file {file_path}")
         return False
 
