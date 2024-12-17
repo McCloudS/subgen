@@ -1105,36 +1105,47 @@ def has_subtitle_language(video_file, target_language: LanguageCode):
     """
     return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language)
 
-def has_subtitle_language_in_file(video_file, target_language: LanguageCode):
+def has_subtitle_language_in_file(video_file: str, target_language: Union[str, None]):
     """
     Checks if a video file contains subtitles with a specific language.
 
     Args:
-        video_file: The path to the video file.
-        target_language: The language of the subtitle file to search for.
+        video_file (str): The path to the video file.
+        target_language (str | None): The language of the subtitle file to search for.
 
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    # logging.debug(f"has_subtitle_language_in_file({video_file}, {target_language})")
-    if (target_language == LanguageCode.NONE and not skip_if_language_is_not_set_but_subtitles_exist) or only_skip_if_subgen_subtitle: # skip if language is not set or we are only interested in subgen subtitles which are not internal, only external
-        return False
     try:
         with av.open(video_file) as container:
-            subtitle_streams = (stream for stream in container.streams if stream.type == 'subtitle' and 'language' in stream.metadata)
+            # Create a list of subtitle streams with 'language' metadata
+            subtitle_streams = [
+                stream for stream in container.streams 
+                if stream.type == 'subtitle' and 'language' in stream.metadata
+            ]
             
-            if skip_if_language_is_not_set_but_subtitles_exist and target_language == LanguageCode.NONE and any(subtitle_streams):
-                logging.debug("Language is not set but internal subtitles exist.")
-                return True
+            # Skip logic: target_language == NONE and specific conditions
+            if target_language is None:
+                if skip_if_language_is_not_set_but_subtitles_exist:
+                    if subtitle_streams:  # Any subtitles exist but language is not set
+                        logging.debug("Language is not set, but internal subtitles exist.")
+                        return True
+                    else:
+                        return False
+                if only_skip_if_subgen_subtitle:
+                    return False  # Skip if only looking for external subgen subtitles
             
-            if next(stream for stream in subtitle_streams if LanguageCode.from_string(stream.metadata['language']) == target_language):
-                logging.debug(f"Subtitles in '{target_language}' language found in the video.")
-                return True
-            else:
-                logging.debug(f"No subtitles in '{target_language}' language found in the video.")
-                return False
+            # Check if any subtitle stream matches the target language
+            for stream in subtitle_streams:
+                if stream.metadata.get('language') == target_language:
+                    logging.debug(f"Subtitles in '{target_language}' language found in the video.")
+                    return True
+            
+            logging.debug(f"No subtitles in '{target_language}' language found in the video.")
+            return False
+        
     except Exception as e:
-        logging.error(f"An error occurred while checking the file with pyav: {e}") # TODO: figure out why this throws (empty) errors
+        logging.error(f"An error occurred while checking the file with pyav: {type(e).__name__}: {e}")
         return False
 
 def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode, recursion = True):
