@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+23 Dec: Added PLEX_QUEUE_NEXT_EPISODE and PLEX_QUEUE_SERIES.  Will automatically start generating subtitles for the next episode in your series, or queue the whole series.  
+
 4 Dec: Added more ENV settings: DETECT_LANGUAGE_OFFSET, PREFERRED_AUDIO_LANGUAGES, SKIP_IF_AUDIO_TRACK_IS, ONLY_SKIP_IF_SUBGEN_SUBTITLE, SKIP_UNKNOWN_LANGUAGE, SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST, SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE
 
 30 Nov 2024: Signifcant refactoring and handling by Muisje.  Added language code class for more robustness and flexibility and ability to separate audio tracks to make sure you get the one you want.  New ENV Variables: SUBTITLE_LANGUAGE_NAMING_TYPE, SKIP_IF_AUDIO_TRACK_IS, PREFERRED_AUDIO_LANGUAGE, SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
@@ -230,6 +232,8 @@ The following environment variables are available in Docker.  They will default 
 | SKIP_UNKNOWN_LANGUAGE | False | Skips generation if the file has an unknown language |
 | SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST | False | Skips generation if file doesn't have an audio stream marked with a language |
 | SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE | False | Should Whisper try to detect the language if there is no audio language specified via force langauge |
+| PLEX_QUEUE_NEXT_EPISODE | False | Will queue the next Plex series episode for subtitle generation if subgen is triggered. |
+| PLEX_QUEUE_SERIES | False | Will queue the whole Plex series for subtitle generation if subgen is triggered. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
