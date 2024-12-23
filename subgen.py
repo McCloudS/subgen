@@ -1262,8 +1262,6 @@ def get_next_plex_episode(current_episode_rating_key):
             logging.debug(f"Parent season not found for episode {current_episode_rating_key}")
             return None
         
-        logging.debug(f"Parent season key: {parent_rating_key}")
-        logging.debug(f"Show key: {grandparent_rating_key}")
         #parent_rating_key = 99707
         
         # Get the list of seasons
