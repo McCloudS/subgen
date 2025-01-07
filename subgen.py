@@ -1,4 +1,4 @@
-subgen_version = '2024.12.10'
+subgen_version = '2024.12.11'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -57,7 +57,7 @@ path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', './models')
 monitor = convert_to_bool(os.getenv('MONITOR', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
-transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe')
+transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe').lower()
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
 compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
@@ -729,6 +729,9 @@ def define_subtitle_language_naming(language: LanguageCode, type):
     """
     if namesublang:
         return namesublang
+    if transcribe_or_translate == 'translate'
+        return 'eng' 
+        # If we are translating, then we ALWAYS output an english file.
     switch_dict = {
         "ISO_639_1": language.to_iso_639_1,
         "ISO_639_2_T": language.to_iso_639_2_t,
