@@ -729,7 +729,7 @@ def define_subtitle_language_naming(language: LanguageCode, type):
     """
     if namesublang:
         return namesublang
-    if transcribe_or_translate == 'translate'
+    if transcribe_or_translate == 'translate':
         return 'eng' 
         # If we are translating, then we ALWAYS output an english file.
     switch_dict = {
