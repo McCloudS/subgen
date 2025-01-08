@@ -416,7 +416,7 @@ async def asr(
 
         args.update(kwargs)
 
-        result = model.transcribe_stable(task=task, language=language, **args)
+        result = model.transcribe(task=task, language=language, **args)
         appendLine(result)
 
         elapsed_time = time.time() - start_time
@@ -500,7 +500,7 @@ async def detect_language(
             args['input_sr'] = 16000
 
         args.update(kwargs)
-        detected_language = LanguageCode.from_name(model.transcribe_stable(**args).language)
+        detected_language = LanguageCode.from_name(model.transcribe(**args).language)
         logging.debug(f"Detected language: {detected_language.to_name()}")
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
         language_code = detected_language.to_iso_639_1()
@@ -562,7 +562,7 @@ def detect_language_task(path):
         audio_segment = extract_audio_segment_to_memory(path, detect_language_offset, int(detect_language_length)).read()
         
 
-        detected_language = LanguageCode.from_name(model.transcribe_stable(audio_segment).language)
+        detected_language = LanguageCode.from_name(model.transcribe(audio_segment).language)
         logging.debug(f"Detected language: {detected_language.to_name()}")
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
         language_code = detected_language.to_iso_639_1()
@@ -693,7 +693,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
             
         args.update(kwargs)
         
-        result = model.transcribe_stable(data, language=force_language.to_iso_639_1(), task=transcription_type, **args)
+        result = model.transcribe(data, language=force_language.to_iso_639_1(), task=transcription_type, **args)
 
         appendLine(result)
 
