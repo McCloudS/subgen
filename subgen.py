@@ -729,8 +729,6 @@ def define_subtitle_language_naming(language: LanguageCode, type):
     """
     if namesublang:
         return namesublang
-    if transcribe_or_translate == 'translate':
-        return 'eng' 
         # If we are translating, then we ALWAYS output an english file.
     switch_dict = {
         "ISO_639_1": language.to_iso_639_1,
@@ -739,6 +737,8 @@ def define_subtitle_language_naming(language: LanguageCode, type):
         "NAME": language.to_name,
         "NATIVE": lambda : language.to_name(in_english=False)
     }
+    if transcribe_or_translate == 'translate':
+        language = LanguageCode.from_string('eng')
     return switch_dict.get(type, language.to_name)()
 
 def name_subtitle(file_path: str, language: LanguageCode) -> str:
