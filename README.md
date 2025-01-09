@@ -121,7 +121,15 @@ If you want to use a GPU, you need to map it accordingly.
 
 #### Unraid
 
-While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See [https://github.com/McCloudS/subgen/issues/37](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
+While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See [https://github.com/McCloudS/subgen/discussions/137](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
+
+## Bazarr
+
+You only need to confiure the Whisper Provider as shown below: <br>
+![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:9000) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  **127.0.0.1 WILL NOT WORK IF YOU ARE RUNNING BAZARR IN A DOCKER CONTAINER!** I recomend not enabling using the Bazarr provider with other webhooks in Subgen, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
+
+**The defaults of Subgen will allow it to run in Bazarr with zero configuration.  However, you will probably want to change, at a minimum, `TRANSCRIBE_DEVICE` and `WHISPER_MODEL`.**
 
 ## Plex
 
@@ -134,14 +142,6 @@ All you need to do is create a webhook in Emby pointing to your subgen IE: `http
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
 Remember, Emby and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
-
-## Bazarr
-
-You only need to confiure the Whisper Provider as shown below: <br>
-![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
-The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:9000) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  I recomend not enabling this with other webhooks, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
-
-**The defaults of Subgen will allow it to run in Bazarr with zero configuration.  However, you will probably want to change, at a minimum, `TRANSCRIBE_DEVICE` and `WHISPER_MODEL`.**
 
 ## Tautulli
 
