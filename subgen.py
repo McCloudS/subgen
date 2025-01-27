@@ -645,21 +645,18 @@ def delete_model():
         model = None
     gc.collect()
 
-def isAudioFileExtension(file_extension):
+def :
     return file_extension.casefold() in \
         AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
-    if not os.path.exists(file_path):
-        with open(file_path, "w") as file:
-            for segment in result.segments:
-                minutes, seconds = divmod(int(segment.start), 60)
-                fraction = int((segment.start - int(segment.start)) * 100)
-                # remove embedded newlines in text, since some players ignore text after newlines
-                text = segment.text[:].replace('\n', '')
-                file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
-    else:
-        logging.debug(f"The file {file_path} already exists. Skipping LRC creation.")
+    with open(file_path, "w") as file:
+        for segment in result.segments:
+            minutes, seconds = divmod(int(segment.start), 60)
+            fraction = int((segment.start - int(segment.start)) * 100)
+            # remove embedded newlines in text, since some players ignore text after newlines
+            text = segment.text[:].replace('\n', '')
+            file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
 
 def gen_subtitles(file_path: str, transcription_type: str, force_language : LanguageCode = LanguageCode.NONE) -> None:
     """Generates subtitles for a video file.
@@ -1043,6 +1040,15 @@ def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
     Returns:
         True if subtitle generation should be skipped; otherwise, False.
     """
+    file_name, file_extension = os.path.splitext(file_path)
+    if isAudioFileExtension(file_extension) and lrc_for_audio_files:
+        lrc_file_path = file_name + '.lrc'
+    
+        # Check if the file already exists
+        if os.path.exists(lrc_file_path):
+            logging.debug(f"The file {lrc_file_path} already exists. Skipping LRC creation.")
+            return True
+            
     if skip_unknown_language and transcribe_language == LanguageCode.NONE:
         logging.debug(f"{file_path} has unknown language, skipping.")
         return True
