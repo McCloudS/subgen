@@ -1,4 +1,4 @@
-subgen_version = '2025.01.01'
+subgen_version = '2025.01.02'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -650,13 +650,16 @@ def isAudioFileExtension(file_extension):
         AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
-    with open(file_path, "w") as file:
-        for segment in result.segments:
-            minutes, seconds = divmod(int(segment.start), 60)
-            fraction = int((segment.start - int(segment.start)) * 100)
-            # remove embedded newlines in text, since some players ignore text after newlines
-            text = segment.text[:].replace('\n', '')
-            file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
+    if not os.path.exists(file_path):
+        with open(file_path, "w") as file:
+            for segment in result.segments:
+                minutes, seconds = divmod(int(segment.start), 60)
+                fraction = int((segment.start - int(segment.start)) * 100)
+                # remove embedded newlines in text, since some players ignore text after newlines
+                text = segment.text[:].replace('\n', '')
+                file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
+    else:
+        logging.debug(f"The file {file_path} already exists. Skipping LRC creation.")
 
 def gen_subtitles(file_path: str, transcription_type: str, force_language : LanguageCode = LanguageCode.NONE) -> None:
     """Generates subtitles for a video file.
