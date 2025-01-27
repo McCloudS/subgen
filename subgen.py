@@ -645,7 +645,7 @@ def delete_model():
         model = None
     gc.collect()
 
-def :
+def isAudioFileExtension(file_extension):
     return file_extension.casefold() in \
         AUDIO_EXTENSIONS
 
