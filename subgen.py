@@ -114,7 +114,7 @@ VIDEO_EXTENSIONS = (
 AUDIO_EXTENSIONS = (
     ".mp3", ".wav", ".aac", ".flac", ".ogg", ".wma", ".alac", ".m4a", ".opus", 
     ".aiff", ".aif", ".pcm", ".ra", ".ram", ".mid", ".midi", ".ape", ".wv", 
-    ".amr", ".vox", ".tak", ".spx", '.m4b'
+    ".amr", ".vox", ".tak", ".spx", ".m4b", ".mka"
 )
 
 
