@@ -1520,6 +1520,25 @@ def path_mapping(fullpath):
         return fullpath.replace(path_mapping_from, path_mapping_to)
     return fullpath
 
+def is_file_stable(file_path, wait_time=2, check_intervals=3):
+    """Returns True if the file size is stable for a given number of checks."""
+    if not os.path.exists(file_path):
+        return False
+    
+    previous_size = -1
+    for _ in range(check_intervals):
+        try:
+            current_size = os.path.getsize(file_path)
+        except OSError:
+            return False  # File might still be inaccessible
+
+        if current_size == previous_size:
+            return True  # File is stable
+        previous_size = current_size
+        time.sleep(wait_time)
+    
+    return False  # File is still changing
+
 if monitor:
     # Define a handler class that will process new files
     class NewFileHandler(FileSystemEventHandler):
@@ -1528,13 +1547,21 @@ if monitor:
             if not event.is_directory:
                 file_path = event.src_path
                 if has_audio(file_path):
-                # Call the gen_subtitles function
                     logging.info(f"File: {path_mapping(file_path)} was added")
                     gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate)
+
+        def handle_event(self, event):
+            """Wait for stability before processing the file."""
+            file_path = event.src_path
+            if is_file_stable(file_path):
+                self.create_subtitle(event)
+
         def on_created(self, event):
-            self.create_subtitle(event)
+            time.sleep(5)  # Extra buffer time for new files
+            self.handle_event(event)
+
         def on_modified(self, event):
-            self.create_subtitle(event)
+            self.handle_event(event)
 
 def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None = None):
     transcribe_folders = transcribe_folders.split("|")
