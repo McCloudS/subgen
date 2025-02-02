@@ -125,9 +125,6 @@ in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
-#start queue
-task_queue = DeduplicatedQueue()
-
 def transcription_worker():
     while True:
         task = task_queue.get()
@@ -176,6 +173,9 @@ class DeduplicatedQueue(queue.Queue):
             # If your workers process multiple items per get(), adjust logic here
             if self.unfinished_tasks == 0:
                 self._processing.clear()  # Reset when all tasks are done
+
+#start queue
+task_queue = DeduplicatedQueue()
 
 # Define a filter class to hide common logging we don't want to see
 class MultiplePatternsFilter(logging.Filter):
