@@ -1,4 +1,4 @@
-subgen_version = '2025.01.03'
+subgen_version = '2025.02.01'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -156,23 +156,35 @@ class DeduplicatedQueue(queue.Queue):
             if self.unfinished_tasks == 0:
                 self._processing.clear()  # Reset when all tasks are done
 
+    def is_processing(self):
+        """Return True if any tasks are being processed."""
+        with self._lock:
+            return len(self._processing) > 0
+
+    def is_idle(self):
+        """Return True if queue is empty AND no tasks are processing."""
+        return self.empty() and not self.is_processing()
+
 #start queue
 task_queue = DeduplicatedQueue()
 
 def transcription_worker():
     while True:
         task = task_queue.get()
-                
-        if "type" in task and task["type"] == "detect_language":
-            detect_language_task(task['path'])
-        elif 'Bazarr-' in task['path']:
-            logging.info(f"Task {task['path']} is being handled by ASR.")
-        else:
-            logging.info(f"Task {task['path']} is being handled by Subgen.") 
-            gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
-            task_queue.task_done()
-        # show queue
-        logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
+        try:        
+            if "type" in task and task["type"] == "detect_language":
+                detect_language_task(task['path'])
+            elif 'Bazarr-' in task['path']:
+                logging.info(f"Task {task['path']} is being handled by ASR.")
+            else:
+                logging.info(f"Task {task['path']} is being handled by Subgen.") 
+                gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
+                task_queue.task_done()
+            # show queue
+            logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
+        finally:
+            #task_queue.task_done()
+            delete_model()  # ✅ Check if safe to purge AFTER finishing work
 
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
@@ -671,9 +683,9 @@ def start_model():
         model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def delete_model():
-    if clear_vram_on_complete and task_queue.qsize() == 0:
-        global model
-        logging.debug("Queue is empty, clearing/releasing VRAM")
+    global model
+    if clear_vram_on_complete and task_queue.is_idle():
+        logging.debug("Queue idle; clearing model from memory.")
         model = None
     gc.collect()
 
