@@ -125,24 +125,6 @@ in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
 last_print_time = None
 
-def transcription_worker():
-    while True:
-        task = task_queue.get()
-                
-        if "type" in task and task["type"] == "detect_language":
-            detect_language_task(task['path'])
-        elif 'Bazarr-' in task['path']:
-            logging.info(f"Task {task['path']} is being handled by ASR.")
-        else:
-            logging.info(f"Task {task['path']} is being handled by Subgen.") 
-            gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
-            task_queue.task_done()
-        # show queue
-        logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
-
-for _ in range(concurrent_transcriptions):
-    threading.Thread(target=transcription_worker, daemon=True).start()
-
 class DeduplicatedQueue(queue.Queue):
     """Queue that prevents duplicates in both queued and in-progress tasks."""
     def __init__(self):
@@ -176,6 +158,24 @@ class DeduplicatedQueue(queue.Queue):
 
 #start queue
 task_queue = DeduplicatedQueue()
+
+def transcription_worker():
+    while True:
+        task = task_queue.get()
+                
+        if "type" in task and task["type"] == "detect_language":
+            detect_language_task(task['path'])
+        elif 'Bazarr-' in task['path']:
+            logging.info(f"Task {task['path']} is being handled by ASR.")
+        else:
+            logging.info(f"Task {task['path']} is being handled by Subgen.") 
+            gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
+            task_queue.task_done()
+        # show queue
+        logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
+
+for _ in range(concurrent_transcriptions):
+    threading.Thread(target=transcription_worker, daemon=True).start()
 
 # Define a filter class to hide common logging we don't want to see
 class MultiplePatternsFilter(logging.Filter):
