@@ -1056,7 +1056,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         return
     
     
-    if have_to_skip(file_path, force_language):
+    if should_skip_file(file_path, force_language):
         return
     
     task = {
@@ -1068,66 +1068,76 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     task_queue.put(task)
     logging.info(f"task_queue.put(task)({task['path']}, {task['transcribe_or_translate']}, {task['force_language']})")
 
-def have_to_skip(file_path: str, transcribe_language: LanguageCode) -> bool:
-    """
-    Determines whether subtitle generation should be skipped for a given file.
+def should_skip_file(file_path: str, transcribe_language: LanguageCode) -> bool:
+    """Determine if subtitle generation should be skipped for a file."""
+    base_name = os.path.basename(file_path)
+    file_name, file_ext = os.path.splitext(base_name)
 
-    Args:
-        file_path: The path to the file to check for existing subtitles.
-        transcribe_language: The language intended for transcription.
+    # 1. Check for existing LRC files for audio files
+    if isAudioFileExtension(file_ext) and lrc_for_audio_files:
+        lrc_path = f"{file_name}.lrc"
+        if os.path.exists(lrc_path):
+            logging.info(f"Skipping {base_name}: LRC file already exists at {lrc_path}")
+            return True
 
-    Returns:
-        True if subtitle generation should be skipped; otherwise, False.
-    """
-    file_name, file_extension = os.path.splitext(file_path)
-    if isAudioFileExtension(file_extension) and lrc_for_audio_files:
-        lrc_file_path = file_name + '.lrc'
+    # 2. Skip if unknown language and configured to skip unknowns
+    if skip_unknown_language and transcribe_language == LanguageCode.NONE:
+        logging.info(f"Skipping {base_name}: Language detection failed (unknown language)")
+        return True
+
+    # 3. Check subtitle existence in target language
+    if skip_if_to_transcribe_sub_already_exist:
+        if has_subtitle_language(file_path, transcribe_language):
+            lang_name = transcribe_language.to_name()
+            lang_code = transcribe_language.to_iso_639_1()
+            logging.info(f"Skipping {base_name}: Existing {lang_name} ({lang_code}) subtitles found")
+            return True
+
+    # 4. Check against internal subtitle skip list
+    if skipifinternalsublang and has_subtitle_language(file_path, skipifinternalsublang):
+        lang_name = skipifinternalsublang.to_name()
+        lang_code = skipifinternalsublang.to_iso_639_1()
+        logging.info(f"Skipping {base_name}: Internal {lang_name} ({lang_code}) subtitles present")
+        return True
+
+    # 5. Check for external subtitles in configured language
+    if skipifexternalsub and LanguageCode.is_valid_language(namesublang):
+        target_lang = LanguageCode.from_string(namesublang)
+        if has_subtitle_language(file_path, target_lang):
+            lang_name = target_lang.to_name()
+            lang_code = target_lang.to_iso_639_1()
+            logging.info(f"Skipping {base_name}: External {lang_name} ({lang_code}) subtitles exist")
+            return True
+
+    # 6. Check against global subtitle language skip list
+    existing_sub_langs = get_subtitle_languages(file_path)
+    for lang in existing_sub_langs:
+        if lang in skip_lang_codes_list:
+            lang_name = lang.to_name()
+            lang_code = lang.to_iso_639_1()
+            logging.info(f"Skipping {base_name}: Contains skipped subtitle language {lang_name} ({lang_code})")
+            return True
+
+    # 7. Audio language checks
+    audio_langs = get_audio_languages(file_path)
     
-        # Check if the file already exists
-        if os.path.exists(lrc_file_path):
-            logging.debug(f"The file {lrc_file_path} already exists. Skipping LRC creation.")
+    # 7a. Limit to preferred audio languages
+    if limit_to_preferred_audio_languages:
+        preferred_names = [lang.to_name() for lang in preferred_audio_languages]
+        found_audio = any(lang in preferred_audio_languages for lang in audio_langs)
+        if not found_audio:
+            logging.info(f"Skipping {base_name}: No preferred audio tracks found (looking for {', '.join(preferred_names)})")
             return True
             
-    if skip_unknown_language and transcribe_language == LanguageCode.NONE:
-        logging.debug(f"{file_path} has unknown language, skipping.")
-        return True
-    
-    # Check if subtitles in the desired transcription language already exist
-    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, transcribe_language):
-        logging.debug(f"{file_path} already has subtitles in {transcribe_language}, skipping.")
-        return True
-
-    # Check if subtitles in the specified internal language(s) should skip processing
-    if skipifinternalsublang and has_subtitle_language(file_path, skipifinternalsublang):
-        logging.debug(f"{file_path} has internal subtitles matching skip condition, skipping.")
-        return True
-
-    # Check if external subtitles exist for the specified language
-    # Probably not use LanguageCode for this, but just check with strings, to be able to skip with custom named languages. 
-    if LanguageCode.is_valid_language(namesublang):
-        if skipifexternalsub and has_subtitle_language(file_path, LanguageCode.from_string(namesublang)):
-            logging.debug(f"{file_path} has external subtitles in {namesublang}, skipping.")
+    # 7b. Check for audio languages in skip list
+    for lang in audio_langs:
+        if lang in skip_if_audio_track_is_in_list:
+            lang_name = lang.to_name()
+            lang_code = lang.to_iso_639_1()
+            logging.info(f"Skipping {base_name}: Contains skipped audio language {lang_name} ({lang_code})")
             return True
 
-    # Skip if any language in the skip list is detected in existing subtitles
-    existing_sub_langs = get_subtitle_languages(file_path)
-    if any(lang in skip_lang_codes_list for lang in existing_sub_langs):
-        logging.debug(f"Languages in skip list {skip_lang_codes_list} detected in {file_path}, skipping.")
-        return True
-
-    audio_langs = get_audio_languages(file_path)
-    if preferred_audio_languages in audio_langs:
-        logging.debug(f"Preferred audio language {preferred_audio_languages} detected in {file_path}.")
-        # maybe not skip if subtitle exist in preferred audio language, but not in another preferred audio language if the file has multiple audio tracks matching the preferred audio languages
-    else:
-        if limit_to_preferred_audio_languages:
-            logging.debug(f"Only non-preferred audio language detected in {file_path}, skipping.")
-            return True
-        if any(lang in skip_if_audio_track_is_in_list for lang in audio_langs):
-            logging.debug(f"Audio language in skip list {skip_if_audio_track_is_in_list} detected in {file_path}, skipping.")
-            return True
-
-    # If none of the conditions matched, do not skip
+    logging.debug(f"Proceeding with {base_name}: No skip conditions met (Language: {transcribe_language.to_name() if transcribe_language else 'auto-detect'})")
     return False
     
 def get_subtitle_languages(video_path):
