@@ -1075,7 +1075,7 @@ def should_skip_file(file_path: str, transcribe_language: LanguageCode) -> bool:
 
     # 1. Check for existing LRC files for audio files
     if isAudioFileExtension(file_ext) and lrc_for_audio_files:
-        lrc_path = f"{file_name}.lrc"
+        lrc_path = os.path.join(os.path.dirname(file_path), f"{file_name}.lrc")
         if os.path.exists(lrc_path):
             logging.info(f"Skipping {base_name}: LRC file already exists at {lrc_path}")
             return True
