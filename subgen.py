@@ -181,7 +181,7 @@ def transcription_worker():
                 gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
                 task_queue.task_done()
             # show queue
-            logging.debug(f"There are {task_queue.qsize()} tasks left in the queue.")
+            logging.debug(f"Queue status: {task_queue.qsize()} tasks remaining")
         finally:
             #task_queue.task_done()
             delete_model()  # ✅ Check if safe to purge AFTER finishing work
@@ -246,7 +246,7 @@ def progress(seek, total):
             # Update the last print time
             last_print_time = current_time
             # Log the message
-            logging.debug("Force Update...")
+            logging.debug("Progress update: 5s interval heartbeat")
 
 TIME_OFFSET = 5
 
@@ -296,7 +296,7 @@ def receive_tautulli_webhook(
         logging.debug(f"Tautulli event detected is: {event}")
         if((event == "added" and procaddedmedia) or (event == "played" and procmediaonplay)):
             fullpath = file
-            logging.debug("Path of file: " + fullpath)
+            logging.debug(f"Full file path: {fullpath}")
 
             gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
     else:
@@ -323,9 +323,8 @@ def receive_plex_webhook(
 
         if (event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay):
             fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
-            logging.debug("Path of file: " + fullpath)
+            logging.debug(f"Full file path: {fullpath}")
 
-            
             gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
             refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             if plex_queue_next_episode:
@@ -367,7 +366,7 @@ def receive_jellyfin_webhook(
 
         if (NotificationType == "ItemAdded" and procaddedmedia) or (NotificationType == "PlaybackStart" and procmediaonplay):
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
-            logging.debug(f"Path of file: {fullpath}")
+            logging.debug(f"Full file path: {fullpath}")
 
             gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
             try:
@@ -403,7 +402,7 @@ def receive_emby_webhook(
 
     if (event == "library.new" and procaddedmedia) or (event == "playback.start" and procmediaonplay):
         fullpath = data_dict['Item']['Path']
-        logging.debug("Path of file: " + fullpath)
+        logging.debug(f"Full file path: {fullpath}")
         gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
 
     return ""
@@ -500,7 +499,7 @@ async def detect_language(
 ):    
     
     if force_detected_language_to:
-        logging.info(f"language is: {force_detected_language_to.to_name()}")
+        #logging.info(f"language is: {force_detected_language_to.to_name()}")
         logging.debug(f"Skipping detect language, we have forced it as {force_detected_language_to.to_name()}")
         return {
             "detected_language": force_detected_language_to.to_name(),
@@ -545,10 +544,8 @@ async def detect_language(
 
         args.update(kwargs)
         detected_language = LanguageCode.from_name(model.transcribe(**args).language)
-        logging.debug(f"Detected language: {detected_language.to_name()}")
-        # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
         language_code = detected_language.to_iso_639_1()
-        logging.debug(f"Language Code: {language_code}")
+        logging.debug(f"Language detection: {detected_language.to_name()} (Code: {language_code})")
 
     except Exception as e:
         logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
@@ -712,9 +709,9 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
     """
 
     try:
-        logging.info(f"Added {os.path.basename(file_path)} for transcription.")
-        logging.info(f"Transcribing file: {os.path.basename(file_path)}")
-        logging.info(f"Transcribing file language: {force_language}")
+        logging.info(f"Queuing file for processing: {os.path.basename(file_path)}")
+        #logging.info(f"Transcribing file: {os.path.basename(file_path)}")
+        #logging.info(f"Transcribing file language: {force_language}")
 
         start_time = time.time()
         start_model()
@@ -751,8 +748,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language : Lang
 
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
-        logging.info(
-            f"Transcription of {os.path.basename(file_path)} is completed, it took {minutes} minutes and {seconds} seconds to complete.")
+        logging.info(f"Completed transcription: {os.path.basename(file_path)} in {minutes}m {seconds}s")
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
@@ -1056,7 +1052,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         # make a detect language task
         task_id = { 'path': file_path, 'type': "detect_language" }
         task_queue.put(task_id)
-        logging.info(f"task_queue.put(task_id)({file_path}, detect_language)")
+        logging.debug(f"Added to queue: {task['path']} [Type: {task.get('type', 'transcribe')}]")
         return
     
     
@@ -1635,11 +1631,8 @@ def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None 
 if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
-    logging.info("Starting Subgen with listening webhooks!")
-    logging.info(f"Transcriptions are limited to running {str(concurrent_transcriptions)} at a time")
-    logging.info(f"Running {str(whisper_threads)} threads per transcription")
-    logging.info(f"Using {transcribe_device} to encode")
-    logging.info(f"Using faster-whisper")
+    logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
+    logging.info(f"Transcribe device: {transcribe_device}, Model: {whisper_model}")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
