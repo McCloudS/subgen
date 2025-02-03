@@ -1057,7 +1057,6 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     
     
     if have_to_skip(file_path, force_language):
-        logging.debug(f"{file_path} already has subtitles in {force_language}, skipping.")
         return
     
     task = {
