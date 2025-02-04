@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt --extra-index-url https://download.pytorch.org/wheel/cpu
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 # === Stage 2: Create a minimal runtime image ===
 FROM python:3.11-slim-bullseye AS runtime
