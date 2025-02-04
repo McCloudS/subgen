@@ -6,7 +6,6 @@ WORKDIR /subgen
 # Install required build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    cmake \
     ffmpeg \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -23,7 +22,6 @@ WORKDIR /subgen
 # Install only required runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only necessary files from builder stage
