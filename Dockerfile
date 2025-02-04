@@ -27,7 +27,7 @@ WORKDIR /subgen
 COPY --from=builder /subgen/launcher.py .
 COPY --from=builder /subgen/subgen.py .
 COPY --from=builder /subgen/language_code.py .
-COPY --from=builder /install /usr/local
+COPY --from=builder /install/local/bin /usr/local/lib/python3.10/dist-packages
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
