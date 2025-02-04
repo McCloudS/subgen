@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
@@ -27,7 +27,7 @@ WORKDIR /subgen
 COPY --from=builder /subgen/launcher.py .
 COPY --from=builder /subgen/subgen.py .
 COPY --from=builder /subgen/language_code.py .
-COPY --from=builder /usr /usr
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,8 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/usr/local/lib/python3.10/site-packages
+ENV PYTHONUNBUFFERED=1
 
 # Set command to run the application
 CMD ["python3", "launcher.py"]
