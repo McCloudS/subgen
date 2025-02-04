@@ -13,16 +13,17 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install -r /subgen/requirements.txt \
-    && git clone --recursive https://github.com/OpenNMT/CTranslate2.git \
+    && git clone --recursive https://github.com/OpenNMT/CTranslate2.git /CTranslate2 \
+    && cd /CTranslate2 \
     && mkdir build && cd build \
     && cmake -DCUDA_ARCH_LIST="5.0" -DWITH_CUDA=ON -DWITH_CUDNN=ON -DWITH_MKL=OFF .. \
-    && make -j4 \
+    && make -j$(nproc) \
     && make install \
-    && sudo ldconfig \
-    && cd python \
+    && ldconfig \
+    && cd /CTranslate2/python \
     && pip install -r install_requirements.txt \
     && python setup.py bdist_wheel \
-    && pip uninstall ctranslate2 \
+    && pip uninstall -y ctranslate2 \
     && pip install dist/*.whl
 
 WORKDIR /subgen
