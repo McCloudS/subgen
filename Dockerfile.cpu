@@ -1,34 +1,35 @@
-# Stage 1: Build dependencies in a full-featured Python image
-FROM python:3.11-alpine AS builder
+# === Stage 1: Build dependencies and install packages ===
+FROM python:3.11-slim-bullseye AS builder
 
 WORKDIR /subgen
 
-# Install dependencies required for building wheels
-RUN apk add --no-cache \
+# Install required build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
     ffmpeg \
     git \
-    build-base \
-    python3-dev \
-    libffi-dev
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
+# Copy and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Stage 2: Create a minimal final image
-FROM python:3.11-alpine
+# === Stage 2: Create a minimal runtime image ===
+FROM python:3.11-slim-bullseye AS runtime
 
 WORKDIR /subgen
 
-# Install runtime dependencies (minimal set)
-RUN apk add --no-cache ffmpeg git
+# Install only required runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy only the required files from the builder stage
+# Copy only necessary files from builder stage
 COPY --from=builder /install /usr/local
+
+# Copy source code
 COPY launcher.py subgen.py language_code.py /subgen/
 
-# Set environment variable for cleaner output
-ENV PYTHONUNBUFFERED=1
-
-# Run the application
-CMD ["python3", "-u", "launcher.py"]
+CMD ["python3", "launcher.py"]
