@@ -16,7 +16,7 @@ RUN apt-get update \
     && git clone --recursive https://github.com/OpenNMT/CTranslate2.git /CTranslate2 \
     && cd /CTranslate2 \
     && mkdir build && cd build \
-    && cmake -DCUDA_ARCH_LIST="5.0" -DWITH_CUDA=ON -DWITH_CUDNN=ON -DWITH_MKL=OFF .. \
+    && cmake -DCUDA_ARCH_LIST="5.0" -DWITH_CUDA=ON -DWITH_CUDNN=ON -DWITH_MKL=OFF -DOPENMP_RUNTIME=NONE .. \
     && make -j$(nproc) \
     && make install \
     && ldconfig \
