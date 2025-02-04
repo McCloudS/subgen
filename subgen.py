@@ -1,4 +1,4 @@
-subgen_version = '2025.02.01'
+subgen_version = '2025.02.02'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -165,6 +165,16 @@ class DeduplicatedQueue(queue.Queue):
         """Return True if queue is empty AND no tasks are processing."""
         return self.empty() and not self.is_processing()
 
+    def get_queued_tasks(self):
+        """Return a list of queued task paths."""
+        with self._lock:
+            return list(self._queued)
+
+    def get_processing_tasks(self):
+        """Return a list of paths being processed."""
+        with self._lock:
+            return list(self._processing)
+
 #start queue
 task_queue = DeduplicatedQueue()
 
@@ -246,7 +256,10 @@ def progress(seek, total):
             # Update the last print time
             last_print_time = current_time
             # Log the message
-            logging.debug("Progress update: 5s interval heartbeat")
+            logging.info("")
+            if concurrent_transcriptions == 1:
+                processing = task_queue.get_processing_tasks()[0]
+                logging.debug(f"Processing file: {processing}")
 
 TIME_OFFSET = 5
 
