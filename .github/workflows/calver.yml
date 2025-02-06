@@ -1,4 +1,4 @@
-name: Update_CalVer
+name: Update_CalVer_Amend
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
       - 'main'
     paths:
       - 'subgen.py'
-      - 'launcher.py'
-  workflow_dispatch:
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   docker:
@@ -16,7 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Crucial for getting full history
 
       - name: Calculate version
         id: version
@@ -27,11 +26,21 @@ jobs:
           echo "COMMIT_COUNT=$COMMIT_COUNT"
           echo "VERSION=${YEAR}.${MONTH}.${COMMIT_COUNT}" >> $GITHUB_ENV
 
-      - name: Update version file
+      - name: Update subgen.py with version
         run: |
           sed -i "s/subgen_version =.*/subgen_version = '${{ env.VERSION }}'/" subgen.py
 
-      - name: Amend commit with version update
+      - name: Check if subgen.py was actually changed (compare with HEAD)
+        id: check_change
+        run: |
+          if git diff --quiet HEAD subgen.py; then
+            echo "::set-output name=changed::false"
+          else
+            echo "::set-output name=changed::true"
+          fi
+
+      - name: Amend commit if subgen.py changed
+        if: steps.check_change.outputs.changed == 'true'
         env:
           GIT_AUTHOR_NAME: "McCloudS"
           GIT_AUTHOR_EMAIL: "scott@mccloud.dev"
@@ -40,14 +49,7 @@ jobs:
           git config user.email "${GIT_AUTHOR_EMAIL}"
 
           git add subgen.py
-          git commit --amend --reuse-message=HEAD --author="${GIT_AUTHOR_NAME} <${GIT_AUTHOR_EMAIL}>"
+          git commit --amend --reuse-message=HEAD --author="${GIT_AUTHOR_NAME} <${GIT_AUTHOR_EMAIL}>"  # Amend the last commit
 
-          # Pull and rebase.  Handle potential conflicts.
-          git pull --rebase origin main || {
-            echo "Rebase failed! Resolving conflicts..."
-            git rebase --abort  # Abort the rebase
-            exit 1            # Fail the job (optional)
-          }
-
-          # Push the amended commit
-          git push origin HEAD:main
+          # Push with force-with-lease (safer than --force)
+          git push --force-with-lease origin HEAD:main
