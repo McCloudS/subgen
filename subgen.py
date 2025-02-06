@@ -1,4 +1,4 @@
-subgen_version = '2025.02.58'
+subgen_version = '2025.02.59'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -30,6 +30,7 @@ import faster_whisper
 from io import BytesIO
 import io
 import asyncio
+import torch
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
