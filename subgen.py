@@ -1,4 +1,4 @@
-subgen_version = '2025.02.57'
+subgen_version = '2025.02.58'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -29,6 +29,7 @@ from watchdog.events import FileSystemEventHandler
 import faster_whisper
 from io import BytesIO
 import io
+import asyncio
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
@@ -236,6 +237,7 @@ for handler in logger.handlers:
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 #This forces a flush to print progress correctly
 def progress(seek, total):
