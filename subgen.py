@@ -30,10 +30,6 @@ import faster_whisper
 from io import BytesIO
 import io
 
-def get_key_by_value(d, value):
-    reverse_dict = {v: k for k, v in d.items()}
-    return reverse_dict.get(value)
-
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
