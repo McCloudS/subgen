@@ -1,4 +1,4 @@
-subgen_version = '2025.02.60'
+subgen_version = '2025.02.61'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -125,8 +125,8 @@ docker_status = "Docker" if in_docker else "Standalone"
 class DeduplicatedQueue(queue.Queue):
     """Queue that prevents duplicates and tracks worker ID."""
 
-    def init(self):
-        super().init()
+    def __init__(self):
+        super().__init__()  # Call the superclass's __init__
         self._queued = set()
         self._processing = {}  # Store processing tasks by path: {path: worker_id}
         self._lock = threading.Lock()
@@ -134,7 +134,7 @@ class DeduplicatedQueue(queue.Queue):
     def put(self, item, block=True, timeout=None):
         with self._lock:
             path = item["path"]
-            if path not in self._queued : #and path not in self._processing:  # Check against the queue
+            if path not in self._queued: #and path not in self._processing:  # Check against the queue
                 super().put(item, block, timeout)
                 self._queued.add(path)
 
