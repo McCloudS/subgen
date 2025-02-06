@@ -16,9 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          # Fetch the full history
           fetch-depth: 0
-          ref: main
 
       - name: Calculate version
         id: version
@@ -44,8 +42,12 @@ jobs:
           git add subgen.py
           git commit --amend --reuse-message=HEAD --author="${GIT_AUTHOR_NAME} <${GIT_AUTHOR_EMAIL}>"
 
-          # Pull any remote changes
-          git pull --rebase origin main  # Use --rebase to avoid a merge commit
+          # Pull and rebase.  Handle potential conflicts.
+          git pull --rebase origin main || {
+            echo "Rebase failed! Resolving conflicts..."
+            git rebase --abort  # Abort the rebase
+            exit 1            # Fail the job (optional)
+          }
 
           # Push the amended commit
           git push origin HEAD:main
