@@ -1,23 +1,32 @@
-FROM python:3.11-slim-bullseye
+# === Stage 1: Build dependencies and install packages ===
+FROM python:3.11-slim-bullseye AS builder
 
 WORKDIR /subgen
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt /subgen/requirements.txt
+# Install required build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update \
-    && apt-get install -y \
-        python3 \
-        python3-pip \
-        ffmpeg \
-        git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install -r requirements.txt
+# Copy and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install torch torchaudio --extra-index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir --prefix=/install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
-ENV PYTHONUNBUFFERED=1
+# === Stage 2: Create a minimal runtime image ===
+FROM python:3.11-slim-bullseye AS runtime
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py /subgen/subgen.py
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/language_code.py /subgen/language_code.py
+WORKDIR /subgen
 
-CMD [ "bash", "-c", "python3 -u launcher.py" ]
+# Install only required runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only necessary files from builder stage
+COPY --from=builder /install /usr/local
+
+# Copy source code
+COPY launcher.py subgen.py language_code.py /subgen/
+
+CMD ["python3", "launcher.py"]

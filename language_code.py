@@ -2,6 +2,7 @@ from enum import Enum
 
 class LanguageCode(Enum):
     # ISO 639-1, ISO 639-2/T, ISO 639-2/B, English Name, Native Name
+    AFAR = ("aa", "aar", "aar", "Afar", "Afar") 
     AFRIKAANS = ("af", "afr", "afr", "Afrikaans", "Afrikaans")
     AMHARIC = ("am", "amh", "amh", "Amharic", "አማርኛ")
     ARABIC = ("ar", "ara", "ara", "Arabic", "العربية")

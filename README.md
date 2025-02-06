@@ -4,6 +4,10 @@
 <details>
 <summary>Updates:</summary>
 
+23 Dec: Added PLEX_QUEUE_NEXT_EPISODE and PLEX_QUEUE_SERIES.  Will automatically start generating subtitles for the next episode in your series, or queue the whole series.  
+
+4 Dec: Added more ENV settings: DETECT_LANGUAGE_OFFSET, PREFERRED_AUDIO_LANGUAGES, SKIP_IF_AUDIO_TRACK_IS, ONLY_SKIP_IF_SUBGEN_SUBTITLE, SKIP_UNKNOWN_LANGUAGE, SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST, SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE
+
 30 Nov 2024: Signifcant refactoring and handling by Muisje.  Added language code class for more robustness and flexibility and ability to separate audio tracks to make sure you get the one you want.  New ENV Variables: SUBTITLE_LANGUAGE_NAMING_TYPE, SKIP_IF_AUDIO_TRACK_IS, PREFERRED_AUDIO_LANGUAGE, SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
 
     There will be some minor hiccups, so please identify them as we work through this major overhaul.
@@ -117,7 +121,15 @@ If you want to use a GPU, you need to map it accordingly.
 
 #### Unraid
 
-While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See [https://github.com/McCloudS/subgen/issues/37](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
+While Unraid doesn't have an app or template for quick install, with minor manual work, you can install it.  See [https://github.com/McCloudS/subgen/discussions/137](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
+
+## Bazarr
+
+You only need to confiure the Whisper Provider as shown below: <br>
+![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
+The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:9000) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  **127.0.0.1 WILL NOT WORK IF YOU ARE RUNNING BAZARR IN A DOCKER CONTAINER!** I recomend not enabling using the Bazarr provider with other webhooks in Subgen, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
+
+**The defaults of Subgen will allow it to run in Bazarr with zero configuration.  However, you will probably want to change, at a minimum, `TRANSCRIBE_DEVICE` and `WHISPER_MODEL`.**
 
 ## Plex
 
@@ -130,12 +142,6 @@ All you need to do is create a webhook in Emby pointing to your subgen IE: `http
 Emby was really nice and provides good information in their responses, so we don't need to add an API token or server url to query for more information.
 
 Remember, Emby and Subgen need to be able to see the exact same files at the exact same paths, otherwise you need `USE_PATH_MAPPING`.
-
-## Bazarr
-
-You only need to confiure the Whisper Provider as shown below: <br>
-![bazarr_configuration](https://wiki.bazarr.media/Additional-Configuration/images/whisper_config.png) <br>
-The Docker Endpoint is the ip address and port of your subgen container (IE http://192.168.1.111:9000) See https://wiki.bazarr.media/Additional-Configuration/Whisper-Provider/ for more info.  I recomend not enabling this with other webhooks, or you will likely be generating duplicate subtitles. If you are using Bazarr, path mapping isn't necessary, as Bazarr sends the file over http.
 
 ## Tautulli
 
@@ -221,6 +227,15 @@ The following environment variables are available in Docker.  They will default 
 | SKIP_IF_AUDIO_TRACK_IS | '' | Takes a pipe separated `\|` list of 3 letter language codes to skip if the file has audio in that language.  This could be used to skip generating subtitles for a language you don't want, like, I speak English, don't generate English subtitles (for example: 'eng\|deu')|
 | PREFERRED_AUDIO_LANGUAGE | 'eng' | If there are multiple audio tracks in a file, it will prefer this setting |
 | SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST | True | Skips generation of subtitle if a file matches our desired language already. |
+| DETECT_LANGUAGE_OFFSET | 0 | Allows you to shift when to run detect_language, geared towards avoiding introductions or songs. |
+| PREFERRED_AUDIO_LANGUAGES | 'eng' | Pipe separated list |
+| SKIP_IF_AUDIO_TRACK_IS | '' | Takes a pipe separated list of ISO 639-2 languages. Skips generation of subtitle if the file has the audio file listed. |
+| ONLY_SKIP_IF_SUBGEN_SUBTITLE | False | Skips generation of subtitles if the file has "subgen" somewhere in the same |
+| SKIP_UNKNOWN_LANGUAGE | False | Skips generation if the file has an unknown language |
+| SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST | False | Skips generation if file doesn't have an audio stream marked with a language |
+| SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE | False | Should Whisper try to detect the language if there is no audio language specified via force langauge |
+| PLEX_QUEUE_NEXT_EPISODE | False | Will queue the next Plex series episode for subtitle generation if subgen is triggered. |
+| PLEX_QUEUE_SERIES | False | Will queue the whole Plex series for subtitle generation if subgen is triggered. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>

@@ -1,23 +1,41 @@
+# Stage 1: Builder
+FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 AS builder
+
+WORKDIR /subgen
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    ffmpeg \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Stage 2: Runtime
 FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
 
 WORKDIR /subgen
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt /subgen/requirements.txt
+# Copy necessary files from the builder stage
+COPY --from=builder /subgen/launcher.py .
+COPY --from=builder /subgen/subgen.py .
+COPY --from=builder /subgen/language_code.py .
+COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 
-RUN apt-get update \
-    && apt-get install -y \
-        python3 \
-        python3-pip \
-        ffmpeg \
-        git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip3 install -r requirements.txt
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1
 
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/launcher.py /subgen/launcher.py
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/subgen.py /subgen/subgen.py
-ADD https://raw.githubusercontent.com/McCloudS/subgen/main/language_code.py /subgen/language_code.py
-
-CMD [ "bash", "-c", "python3 -u launcher.py" ]
+# Set command to run the application
+CMD ["python3", "launcher.py"]
