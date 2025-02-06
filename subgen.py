@@ -1,4 +1,4 @@
-subgen_version = '2025.02.56'
+subgen_version = '2025.02.57'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -235,7 +235,6 @@ for handler in logger.handlers:
 
 logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("asyncio").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
 #This forces a flush to print progress correctly
