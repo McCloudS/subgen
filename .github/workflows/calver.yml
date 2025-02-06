@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - 'main'
-    paths:
-      - 'subgen.py'
-      - 'launcher.py'
   workflow_dispatch:
 
 jobs:
@@ -16,24 +13,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          # Fetch the full history, it's important here
+          # Fetch the full history
           fetch-depth: 0
           ref: main
 
       - name: Calculate version
         id: version
         run: |
-          # Calculate the commit count for this month
           YEAR=$(date +%Y)
           MONTH=$(date +%m)
-          # count commits since start of the month, limiting scope
           COMMIT_COUNT=$(git rev-list --count HEAD --since="$YEAR-$MONTH-01")
           echo "COMMIT_COUNT=$COMMIT_COUNT"
           echo "VERSION=${YEAR}.${MONTH}.${COMMIT_COUNT}" >> $GITHUB_ENV
 
       - name: Update version file
         run: |
-          # Update subgen.py with the calculated version
           sed -i "s/subgen_version =.*/subgen_version = '${{ env.VERSION }}'/" subgen.py
 
       - name: Amend commit with version update
@@ -44,16 +38,11 @@ jobs:
           git config user.name "${GIT_AUTHOR_NAME}"
           git config user.email "${GIT_AUTHOR_EMAIL}"
 
-          # Stage the modified file
           git add subgen.py
-
-          # Amend the most recent commit, reusing the previous commit message
           git commit --amend --reuse-message=HEAD --author="${GIT_AUTHOR_NAME} <${GIT_AUTHOR_EMAIL}>"
 
-          # Attempt a regular push first.  If it fails because of remote changes, use --force-with-lease cautiously.
-          git push origin HEAD:main
+          # Pull any remote changes
+          git pull --rebase origin main  # Use --rebase to avoid a merge commit
 
-          # Alternative:  Use --force-with-lease if a regular push fails
-          # This is much safer than --force, but still requires care
-          # If this fails as well (e.g., very recent conflict), you'll need manual intervention.
-          # git push --force-with-lease origin HEAD:main
+          # Push the amended commit
+          git push origin HEAD:main
