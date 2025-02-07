@@ -1,4 +1,4 @@
-subgen_version = '2025.02.62'
+subgen_version = '2025.02.63'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -349,30 +349,36 @@ def receive_plex_webhook(
             gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
             refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             if plex_queue_next_episode:
-                gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(plex_json['Metadata']['ratingKey']), plexserver, plextoken)), transcribe_or_translate)
+                gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(plex_json['Metadata']['ratingKey'], stay_in_season=False), plexserver, plextoken)), transcribe_or_translate)
+
             if plex_queue_series or plex_queue_season:
                 current_rating_key = plex_json['Metadata']['ratingKey']
+                stay_in_season = plex_queue_season  # Determine if we're staying in the season or not
 
-                # Process all episodes in the series (or season) starting from the current episode
                 while current_rating_key is not None:
                     try:
                         # Queue the current episode
                         file_path = path_mapping(get_plex_file_name(current_rating_key, plexserver, plextoken))
-                        gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(current_rating_key), plexserver, plextoken)), transcribe_or_translate)
+                        gen_subtitles_queue(file_path, transcribe_or_translate)
+                        logging.debug(f"Queued episode with ratingKey {current_rating_key}")
 
                         # Get the next episode
-                        current_rating_key = get_next_plex_episode(current_rating_key, plex_queue_season)
+                        next_episode_rating_key = get_next_plex_episode(current_rating_key, stay_in_season=stay_in_season)
+                        if next_episode_rating_key is None:
+                            break  # Exit the loop if no next episode
+                        current_rating_key = next_episode_rating_key
 
                     except Exception as e:
                         logging.error(f"Error processing episode with ratingKey {current_rating_key} or reached end of series: {e}")
-                        current_rating_key = None  # Stop processing on error
+                        break  # Stop processing on error
 
-                logging.info("All episodes in the series have been queued.")
+                logging.info("All episodes in the series (or season) have been queued.")
+
+
     except Exception as e:
         logging.error(f"Failed to process Plex webhook: {e}")
 
     return ""
-
 
 @app.post("/jellyfin")
 def receive_jellyfin_webhook(
