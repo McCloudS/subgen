@@ -1,4 +1,4 @@
-subgen_version = '2025.02.61'
+subgen_version = '2025.02.62'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -69,6 +69,7 @@ skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
 skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
 skipifinternalsublang = LanguageCode.from_string(os.getenv('SKIPIFINTERNALSUBLANG', ''))
 plex_queue_next_episode = convert_to_bool(os.getenv('PLEX_QUEUE_NEXT_EPISODE', False))
+plex_queue_season = convert_to_bool(os.getenv('PLEX_QUEUE_SEASON', False))
 plex_queue_series = convert_to_bool(os.getenv('PLEX_QUEUE_SERIES', False))
 skip_lang_codes_list = (
     [LanguageCode.from_string(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
@@ -349,10 +350,10 @@ def receive_plex_webhook(
             refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
             if plex_queue_next_episode:
                 gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(plex_json['Metadata']['ratingKey']), plexserver, plextoken)), transcribe_or_translate)
-            if plex_queue_series:
+            if plex_queue_series or plex_queue_season:
                 current_rating_key = plex_json['Metadata']['ratingKey']
 
-                # Process all episodes in the series starting from the current episode
+                # Process all episodes in the series (or season) starting from the current episode
                 while current_rating_key is not None:
                     try:
                         # Queue the current episode
@@ -360,7 +361,7 @@ def receive_plex_webhook(
                         gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(current_rating_key), plexserver, plextoken)), transcribe_or_translate)
 
                         # Get the next episode
-                        current_rating_key = get_next_plex_episode(current_rating_key)
+                        current_rating_key = get_next_plex_episode(current_rating_key, plex_queue_season)
 
                     except Exception as e:
                         logging.error(f"Error processing episode with ratingKey {current_rating_key} or reached end of series: {e}")
@@ -1315,12 +1316,14 @@ def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode
     # If the language is not found, return False
     return False
 
-def get_next_plex_episode(current_episode_rating_key):
+def get_next_plex_episode(current_episode_rating_key, stay_in_season: bool = False):
     """
     Get the next episode's ratingKey based on the current episode in Plex.
 
     Args:
         current_episode_rating_key (str): The ratingKey of the current episode.
+        stay_in_season (bool): If True, only find the next episode within the current season.
+                              If False, find the next episode in the series.
 
     Returns:
         str: The ratingKey of the next episode, or None if it's the last episode.
@@ -1347,8 +1350,6 @@ def get_next_plex_episode(current_episode_rating_key):
             logging.debug(f"Parent season not found for episode {current_episode_rating_key}")
             return None
         
-        #parent_rating_key = 99707
-        
         # Get the list of seasons
         url = f"{plexserver}/library/metadata/{grandparent_rating_key}/children"
         response = requests.get(url, headers=headers)
@@ -1363,41 +1364,51 @@ def get_next_plex_episode(current_episode_rating_key):
 
         # Parse XML response for the list of episodes
         episodes = ET.fromstring(response.content).findall(".//Video")
-        episodes_in_season = ET.fromstring(response.content).get('size')
+        episodes_in_season = len(episodes) #episodes.get('size') # changed from episodes.get("size") because size is not available
         
         # Find the current episode index and get the next one
         current_episode_number = None
         current_season_number = None
         next_season_number = None
         for episode in episodes:
-            rating_key_element = episode.get("ratingKey")
-            if int(rating_key_element) == int(current_episode_rating_key):
-                current_episode_number = episode.get("index")
+            if episode.get("ratingKey") == current_episode_rating_key:
+                current_episode_number = int(episode.get("index"))
                 current_season_number = episode.get("parentIndex")
-            if rating_key_element is None:
-                logging.warning(f"ratingKey not found for episode at index")
-                continue
-                
-        # Find next season if it exists
-        for season in seasons:
-            if int(season.get("index")) == int(current_season_number)+1:
-                print(f"next season is: {episode.get('ratingKey')}")
-                print(season.get("title"))
-                next_season_number = season.get("ratingKey")
-            #if current_episode_number == int(
-            
-        # Find next episode
-        if int(current_episode_number) == int(episodes_in_season) and next_season_number is not None:
-            logging.debug("At end of season, try to find next season and first episode.")
-            url = f"{plexserver}/library/metadata/{next_season_number}/children"
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            episodes = ET.fromstring(response.content).findall(".//Video")
-            current_episode_number = 0
-        for episode in episodes:
+                break
+            #if rating_key_element is None:
+            #    logging.warning(f"ratingKey not found for episode at index")
+            #    continue
+        
+        # Logic to find the next episode
+        if stay_in_season:
+          if current_episode_number == episodes_in_season:
+              return None # End of season
+          for episode in episodes:
             if int(episode.get("index")) == int(current_episode_number)+1:
                 return episode.get("ratingKey")
-
+        else: # Not staying in season, find the next overall episode
+          # Find next season if it exists
+          for season in seasons:
+              if int(season.get("index")) == int(current_season_number)+1:
+                  #print(f"next season is: {episode.get('ratingKey')}")
+                  #print(season.get("title"))
+                  next_season_number = season.get("ratingKey")
+                  break
+          
+          if current_episode_number == episodes_in_season: # changed to episodes_in_season from int(episodes_in_season)
+              if next_season_number is not None:
+                logging.debug("At end of season, try to find next season and first episode.")
+                url = f"{plexserver}/library/metadata/{next_season_number}/children"
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                episodes = ET.fromstring(response.content).findall(".//Video")
+                current_episode_number = 0
+              else:
+                return None
+          for episode in episodes:
+            if int(episode.get("index")) == int(current_episode_number)+1:
+                return episode.get("ratingKey")
+              
         logging.debug(f"No next episode found for {get_plex_file_name(current_episode_rating_key, plexserver, plextoken)}, possibly end of season or series")
         return None
 
@@ -1407,7 +1418,7 @@ def get_next_plex_episode(current_episode_rating_key):
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         return None
-
+        
 def get_plex_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
     """Gets the full path to a file from the Plex server.
 
