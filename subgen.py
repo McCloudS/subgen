@@ -1,4 +1,4 @@
-subgen_version = '2025.02.65'
+subgen_version = '2025.02.66'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -257,9 +257,9 @@ def progress(seek, total):
             last_print_time = current_time
             # Log the message
             logging.info("")
-            if concurrent_transcriptions == 1:
-                processing = task_queue.get_processing_tasks()[0]
-                logging.debug(f"Processing file: {processing}")
+            #if concurrent_transcriptions == 1:
+                #processing = task_queue.get_processing_tasks()[0]
+                #logging.debug(f"Processing file: {processing}")
 
 TIME_OFFSET = 5
 
