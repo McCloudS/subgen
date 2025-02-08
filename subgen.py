@@ -1,4 +1,4 @@
-subgen_version = '2025.02.66'
+subgen_version = '2025.02.67'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -178,7 +178,7 @@ task_queue = DeduplicatedQueue()
 
 def transcription_worker():
     while True:
-        task = task_queue.get()
+        task = task_queue.get(block=True, timeout=1)
         try:        
             if "type" in task and task["type"] == "detect_language":
                 detect_language_task(task['path'])
