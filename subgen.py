@@ -1,4 +1,4 @@
-subgen_version = '2025.02.70'
+subgen_version = '2025.02.71'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -194,9 +194,8 @@ def transcription_worker():
             continue # This is ok, as we have a timeout, nothing needs to be printed
         except Exception as e:
             logging.error(f"Error processing task: {e}", exc_info=True) # Log the error and the traceback
-        finally:
-            #task_queue.task_done()
-            delete_model()  # ✅ Check if safe to purge AFTER finishing work
+        else:
+            delete_model()  # Call delete_model() *only* if no exception occurred
 
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
