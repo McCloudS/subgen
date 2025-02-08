@@ -1,4 +1,4 @@
-subgen_version = '2025.02.69'
+subgen_version = '2025.02.70'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -178,10 +178,8 @@ task_queue = DeduplicatedQueue()
 
 def transcription_worker():
     while True:
-        if task_queue.is_idle():
-            continue
-        task = task_queue.get(block=True, timeout=1)
         try:        
+            task = task_queue.get(block=True, timeout=1)
             if "type" in task and task["type"] == "detect_language":
                 detect_language_task(task['path'])
             elif 'Bazarr-' in task['path']:
