@@ -1,4 +1,4 @@
-subgen_version = '2025.02.67'
+subgen_version = '2025.02.68'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -190,6 +190,10 @@ def transcription_worker():
                 task_queue.task_done()
             # show queue
             logging.debug(f"Queue status: {task_queue.qsize()} tasks remaining")
+        except queue.Empty:
+            continue # This is ok, as we have a timeout, nothing needs to be printed
+        except Exception as e:
+            logging.error(f"Error processing task: {e}", exc_info=True) # Log the error and the traceback
         finally:
             #task_queue.task_done()
             delete_model()  # ✅ Check if safe to purge AFTER finishing work
