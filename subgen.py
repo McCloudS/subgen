@@ -1,4 +1,4 @@
-subgen_version = '2025.02.71'
+subgen_version = '2025.02.72'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -705,6 +705,8 @@ def delete_model():
     global model
     if clear_vram_on_complete and task_queue.is_idle():
         logging.debug("Queue idle; clearing model from memory.")
+        model.model.unload_model()
+        del model
         model = None
         if transcribe_device.lower() == 'cuda' and torch.cuda.is_available():
             torch.cuda.empty_cache()
