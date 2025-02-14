@@ -18,12 +18,8 @@ FROM python:3.11-slim-bullseye AS runtime
 
 WORKDIR /subgen
 
-# Install only required runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy only necessary files from builder stage
+COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
 COPY --from=builder /install /usr/local
 
 # Copy source code
