@@ -20,6 +20,7 @@ WORKDIR /subgen
 
 # Copy only necessary files from builder stage
 COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
+COPY --from=builder /usr/bin/ffprobe /usr/bin/ffprobe
 COPY --from=builder /install /usr/local
 
 # Copy source code
