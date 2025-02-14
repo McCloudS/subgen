@@ -1,4 +1,4 @@
-subgen_version = '2025.02.72'
+subgen_version = '2025.02.73'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1068,11 +1068,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         logging.debug(f"{file_path} doesn't have any audio to transcribe!")
         return
     
-    if transcription_type == 'translate':
-        force_language = LanguageCode.from_string('eng')
-        # if we are translating, then we must do it to english only
-    else:
-        force_language = choose_transcribe_language(file_path, force_language)
+    force_language = choose_transcribe_language(file_path, force_language)
     
     # check if we would like to detect audio language in case of no audio language specified. Will return here again with specified language from whisper
     if not force_language and should_whiser_detect_audio_language:
@@ -1081,7 +1077,6 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         task_queue.put(task_id)
         logging.debug(f"Added to queue: {task['path']} [Type: {task.get('type', 'transcribe')}]")
         return
-    
     
     if should_skip_file(file_path, force_language):
         return
