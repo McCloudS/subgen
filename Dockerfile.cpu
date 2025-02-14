@@ -5,7 +5,7 @@ WORKDIR /subgen
 
 # Install required build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ffmpeg --fix-missing \
     git \
     && rm -rf /var/lib/apt/lists/*
 
