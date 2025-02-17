@@ -1,4 +1,4 @@
-subgen_version = '2025.02.73'
+subgen_version = '2025.02.88'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1075,7 +1075,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         # make a detect language task
         task_id = { 'path': file_path, 'type': "detect_language" }
         task_queue.put(task_id)
-        logging.debug(f"Added to queue: {task['path']} [Type: {task.get('type', 'transcribe')}]")
+        logging.debug(f"Added to queue: {task_id['path']} [type: {task_id.get('type', 'transcribe')}]")
         return
     
     if should_skip_file(file_path, force_language):
