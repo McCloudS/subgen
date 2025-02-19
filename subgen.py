@@ -1,4 +1,4 @@
-subgen_version = '2025.02.90'
+subgen_version = '2025.02.91'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -31,6 +31,8 @@ from io import BytesIO
 import io
 import asyncio
 import torch
+from typing import List
+from enum import Enum
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
