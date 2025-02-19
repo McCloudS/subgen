@@ -1,4 +1,4 @@
-subgen_version = '2025.02.88'
+subgen_version = '2025.02.89'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -936,12 +936,11 @@ def choose_transcribe_language(file_path, forced_language):
 
     audio_tracks = get_audio_tracks(file_path)
     
-    found_track_in_language = find_language_audio_track(audio_tracks, preferred_audio_languages)
-    if found_track_in_language:
-        language = found_track_in_language
-        if language:
-            logger.debug(f"Preferred language found: {language}")
-            return language
+    preferred_track_language = find_language_audio_track(audio_tracks, preferred_audio_languages)
+
+    if preferred_track_language:
+        logging.debug(f"Preferred language found: {preferred_track_language}")
+        return preferred_track_language
     
     default_language = find_default_audio_track_language(audio_tracks)
     if default_language:
@@ -1086,7 +1085,6 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         'transcribe_or_translate': transcription_type,
         'force_language': force_language
     }
-    task['force_language'] = force_language
     task_queue.put(task)
     logging.info(f"task_queue.put(task)({task['path']}, {task['transcribe_or_translate']}, {task['force_language']})")
 
@@ -1103,7 +1101,8 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     """
     base_name = os.path.basename(file_path)
     file_name, file_ext = os.path.splitext(base_name)
-
+    if transcribe_or_translate == 'translate': 
+        target_language = LanguageCode.ENGLISH # Force our target language as english if we are translating
     # 1. Skip if it's an audio file and an LRC file already exists.
     if isAudioFileExtension(file_ext) and lrc_for_audio_files:
         lrc_path = os.path.join(os.path.dirname(file_path), f"{file_name}.lrc")
@@ -1117,7 +1116,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         return True
 
     # 3. Skip if a subtitle already exists in the target language.
-    if skip_if_to_transcribe_sub_already_exist and (has_subtitle_language(file_path, target_language) or has_subtitle_of_language_in_folder(file_path, target_language)):
+    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language):
         lang_name = target_language.to_name()
         logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
         return True
