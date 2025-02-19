@@ -1,4 +1,4 @@
-subgen_version = '2025.02.89'
+subgen_version = '2025.02.90'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1253,65 +1253,68 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
         logging.error(f"An error occurred while checking the file with pyav: {type(e).__name__}: {e}")
         return False
 
-def has_subtitle_of_language_in_folder(video_file, target_language: LanguageCode, recursion = True):
+def has_subtitle_of_language_in_folder(video_file: str, target_language: LanguageCode, recursion: bool = True, only_skip_if_subgen_subtitle: bool = False) -> bool:
     """Checks if the given folder has a subtitle file with the given language.
 
     Args:
-        video_file: The path of the video file.
-        target_language: The language of the subtitle file that we are looking for.
-        recursion: If True, search in subfolders of the given folder. If False,
-            only search in the given folder.
+        video_file (str): The path of the video file.
+        target_language (LanguageCode): The language of the subtitle file to search for.
+        recursion (bool): If True, search subfolders. If False, only the current folder.
+        only_skip_if_subgen_subtitle (bool): If True, only skip if subtitles are auto-generated ("subgen").
 
     Returns:
-        True if a subtitle file with the given language is found in the folder,
-            False otherwise.
+        bool: True if a matching subtitle file is found, False otherwise.
     """
-    subtitle_extensions = ['.srt', '.vtt', '.sub', '.ass', '.ssa', '.idx', '.sbv', '.pgs', '.ttml', '.lrc']
+    subtitle_extensions = {'.srt', '.vtt', '.sub', '.ass', '.ssa', '.idx', '.sbv', '.pgs', '.ttml', '.lrc'}
     
-    # just get the name of the movie e.g. movie.2025.remastered
-    video_file_stripped = os.path.splitext(os.path.split(video_file)[1])[0]
-    folder_path = os.path.dirname(video_file)
-    for file_name in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, file_name)
-        
-        if os.path.isfile(file_path):
-            root, ext = os.path.splitext(file_name)
-            if root.startswith(video_file_stripped) and ext.lower() in subtitle_extensions:
-                parts = root[len(video_file_stripped):].lstrip(".").split(".")
-                
-                has_subgen = "subgen" in parts  # Checks if "subgen" is in parts
-                
-                #checking this first because e.g  LanguageCode.from_string("subgen") == LanguageCode.NONE is equal to True. Maybe handle this better with a check with a function like is language code. To check if part is a valid language before comparing it to target_language
-                
-                if target_language == LanguageCode.NONE:
-                    if only_skip_if_subgen_subtitle:
-                        if has_subgen:
-                            logger.debug("Subtitles from subgen found in the folder. ")
-                            return skip_if_language_is_not_set_but_subtitles_exist
-                        else:
-                            #might be other subtitles that have subgen in the name
-                            continue
-                    logger.debug("Subtitles exist in the folder. and only_skip_if_subgen_subtitle is False.")
-                    return skip_if_language_is_not_set_but_subtitles_exist                 
-                
-                if any(LanguageCode.from_string(part) == target_language for part in parts):
-                    # If the subtitle is found, return True
-                    if only_skip_if_subgen_subtitle:
-                        if has_subgen:
-                            logger.debug(f"Subtitles from subgen in '{target_language}' language found in the folder.")
-                            return True
-                        else:
-                            #might be other subtitles that have subgen in the name
-                            continue
-                    logger.debug(f"Subtitles in '{target_language}' language found in the folder.")
-                    return True
-        elif os.path.isdir(file_path) and recursion: 
-            # Looking in the subfolders of the video for subtitles
-            if has_subtitle_of_language_in_folder(os.path.join(file_path, os.path.split(video_file)[1]) , target_language, False):
-                # If the language is found in the subfolders, return True
+    video_folder = os.path.dirname(video_file)
+    video_name = os.path.splitext(os.path.basename(video_file))[0]
+
+    logging.debug(f"Searching for subtitles in: {video_folder}")
+    
+    for file_name in os.listdir(video_folder):
+        file_path = os.path.join(video_folder, file_name)
+
+        # If it's a file and has a subtitle extension
+        if os.path.isfile(file_path) and file_path.endswith(tuple(subtitle_extensions)):
+            subtitle_name, ext = os.path.splitext(file_name)
+
+            # Ensure the subtitle name starts with the video name
+            if not subtitle_name.startswith(video_name):
+                continue
+
+            # Extract parts after video filename
+            subtitle_parts = subtitle_name[len(video_name):].lstrip(".").split(".")
+            
+            # Check for "subgen"
+            has_subgen = "subgen" in subtitle_parts
+            
+            # Special handling if only skipping for subgen subtitles
+            if target_language == LanguageCode.NONE:
+                if only_skip_if_subgen_subtitle:
+                    if has_subgen:
+                        logging.debug("Skipping subtitles because they are auto-generated ('subgen').")
+                        return False
+                logging.debug("Skipping subtitles because language is NONE.")
+                return True  # Default behavior if subtitles exist
+
+            # Check if the subtitle file matches the target language
+            if is_valid_subtitle_language(subtitle_parts, target_language):
+                if only_skip_if_subgen_subtitle and not has_subgen:
+                    continue  # Ignore non-subgen subtitles if flag is set
+                logging.debug(f"Found matching subtitle: {file_name} for language {target_language.name} (subgen={has_subgen})")
                 return True
-    # If the language is not found, return False
+
+        # Recursively search subfolders
+        elif os.path.isdir(file_path) and recursion:
+            if has_subtitle_of_language_in_folder(os.path.join(file_path, os.path.basename(video_file)), target_language, False, only_skip_if_subgen_subtitle):
+                return True
+
     return False
+
+def is_valid_subtitle_language(subtitle_parts: List[str], target_language: LanguageCode) -> bool:
+    """Checks if any part of the subtitle name matches the target language."""
+    return any(LanguageCode.from_string(part) == target_language for part in subtitle_parts)
 
 def get_next_plex_episode(current_episode_rating_key, stay_in_season: bool = False):
     """
