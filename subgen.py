@@ -1,4 +1,4 @@
-subgen_version = '2025.02.94'
+subgen_version = '2025.02.95'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -537,15 +537,14 @@ async def detect_language(
             logging.info(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}\n Returning without detection")
             return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
             
-    # Log custom detection time settings if modified
+    # Update detection parameters if custom values are provided
     if detect_lang_length != detect_language_length:
-        logging.info(f"Detecting language on the first {detect_lang_length} seconds of the audio.")
+        logging.info(f"Language detection window: First {detect_lang_length}s of audio")
         detect_language_length = detect_lang_length
 
     if detect_lang_offset != detect_language_offset:
-        logging.info(f"Offsetting language detection by {detect_language_offset} seconds.")
+        logging.info(f"Language detection offset: {detect_lang_offset}s from start")
         detect_language_offset = detect_lang_offset
-        #audio_file = extract_audio_segment_to_memory(audio_file, detect_language_offset, detect_language_length)
     try:
         start_model()
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
@@ -634,7 +633,7 @@ def detect_language_task(path):
         logging.debug(f"Language Code: {language_code}")
 
     except Exception as e:
-        logging.info(f"Error detectign language of file with whisper: {e}")
+        logging.info(f"Error detecting language of file with whisper: {e}")
         
     finally:
         task_queue.task_done()
