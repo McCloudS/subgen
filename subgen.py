@@ -1,4 +1,4 @@
-subgen_version = '2025.02.92'
+subgen_version = '2025.02.93'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -713,7 +713,7 @@ def delete_model():
         if transcribe_device.lower() == 'cuda' and torch.cuda.is_available():
             torch.cuda.empty_cache()
             logging.debug("CUDA cache cleared.")
-    if os.name != 'nt': # don't garbage collect on Windows
+    if os.name != 'nt': # don't garbage collect on Windows, it will crash the script
         gc.collect()
 
 def isAudioFileExtension(file_extension):
