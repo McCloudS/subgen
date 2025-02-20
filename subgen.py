@@ -1,4 +1,4 @@
-subgen_version = '2025.02.93'
+subgen_version = '2025.02.94'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -617,9 +617,9 @@ async def get_audio_chunk(audio_file, offset=detect_language_offset, length=dete
 def detect_language_task(path):
     detected_language = LanguageCode.NONE
     language_code = 'und'
-    global detect_language_length 
+    global detect_language_length, detect_language_offset
 
-    logger.info(f"Detecting language of file: {path} on the first {detect_language_length} seconds of the file")
+    logger.info(f"Detecting language of file: {path} for {detect_language_length} seconds starting at {detect_language_offset} seconds in")
 
     try:
         start_model()
