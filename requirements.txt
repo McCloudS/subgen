@@ -1,5 +1,5 @@
 numpy
-git+https://github.com/jianfch/stable-ts.git
+stable-ts
 fastapi
 requests
 faster-whisper
