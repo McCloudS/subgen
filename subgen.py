@@ -1,4 +1,4 @@
-subgen_version = '2025.03.5'
+subgen_version = '2025.03.6'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1233,7 +1233,7 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
             ]
             
             # Skip logic if target_language is None
-            if target_language is None:
+            if target_language is LanguageCode.NONE:
                 if skip_if_language_is_not_set_but_subtitles_exist and subtitle_streams:
                     logging.debug("Language is not set, but internal subtitles exist.")
                     return True
