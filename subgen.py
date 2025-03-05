@@ -1,4 +1,4 @@
-subgen_version = '2025.03.6'
+subgen_version = '2025.03.7'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -518,6 +518,7 @@ async def asr(
 async def detect_language(
         audio_file: UploadFile = File(...),
         encode: bool = Query(default=True, description="Encode audio first through ffmpeg"), # This is always false from Bazarr
+        video_file: Union[str, None] = Query(default=None),
         detect_lang_length: int = Query(default=detect_language_length, description="Detect language on X seconds of the file"),
         detect_lang_offset: int = Query(default=detect_language_offset, description="Start Detect language X seconds into the file")
 ):    
@@ -546,6 +547,7 @@ async def detect_language(
         logging.info(f"Language detection offset: {detect_lang_offset}s from start")
         detect_language_offset = detect_lang_offset
     try:
+        logging.info(f"Detecting language for file '{video_file}' from Bazarr/detect-language webhook" if video_file else "Detecting language from Bazarr/detect-language webhook")
         start_model()
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
         
@@ -571,7 +573,10 @@ async def detect_language(
         logging.debug(f"Language detection: {detected_language.to_name()} (Code: {language_code})")
 
     except Exception as e:
-        logging.info(f"Error processing or transcribing Bazarr {audio_file.filename}: {e}")
+        logging.error(
+            f"Error processing or transcribing Bazarr file: {video_file} -- Exception: {e}" if video_file
+            else f"Error processing or transcribing Bazarr file Exception: {e}"
+        )
         
     finally:
         #await audio_file.close()
