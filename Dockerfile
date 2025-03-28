@@ -3,6 +3,8 @@ FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 AS builder
 
 WORKDIR /subgen
 
+ARG DEBIAN_FRONTEND=noninteractive
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
