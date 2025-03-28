@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     ffmpeg \
     git \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
