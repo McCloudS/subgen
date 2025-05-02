@@ -1,4 +1,4 @@
-subgen_version = '2025.03.7'
+subgen_version = '2025.05.1'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -95,6 +95,8 @@ only_skip_if_subgen_subtitle = convert_to_bool(os.getenv('ONLY_SKIP_IF_SUBGEN_SU
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
 skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False)) 
 should_whiser_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
+show_in_subname_subgen = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_SUBGEN', True))
+show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True)) 
 
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
@@ -826,8 +828,8 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
     Returns:
         The name of the subtitle file to be written.
     """
-    return f"{os.path.splitext(file_path)[0]}.subgen.{whisper_model.split('.')[0]}.{define_subtitle_language_naming(language, subtitle_language_naming_type)}.srt"
-        
+    return f"{os.path.splitext(file_path)[0]}{'.subgen' if show_in_subname_subgen else ''}{'.' + os.environ.get('WHISPER_MODEL').split('.')[0] if show_in_subname_model else ''}.{define_subtitle_language_naming(language, subtitle_language_naming_type)}.srt"
+
 def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> BytesIO | None:
     """
     Handles the possibility of a media file having multiple audio tracks.
