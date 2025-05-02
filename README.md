@@ -239,6 +239,8 @@ The following environment variables are available in Docker.  They will default 
 | PLEX_QUEUE_NEXT_EPISODE | False | Will queue the next Plex series episode for subtitle generation if subgen is triggered. |
 | PLEX_QUEUE_SEASON | False | Will queue the rest of the Plex season for subtitle generation if subgen is triggered. |
 | PLEX_QUEUE_SERIES | False | Will queue the whole Plex series for subtitle generation if subgen is triggered. |
+| SHOW_IN_SUBNAME_SUBGEN | True | Adds subgen to the subtitle file name. |
+| SHOW_IN_SUBNAME_MODEL | True | Adds Whisper model name to the subtitle file name. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
