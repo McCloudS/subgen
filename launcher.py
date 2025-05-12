@@ -74,8 +74,9 @@ def load_env_variables(env_filename='subgen.env'):
     try:
         with open(env_filename, 'r') as file:
             for line in file:
-                var, value = line.strip().split('=', 1)
-                os.environ[var] = value
+                if '=' in line:
+                    var, value = line.strip().split('=', 1)
+                    os.environ[var] = value
 
         print(f"Environment variables have been loaded from {env_filename}")
 
