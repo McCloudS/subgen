@@ -1,4 +1,4 @@
-subgen_version = '2025.05.6'
+subgen_version = '2025.05.8'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -1686,4 +1686,4 @@ if __name__ == "__main__":
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     if transcribe_folders:
         transcribe_existing(transcribe_folders)
-    uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True, log_config=None)
+    uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)
