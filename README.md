@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+12 Aug 2025: Added distil-large-v3.5
+
 7 Feb: Fixed (V)RAM clearing, added PLEX_QUEUE_SEASON, other extraneous fixes or refactorting.  
 
 23 Dec: Added PLEX_QUEUE_NEXT_EPISODE and PLEX_QUEUE_SERIES.  Will automatically start generating subtitles for the next episode in your series, or queue the whole series.  
@@ -191,7 +193,7 @@ The following environment variables are available in Docker.  They will default 
 | Variable                  | Default Value          | Description                                                                                                                                                                                                                                                                               |
 |---------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | TRANSCRIBE_DEVICE         | 'cpu'                  | Can transcribe via gpu (Cuda only) or cpu.  Takes option of "cpu", "gpu", "cuda".                                                                                                                     |
-| WHISPER_MODEL             | 'medium'               | Can be:'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-large-v3', 'distil-medium.en', 'distil-small.en', 'large-v3-turbo'                                   |
+| WHISPER_MODEL             | 'medium'               | Can be:'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1','large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-large-v3', 'distil-large-v3.5', 'distil-medium.en', 'distil-small.en', 'large-v3-turbo'                                   |
 | CONCURRENT_TRANSCRIPTIONS | 2                      | Number of files it will transcribe in parallel                                                                                                                                                                                                                                            |
 | WHISPER_THREADS           | 4                      | number of threads to use during computation                                                                                                                                                                                                                                               |
 | MODEL_PATH                | './models'                    | This is where the WHISPER_MODEL will be stored.  This defaults to placing it where you execute the script in the folder 'models'                                                                                                                                                                              |
