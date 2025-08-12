@@ -1,4 +1,4 @@
-subgen_version = '2025.08.1'
+subgen_version = '2025.08.3'
 
 from language_code import LanguageCode
 from datetime import datetime
@@ -828,9 +828,10 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
     Returns:
         The name of the subtitle file to be written.
     """
-    model_part = f".{os.path.splitext(whisper_model)[0]}" if show_in_subname_model else ""
     subgen_part = ".subgen" if show_in_subname_subgen else ""
+    model_part = f".{whisper_model}" if show_in_subname_model else ""
     lang_part = define_subtitle_language_naming(language, subtitle_language_naming_type)
+    
     return f"{os.path.splitext(file_path)[0]}{subgen_part}{model_part}.{lang_part}.srt"
     
 def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> BytesIO | None:
