@@ -1,5 +1,48 @@
 subgen_version = '2025.08.3'
 
+"""
+ENVIRONMENT VARIABLES DOCUMENTATION
+
+This application supports both new standardized environment variable names and legacy names
+for backwards compatibility. The new names follow a consistent naming convention:
+
+STANDARDIZED NAMING CONVENTION:
+- Use UPPERCASE with underscores for separation
+- Group related variables with consistent prefixes:
+  * PLEX_* for Plex server integration
+  * JELLYFIN_* for Jellyfin server integration
+  * PROCESS_* for media processing triggers
+  * SKIP_* for all skip conditions
+  * SUBTITLE_* for subtitle-related settings
+  * WHISPER_* for Whisper model settings
+  * TRANSCRIBE_* for transcription settings
+
+BACKWARDS COMPATIBILITY:
+Legacy environment variable names are still supported. If both new and old names are set,
+the new standardized name takes precedence.
+
+NEW NAME → OLD NAME (for backwards compatibility):
+- PLEX_TOKEN → PLEXTOKEN
+- PLEX_SERVER → PLEXSERVER
+- JELLYFIN_TOKEN → JELLYFINTOKEN
+- JELLYFIN_SERVER → JELLYFINSERVER
+- PROCESS_ADDED_MEDIA → PROCADDEDMEDIA
+- PROCESS_MEDIA_ON_PLAY → PROCMEDIAONPLAY
+- SUBTITLE_LANGUAGE_NAME → NAMESUBLANG
+- WEBHOOK_PORT → WEBHOOKPORT
+- SKIP_IF_EXTERNAL_SUBTITLES_EXIST → SKIPIFEXTERNALSUB
+- SKIP_IF_TARGET_SUBTITLES_EXIST → SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
+- SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE → SKIPIFINTERNALSUBLANG
+- SKIP_SUBTITLE_LANGUAGES → SKIP_LANG_CODES
+- SKIP_IF_AUDIO_LANGUAGES → SKIP_IF_AUDIO_TRACK_IS
+- SKIP_ONLY_SUBGEN_SUBTITLES → ONLY_SKIP_IF_SUBGEN_SUBTITLE
+- SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST → SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST
+
+MIGRATION GUIDE:
+Users can gradually migrate to the new names. Both will work simultaneously during the
+transition period. The old names may be deprecated in future versions.
+"""
+
 from language_code import LanguageCode
 from datetime import datetime
 from threading import Lock
@@ -37,19 +80,53 @@ from enum import Enum
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
     return str(in_bool).lower() in ('true', 'on', '1', 'y', 'yes')
+
+def get_env_with_fallback(new_name: str, old_name: str, default_value=None, convert_func=None):
+    """
+    Get environment variable with backwards compatibility fallback.
     
-plextoken = os.getenv('PLEXTOKEN', 'token here')
-plexserver = os.getenv('PLEXSERVER', 'http://192.168.1.111:32400')
-jellyfintoken = os.getenv('JELLYFINTOKEN', 'token here')
-jellyfinserver = os.getenv('JELLYFINSERVER', 'http://192.168.1.111:8096')
+    Args:
+        new_name: The new standardized environment variable name
+        old_name: The legacy environment variable name for backwards compatibility
+        default_value: Default value if neither variable is set
+        convert_func: Optional function to convert the value (e.g., convert_to_bool, int)
+    
+    Returns:
+        The environment variable value, converted if convert_func is provided
+    """
+    # Try new name first, then fall back to old name
+    value = os.getenv(new_name) or os.getenv(old_name)
+    
+    if value is None:
+        value = default_value
+    
+    # Apply conversion function if provided
+    if convert_func and value is not None:
+        return convert_func(value)
+    
+    return value
+    
+# Server Integration - with backwards compatibility
+plextoken = get_env_with_fallback('PLEX_TOKEN', 'PLEXTOKEN', 'token here')
+plexserver = get_env_with_fallback('PLEX_SERVER', 'PLEXSERVER', 'http://192.168.1.111:32400')
+jellyfintoken = get_env_with_fallback('JELLYFIN_TOKEN', 'JELLYFINTOKEN', 'token here')
+jellyfinserver = get_env_with_fallback('JELLYFIN_SERVER', 'JELLYFINSERVER', 'http://192.168.1.111:8096')
+
+# Whisper Configuration
 whisper_model = os.getenv('WHISPER_MODEL', 'medium')
 whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
 transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
-procaddedmedia = convert_to_bool(os.getenv('PROCADDEDMEDIA', True))
-procmediaonplay = convert_to_bool(os.getenv('PROCMEDIAONPLAY', True))
-namesublang = os.getenv('NAMESUBLANG', '')
-webhookport = int(os.getenv('WEBHOOKPORT', 9000))
+
+# Processing Control - with backwards compatibility
+procaddedmedia = get_env_with_fallback('PROCESS_ADDED_MEDIA', 'PROCADDEDMEDIA', True, convert_to_bool)
+procmediaonplay = get_env_with_fallback('PROCESS_MEDIA_ON_PLAY', 'PROCMEDIAONPLAY', True, convert_to_bool)
+
+# Subtitle Configuration - with backwards compatibility
+namesublang = get_env_with_fallback('SUBTITLE_LANGUAGE_NAME', 'NAMESUBLANG', '')
+
+# System Configuration - with backwards compatibility
+webhookport = get_env_with_fallback('WEBHOOK_PORT', 'WEBHOOKPORT', 9000, int)
 word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
 debug = convert_to_bool(os.getenv('DEBUG', True))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
@@ -67,37 +144,43 @@ lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
-skipifexternalsub = convert_to_bool(os.getenv('SKIPIFEXTERNALSUB', False))
-skip_if_to_transcribe_sub_already_exist = convert_to_bool(os.getenv('SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True))
-skipifinternalsublang = LanguageCode.from_string(os.getenv('SKIPIFINTERNALSUBLANG', ''))
+
+# Skip Configuration - with backwards compatibility
+skipifexternalsub = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
+skip_if_to_transcribe_sub_already_exist = get_env_with_fallback('SKIP_IF_TARGET_SUBTITLES_EXIST', 'SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True, convert_to_bool)
+skipifinternalsublang = LanguageCode.from_string(get_env_with_fallback('SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE', 'SKIPIFINTERNALSUBLANG', ''))
 plex_queue_next_episode = convert_to_bool(os.getenv('PLEX_QUEUE_NEXT_EPISODE', False))
 plex_queue_season = convert_to_bool(os.getenv('PLEX_QUEUE_SEASON', False))
 plex_queue_series = convert_to_bool(os.getenv('PLEX_QUEUE_SERIES', False))
+# Language and Skip Configuration - with backwards compatibility
 skip_lang_codes_list = (
-    [LanguageCode.from_string(code) for code in os.getenv("SKIP_LANG_CODES", "").split("|")]
-        if os.getenv('SKIP_LANG_CODES')
+    [LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES', '').split("|")]
+        if get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES')
     else []
 )
 force_detected_language_to = LanguageCode.from_string(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
-preferred_audio_languages = ( 
+preferred_audio_languages = (
     [LanguageCode.from_string(code) for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")]
     if os.getenv('PREFERRED_AUDIO_LANGUAGES')
     else []
-) # in order of preferrence
+) # in order of preference
 limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
 skip_if_audio_track_is_in_list = (
-    [LanguageCode.from_string(code) for code in os.getenv('SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
-    if os.getenv('SKIP_IF_AUDIO_TRACK_IS')
+    [LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
+    if get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS')
     else []
 )
+
+# Additional Subtitle Configuration - with backwards compatibility
 subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_639_2_B')
-only_skip_if_subgen_subtitle = convert_to_bool(os.getenv('ONLY_SKIP_IF_SUBGEN_SUBTITLE', False))
+only_skip_if_subgen_subtitle = get_env_with_fallback('SKIP_ONLY_SUBGEN_SUBTITLES', 'ONLY_SKIP_IF_SUBGEN_SUBTITLE', False, convert_to_bool)
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
-skip_if_language_is_not_set_but_subtitles_exist = convert_to_bool(os.getenv('SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False)) 
+skip_if_language_is_not_set_but_subtitles_exist = get_env_with_fallback('SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST', 'SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False, convert_to_bool)
 should_whiser_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
 show_in_subname_subgen = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_SUBGEN', True))
-show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True)) 
+show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True))
 
+# Advanced Configuration
 try:
     kwargs = ast.literal_eval(os.getenv('SUBGEN_KWARGS', '{}') or '{}')
 except ValueError:
