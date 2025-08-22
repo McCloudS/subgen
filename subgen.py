@@ -1136,7 +1136,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         return True
 
     # 4. Skip if an internal subtitle exists in skipifinternalsublang language.
-    if skipifinternalsublang and has_subtitle_language(file_path, skipifinternalsublang):
+    if skipifinternalsublang and has_subtitle_language_in_file(file_path, skipifinternalsublang):
         lang_name = skipifinternalsublang.to_name()
         logging.info(f"Skipping {base_name}: Internal subtitles in {lang_name} already exist.")
         return True
@@ -1144,7 +1144,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     # 5. Skip if an external subtitle exists in the namesublang language
     if skipifexternalsub and namesublang and LanguageCode.is_valid_language(namesublang):
         external_lang = LanguageCode.from_string(namesublang)
-        if has_subtitle_language(file_path, external_lang):
+        if has_subtitle_of_language_in_folder(file_path, external_lang):
             lang_name = external_lang.to_name()
             logging.info(f"Skipping {base_name}: External subtitles in {lang_name} already exist.")
             return True
