@@ -1,4 +1,4 @@
-subgen_version = '2025.08.7'
+subgen_version = '2025.08.8'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -537,7 +537,7 @@ async def asr(
     word_timestamps: bool = Query(default=False, description="Word-level timestamps"),  # Not used by Bazarr
 ):
     try:
-        logging.info(f"Transcribing file '{video_file}' from Bazarr/ASR webhook" if video_file else "Transcribing file from Bazarr/ASR webhook")
+        logging.info(f"{task.capitalize()} of file '{video_file}' from Bazarr/ASR webhook" if video_file else "{task.capitalize()} of file from Bazarr/ASR webhook")
         
         result = None
         random_name = ''.join(random.choices("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", k=6))
