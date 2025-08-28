@@ -1,4 +1,4 @@
-subgen_version = '2025.08.6'
+subgen_version = '2025.08.7'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -574,13 +574,13 @@ async def asr(
         elapsed_time = time.time() - start_time
         minutes, seconds = divmod(int(elapsed_time), 60)
         logging.info(
-            f"Transcription of '{video_file}' from Bazarr complete, it took {minutes} minutes and {seconds} seconds to complete." if video_file 
-            else f"Transcription complete, it took {minutes} minutes and {seconds} seconds to complete.")
+            f"{task.capitalize()} '{video_file}' from Bazarr complete, it took {minutes} minutes and {seconds} seconds to complete." if video_file 
+            else f"{task.capitalize()} complete, it took {minutes} minutes and {seconds} seconds to complete.")
     
     except Exception as e:
         logging.error(
-            f"Error processing or transcribing Bazarr file: {video_file} -- Exception: {e}" if video_file
-            else f"Error processing or transcribing Bazarr file Exception: {e}"
+            f"Error processing or {task.capitalize()} of Bazarr file: {video_file} -- Exception: {e}" if video_file
+            else f"Error processing or {task.capitalize()} of Bazarr file Exception: {e}"
         )
     
     finally:
@@ -593,7 +593,7 @@ async def asr(
             iter(result.to_srt_vtt(filepath=None, word_level=word_level_highlight)),
             media_type="text/plain",
             headers={
-                'Source': 'Transcribed using stable-ts from Subgen!',
+                'Source': '{task.capitalize()}d using stable-ts from Subgen!',
             }
         )
     else:
