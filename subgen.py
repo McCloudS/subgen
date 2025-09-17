@@ -1,4 +1,4 @@
-subgen_version = '2025.08.8'
+subgen_version = '2025.09.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -313,10 +313,10 @@ class MultiplePatternsFilter(logging.Filter):
 # Configure logging
 if debug:
     level = logging.DEBUG
-    logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 else:
     level = logging.INFO
-    logging.basicConfig(stream=sys.stderr, level=level)
+
+logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
 
 # Get the root logger
 logger = logging.getLogger()
