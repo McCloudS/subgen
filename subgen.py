@@ -1,4 +1,4 @@
-subgen_version = '2025.09.1'
+subgen_version = '2025.11.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -518,7 +518,7 @@ def receive_emby_webhook(
     
 @app.post("/batch")
 def batch(
-        directory: Union[str, None] = Query(default=None),
+        directory: str = Query(...),
         forceLanguage: Union[str, None] = Query(default=None)
 ):
     transcribe_existing(directory, LanguageCode.from_string(forceLanguage))
