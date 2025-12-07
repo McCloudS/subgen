@@ -1,38 +1,39 @@
-# SubGen Docker Compose Configuration
-# For GPU support, see docker-compose.gpu.yml or uncomment deploy section below
+# SubGen Docker Compose Configuration - GPU/CUDA Version
+# Requires NVIDIA GPU and nvidia-container-toolkit installed
 # Copy .env.example to .env and configure before running
 
 services:
   subgen:
-    container_name: subgen
+    container_name: subgen-gpu
 
-    # Option 1: Build from local Dockerfile (CPU-only)
+    # Option 1: Build from local Dockerfile (GPU/CUDA)
     build:
       context: .
-      dockerfile: Dockerfile.cpu
+      dockerfile: Dockerfile
 
     # Option 2: Use pre-built image (uncomment to use instead of building)
-    # image: mccloud/subgen:cpu
-
-    # For GPU support with NVIDIA (uncomment to enable)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    # image: mccloud/subgen:latest
 
     restart: unless-stopped
 
+    # NVIDIA GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1  # Use 'all' to use all GPUs
+              capabilities: [gpu]
+
     # Environment variables - configure in .env file
     environment:
-      # Core Configuration
+      # Core Configuration - GPU optimized
       - WHISPER_MODEL=${WHISPER_MODEL:-medium}
-      - TRANSCRIBE_DEVICE=${TRANSCRIBE_DEVICE:-cpu}
+      - TRANSCRIBE_DEVICE=${TRANSCRIBE_DEVICE:-gpu}
       - WHISPER_THREADS=${WHISPER_THREADS:-4}
       - CONCURRENT_TRANSCRIPTIONS=${CONCURRENT_TRANSCRIPTIONS:-2}
       - MODEL_PATH=/subgen/models
+      - COMPUTE_TYPE=${COMPUTE_TYPE:-auto}
 
       # Processing Behavior
       - PROCESS_ADDED_MEDIA=${PROCESS_ADDED_MEDIA:-True}
@@ -59,7 +60,7 @@ services:
       - PATH_MAPPING_FROM=${PATH_MAPPING_FROM:-/tv}
       - PATH_MAPPING_TO=${PATH_MAPPING_TO:-/tv}
 
-      # Advanced Options
+      # Advanced Options - GPU specific
       - DEBUG=${DEBUG:-True}
       - UPDATE=${UPDATE:-False}
       - CLEAR_VRAM_ON_COMPLETE=${CLEAR_VRAM_ON_COMPLETE:-True}
