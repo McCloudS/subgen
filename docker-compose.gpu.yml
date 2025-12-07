@@ -37,7 +37,7 @@ services:
 
       # Processing Behavior
       - PROCESS_ADDED_MEDIA=${PROCESS_ADDED_MEDIA:-True}
-      - PROCESS_MEDIA_ON_PLAY=${PROCESS_MEDIA_ON_PLAY:-False}
+      - PROCESS_MEDIA_ON_PLAY=${PROCESS_MEDIA_ON_PLAY:-True}
       - TRANSCRIBE_OR_TRANSLATE=${TRANSCRIBE_OR_TRANSLATE:-transcribe}
 
       # Subtitle Configuration
