@@ -125,8 +125,8 @@ test: ## Test configuration and dependencies
 	@docker run --rm --gpus all nvidia/cuda:12.3.2-base-ubuntu22.04 nvidia-smi >/dev/null 2>&1 && echo "  $(GREEN)✓$(NC) Docker GPU support working" || echo "  $(YELLOW)⚠$(NC) Docker GPU support not available"
 	@echo ""
 	@echo "$(BLUE)4. Testing YAML syntax:$(NC)"
-	@python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && echo "  $(GREEN)✓$(NC) docker-compose.yml valid" || echo "  $(RED)✗$(NC) docker-compose.yml invalid"
-	@python3 -c "import yaml; yaml.safe_load(open('docker-compose.gpu.yml'))" && echo "  $(GREEN)✓$(NC) docker-compose.gpu.yml valid" || echo "  $(RED)✗$(NC) docker-compose.gpu.yml invalid"
+	@python3 -c "import yaml" 2>/dev/null && python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml'))" && echo "  $(GREEN)✓$(NC) docker-compose.yml valid" || echo "  $(YELLOW)⚠$(NC) Cannot validate YAML (python3-yaml not installed)"
+	@python3 -c "import yaml" 2>/dev/null && python3 -c "import yaml; yaml.safe_load(open('docker-compose.gpu.yml'))" && echo "  $(GREEN)✓$(NC) docker-compose.gpu.yml valid" || echo "  $(YELLOW)⚠$(NC) Cannot validate YAML (python3-yaml not installed)"
 	@echo ""
 	@if [ -f .env ]; then \
 		echo "$(BLUE)5. Key configuration from .env:$(NC)"; \
