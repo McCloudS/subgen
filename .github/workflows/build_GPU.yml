@@ -3,8 +3,8 @@ name: Build_Subgen_Dockerfile_GPU
 on:
   push:
     paths:
-      - 'requirements.txt'
-      - 'Dockerfile'
+      - requirements.txt
+      - Dockerfile
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -21,23 +21,27 @@ jobs:
         id: get_version
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
-          echo "version=$version" >> $GITHUB_ENV
-
-      - name: Pre-job: free disk space
+          echo "version=$version" >> "$GITHUB_ENV"
+          
+      - name: Pre-job:free disk space
+        shell: bash
         run: |
           set -euo pipefail
           echo "Disk before cleanup:"
           df -h /
-          # Prune buildx builder data and docker caches (safe)
+
+          # Prune buildx builder data and docker caches
           sudo docker builder prune --all --force || true
           sudo docker system prune -af --volumes || true
-          # remove temp files
+
+          # Remove temp files
           sudo rm -rf /tmp/* || true
-          # small safety: remove old Docker buildkit cache dirs (if present)
+
+          # Remove old buildkit cache if present
           sudo rm -rf /var/lib/docker/buildkit || true
+
           echo "Disk after cleanup:"
           df -h /
-        shell: bash
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -54,14 +58,13 @@ jobs:
             mccloud/subgen:latest
             mccloud/subgen:${{ env.version }}
 
-      - name: Post-job: cleanup local docker artifacts
+      - name: Post-job:cleanup local docker artifacts
         if: always()
+        shell: bash
         run: |
           set -euo pipefail
-          # remove images/containers/build cache used during this job to free disk
           sudo docker builder prune --all --force || true
           sudo docker image prune -af || true
           sudo docker container prune -f || true
           sudo docker system prune -af --volumes || true
           df -h /
-        shell: bash
