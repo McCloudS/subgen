@@ -37,14 +37,3 @@ jobs:
           tags: |
             mccloud/subgen:latest
             mccloud/subgen:${{ env.version }}
-
-      - name: Post-job:cleanup local docker artifacts
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo docker builder prune --all --force || true
-          sudo docker image prune -af || true
-          sudo docker container prune -f || true
-          sudo docker system prune -af --volumes || true
-          df -h /
