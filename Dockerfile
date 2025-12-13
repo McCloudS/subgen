@@ -1,5 +1,5 @@
 # Stage 1: Builder
-FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.6.3-base-ubuntu22.04 AS builder
 
 WORKDIR /subgen
 
