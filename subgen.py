@@ -1,4 +1,4 @@
-subgen_version = '2026.01.1'
+subgen_version = '2026.01.2'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -74,6 +74,8 @@ from io import BytesIO
 import io
 import asyncio
 import torch
+import cutil
+import ctypes, ctypes.util
 from typing import List
 from enum import Enum
 
@@ -586,7 +588,7 @@ async def asr(
     finally:
         await audio_file.close()
         task_queue.task_done()
-        delete_model()
+        ()
     
     if result:
         return StreamingResponse(
@@ -804,6 +806,7 @@ def delete_model():
             logging.debug("CUDA cache cleared.")
     if os.name != 'nt': # don't garbage collect on Windows, it will crash the script
         gc.collect()
+        ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(0)
 
 def isAudioFileExtension(file_extension):
     return file_extension.casefold() in \
