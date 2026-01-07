@@ -1,4 +1,4 @@
-subgen_version = '2025.11.1'
+subgen_version = '2026.01.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -265,24 +265,24 @@ task_queue = DeduplicatedQueue()
 
 def transcription_worker():
     while True:
-        try:        
+        task = None
+        try:
             task = task_queue.get(block=True, timeout=1)
             if "type" in task and task["type"] == "detect_language":
                 detect_language_task(task['path'])
             elif 'Bazarr-' in task['path']:
                 logging.info(f"Task {task['path']} is being handled by ASR.")
             else:
-                logging.info(f"Task {task['path']} is being handled by Subgen.") 
+                logging.info(f"Task {task['path']} is being handled by Subgen.")
                 gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
-                task_queue.task_done()
-            # show queue
-            logging.debug(f"Queue status: {task_queue.qsize()} tasks remaining")
         except queue.Empty:
-            continue # This is ok, as we have a timeout, nothing needs to be printed
+            continue
         except Exception as e:
-            logging.error(f"Error processing task: {e}", exc_info=True) # Log the error and the traceback
-        else:
-            delete_model()  # Call delete_model() *only* if no exception occurred
+            logging.error(f"Error processing task: {e}", exc_info=True)
+        finally:
+            if task: # Ensure a task was actually retrieved before calling task_done
+                task_queue.task_done()
+            delete_model()
 
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
