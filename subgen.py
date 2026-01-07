@@ -1,4 +1,4 @@
-subgen_version = '2026.01.2'
+subgen_version = '2026.01.3'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -74,7 +74,6 @@ from io import BytesIO
 import io
 import asyncio
 import torch
-import cutil
 import ctypes, ctypes.util
 from typing import List
 from enum import Enum
