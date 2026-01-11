@@ -1,4 +1,4 @@
-subgen_version = '2026.01.7'
+subgen_version = '2026.01.8'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -281,14 +281,11 @@ def transcription_worker():
         except Exception as e:
             logging.error(f"Error processing task: {e}", exc_info=True)
         finally:
-            # FIX: Only attempt cleanup if we actually had a task
             if task: 
-                task_queue.task_done()
-                
-                # Prevent Bazarr/ASR tasks from unloading the model immediately, makes sure the /asr endpoint doesn't clear the model while working
                 if 'Bazarr-' not in task['path']:
+                    task_queue.task_done()
                     delete_model()
-
+                 
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
 
