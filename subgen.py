@@ -1,4 +1,4 @@
-subgen_version = '2026.01.8'
+subgen_version = '2026.01.9'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -281,9 +281,9 @@ def transcription_worker():
         except Exception as e:
             logging.error(f"Error processing task: {e}", exc_info=True)
         finally:
-            if task: 
+            if task:
+                task_queue.task_done()
                 if 'Bazarr-' not in task['path']:
-                    task_queue.task_done()
                     delete_model()
                  
 for _ in range(concurrent_transcriptions):
@@ -331,6 +331,9 @@ logging.getLogger("multipart").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("watchfiles").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 last_print_time = None
 
@@ -526,17 +529,16 @@ def batch(
     transcribe_existing(directory, LanguageCode.from_string(forceLanguage))
     
 # idea and some code for asr and detect language from https://github.com/ahmetoner/whisper-asr-webservice
-@app.post("//asr")
 @app.post("/asr")
 async def asr(
     task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
     language: Union[str, None] = Query(default=None),
     video_file: Union[str, None] = Query(default=None),
-    initial_prompt: Union[str, None] = Query(default=None),  # Not used by Bazarr
+    initial_prompt: Union[str, None] = Query(default=None),
     audio_file: UploadFile = File(...),
-    encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),  # Not used by Bazarr/always False
+    encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),
     output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
-    word_timestamps: bool = Query(default=False, description="Word-level timestamps"),  # Not used by Bazarr
+    word_timestamps: bool = Query(default=False, description="Word-level timestamps"),
 ):
     try:
         logging.info(f"{task.capitalize()} of file '{video_file}' from Bazarr/ASR webhook" if video_file else "{task.capitalize()} of file from Bazarr/ASR webhook")
@@ -587,8 +589,7 @@ async def asr(
     
     finally:
         await audio_file.close()
-        task_queue.task_done()
-        ()
+        delete_model()
     
     if result:
         return StreamingResponse(
@@ -600,7 +601,7 @@ async def asr(
         )
     else:
         return
-@app.post("//detect-language")
+     
 @app.post("/detect-language")
 async def detect_language(
         audio_file: UploadFile = File(...),
@@ -666,8 +667,6 @@ async def detect_language(
         )
         
     finally:
-        #await audio_file.close()
-        task_queue.task_done()
         delete_model()
 
         return {"detected_language": detected_language.to_name(), "language_code": language_code}
@@ -717,7 +716,6 @@ def detect_language_task(path):
 
         audio_segment = extract_audio_segment_to_memory(path, detect_language_offset, int(detect_language_length)).read()
         
-
         detected_language = LanguageCode.from_name(model.transcribe(audio_segment).language)
         logging.debug(f"Detected language: {detected_language.to_name()}")
         # reverse lookup of language -> code, ex: "english" -> "en", "nynorsk" -> "nn", ...
@@ -728,14 +726,13 @@ def detect_language_task(path):
         logging.info(f"Error detecting language of file with whisper: {e}")
         
     finally:
-        task_queue.task_done()
         delete_model()
+        
         # put task to transcribe this with the detected language
         task_id = { 'path': path, "transcribe_or_translate": transcribe_or_translate, 'force_language': detected_language }
         task_queue.put(task_id)
         
         #maybe modify the file to contain detected language so we won't trigger this again
-        
         return
 
 def extract_audio_segment_to_memory(input_file, start_time, duration):
