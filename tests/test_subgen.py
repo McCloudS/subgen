@@ -784,4 +784,4 @@ def test_transcribe_existing(monkeypatch, subgen_module, tmp_path):
     monkeypatch.setattr(subgen_module, "gen_subtitles_queue", lambda path, mode, lang=None: calls.append((path, mode, lang)))
 
     subgen_module.transcribe_existing(str(file_path), LanguageCode.ENGLISH)
-    assert calls
+    assert calls == [(str(file_path), subgen_module.transcribe_or_translate, LanguageCode.ENGLISH)]
