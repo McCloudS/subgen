@@ -1,7 +1,6 @@
 import asyncio
 import io
 import json
-import os
 import types
 
 import numpy as np
@@ -439,7 +438,7 @@ def test_handle_multiple_audio_tracks(monkeypatch, subgen_module):
     assert result is None
 
 
-def test_extract_audio_track_to_memory(subgen_module, monkeypatch):
+def test_extract_audio_track_to_memory(monkeypatch, subgen_module):
     assert subgen_module.extract_audio_track_to_memory("/media/show.mkv", None) is None
 
     def raise_error(*args, **kwargs):
@@ -740,7 +739,7 @@ def test_get_jellyfin_admin(subgen_module):
     assert subgen_module.get_jellyfin_admin(users) == "admin"
 
 
-def test_has_audio(monkeypatch, subgen_module, tmp_path):
+def test_has_audio(monkeypatch, tmp_path, subgen_module):
     file_path = tmp_path / "audio.mkv"
     file_path.write_text("data")
     subgen_module.is_valid_path = lambda path: True
