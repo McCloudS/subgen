@@ -1,4 +1,4 @@
-subgen_version = '2026.01.5'
+subgen_version = '2026.01.6'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -586,7 +586,8 @@ async def asr(
     
     finally:
         await audio_file.close()
-        delete_model()
+        task_queue.task_done()
+        ()
     
     if result:
         return StreamingResponse(
@@ -665,6 +666,7 @@ async def detect_language(
         
     finally:
         #await audio_file.close()
+        task_queue.task_done()
         delete_model()
 
         return {"detected_language": detected_language.to_name(), "language_code": language_code}
@@ -1140,7 +1142,6 @@ def find_language_audio_track(audio_tracks, find_languages):
             if track['language'] == language:
                 return language
     return None
-
 def find_default_audio_track_language(audio_tracks):    
     """
     Finds the language of the default audio track in the given list of audio tracks.
@@ -1257,7 +1258,6 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     logging.debug(f"Processing {base_name}: No skip conditions met.")
     return False
     
-
 def get_subtitle_languages(video_path):
     """
     Extract language codes from each audio stream in the video file using pyav.
