@@ -10,3 +10,5 @@
 subgen.env
 
 models/
+__pycache__/
+*.pyc
