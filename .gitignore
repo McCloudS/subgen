@@ -12,3 +12,6 @@ subgen.env
 models/
 __pycache__/
 *.pyc
+.coverage
+coverage.xml
+htmlcov/
