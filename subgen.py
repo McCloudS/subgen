@@ -1,4 +1,4 @@
-subgen_version = '2026.01.13'
+subgen_version = '2026.01.14'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -516,7 +516,7 @@ def receive_plex_webhook(
 ):
     try:
         plex_json = json.loads(payload)
-        logging.debug(f"Raw response: {payload}")
+        #logging.debug(f"Raw response: {payload}")
 
         if "PlexMediaServer" not in user_agent:
             return {"message": "This doesn't appear to be a properly configured Plex webhook, please review the instructions again"}
@@ -593,7 +593,7 @@ def receive_emby_webhook(
         user_agent: Union[str, None] = Header(None),
         data: Union[str, None] = Form(None),
 ):
-    logging.debug("Raw response: %s", data)
+    #logging.debug("Raw response: %s", data)
 
     if not data:
         return ""
