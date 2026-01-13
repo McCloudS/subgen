@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+13 Jan 2026: Probably fixed the runaway memory problems for CPU only.  Added `MODEL_CLEANUP_DELAY` which will wait X seconds before purging the model to clear up (V)RAM.  This mostly helps with Bazarr or when concurrent transcriptions is 1.  Rewrote ASR (Bazarr) queuing so it should respect queing and follow concurrent transcriptions.  Also fixed the error when too many Bazarr or ASR requests would start to fail.  
+
 26 Aug 2025: Renamed environment variables to make them slightly easier to understand.  Currently maintains backwards compatibility. See https://github.com/McCloudS/subgen/pull/229
 
 12 Aug 2025: Added distil-large-v3.5
@@ -245,6 +247,7 @@ The following environment variables are available in Docker.  They will default 
 | PLEX_QUEUE_SERIES | False | Will queue the whole Plex series for subtitle generation if subgen is triggered. |
 | SHOW_IN_SUBNAME_SUBGEN | True | Adds subgen to the subtitle file name. |
 | SHOW_IN_SUBNAME_MODEL | True | Adds Whisper model name to the subtitle file name. |
+| MODEL_CLEANUP_DELAY | 30 | Seconds to wait before clearing the Whisper model from memory. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
