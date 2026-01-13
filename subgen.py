@@ -1,4 +1,4 @@
-subgen_version = '2026.01.10'
+subgen_version = '2026.01.13'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1159,9 +1159,21 @@ def perform_model_cleanup():
         model_cleanup_timer = None
 
 def delete_model():
-    """Schedule model cleanup instead of doing it immediately."""
-    # Just schedule the cleanup, don't do it immediately
-    schedule_model_cleanup()
+    """
+    Only schedules a cleanup timer if the system is actually idle.
+    This prevents unnecessary timer resets when a large batch is being processed.
+    """
+    # 1. If we aren't supposed to clear VRAM, don't bother with timers at all.
+    if not clear_vram_on_complete:
+        return
+
+    # 2. Only schedule cleanup if the queue is empty AND no other workers are processing.
+    if task_queue.is_idle():
+        schedule_model_cleanup()
+    else:
+        # If there are 10 items left in the queue, we simply do nothing. 
+        # The very last worker to finish the last item will trigger the timer.
+        logging.debug("Tasks still in queue or processing; skipping model cleanup scheduling.")
 
 def isAudioFileExtension(file_extension):
     return file_extension.casefold() in AUDIO_EXTENSIONS
