@@ -1,4 +1,4 @@
-subgen_version = '2026.01.14'
+subgen_version = '2026.01.15'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -273,72 +273,51 @@ def generate_audio_hash(audio_content: bytes, task: str = None, language: str = 
 # REFACTORED DEDUPLICATED QUEUE WITH BETTER TRACKING
 # ============================================================================
 
-class DeduplicatedQueue(queue.Queue):
-    """Queue that prevents duplicates in both queued and in-progress tasks."""
+class DeduplicatedQueue(queue.PriorityQueue):
+    """Queue that prevents duplicates, handles priority, and tracks status."""
     def __init__(self):
         super().__init__()
-        self._queued = set() # Tracks task IDs in the queue
-        self._processing = set() # Tracks task IDs being processed
-        self._lock = Lock() # Ensures thread safety
+        self._queued = set()     # Tracks task IDs waiting in queue
+        self._processing = set() # Tracks task IDs currently being handled
+        self._lock = Lock()
 
     def put(self, item, block=True, timeout=None):
-        """
-        Add item to queue if not already queued or processing.
-        Uses 'path' field as the deduplication key.
-        
-        Returns: True if successfully queued, False if duplicate
-        """
-        with self._lock:
-            task_id = item["path"] # Use path as unique key
-            if task_id not in self._queued and task_id not in self._processing:
-                super().put(item, block, timeout)
-                self._queued.add(task_id)
-                logging.debug(f"Task added to queue: {task_id}")
-                return True
-            else:
-                logging.debug(f"Task {task_id} already queued or processing - skipped")
-                return False
-
-    def get(self, block=True, timeout=None):
-        """Remove and return item from queue, move to processing set"""
-        item = super().get(block, timeout)
         with self._lock:
             task_id = item["path"]
-            self._queued.discard(task_id) # Remove from queued set
-            self._processing.add(task_id) # Mark as in-progress
+            if task_id not in self._queued and task_id not in self._processing:
+                # Priority: 0 (Detect), 1 (ASR), 2 (Transcribe)
+                task_type = item.get("type", "transcribe")
+                priority = 0 if task_type == "detect_language" else (1 if task_type == "asr" else 2)
+                
+                # PriorityQueue requires a tuple: (priority, tie_breaker, item)
+                super().put((priority, time.time(), item), block, timeout)
+                self._queued.add(task_id)
+                return True
+            return False
+
+    def get(self, block=True, timeout=None):
+        # PriorityQueue returns the tuple, we want just the item
+        priority, timestamp, item = super().get(block, timeout)
+        with self._lock:
+            task_id = item["path"]
+            self._queued.discard(task_id)
+            self._processing.add(task_id)
         return item
 
-    def task_done(self):
-        """Mark task as complete and remove from processing"""
-        super().task_done()
-        with self._lock:
-            # Reset processing set when all tasks complete
-            if self.unfinished_tasks == 0:
-                self._processing.clear()
-
     def mark_done(self, item):
-        """Explicitly mark a specific task as done"""
         with self._lock:
             task_id = item["path"]
             self._processing.discard(task_id)
-            logging.debug(f"Task marked as done: {task_id}")
-
-    def is_processing(self):
-        """Return True if any tasks are being processed."""
-        with self._lock:
-            return len(self._processing) > 0
 
     def is_idle(self):
-        """Return True if queue is empty AND no tasks are processing."""
-        return self.empty() and not self.is_processing()
+        with self._lock:
+            return self.empty() and len(self._processing) == 0
 
     def get_queued_tasks(self):
-        """Return a list of queued task IDs."""
         with self._lock:
             return list(self._queued)
 
     def get_processing_tasks(self):
-        """Return a list of task IDs being processed."""
         with self._lock:
             return list(self._processing)
 
@@ -350,30 +329,37 @@ task_queue = DeduplicatedQueue()
 # ============================================================================
 
 def transcription_worker():
-    """Main worker thread that processes all task types."""
+    """Main worker thread with centralized logging and status tracking."""
     while True:
         task = None
         try:
             task = task_queue.get(block=True, timeout=1)
             task_type = task.get("type", "transcribe")
+            path = task.get("path", "unknown")
+            display_name = os.path.basename(path) if ("/" in str(path) or "\\" in str(path)) else path
             
+            # Status for START log
+            proc_count = len(task_queue.get_processing_tasks())
+            queue_count = len(task_queue.get_queued_tasks())
+            logging.info(f"WORKER START : [{task_type.upper():<10}] {display_name:^40} | Jobs: {proc_count} processing, {queue_count} queued")
+            
+            start_time = time.time()
             if task_type == "detect_language": 
-                logging.info(f"Processing language detection task: {task['path']}")
                 if "audio_content" in task: 
-                    # Uploaded audio (from /detect-language endpoint)
                     detect_language_from_upload(task)
                 else: 
-                    # Local file (from gen_subtitles_queue)
                     detect_language_task(task['path'])
-                    
             elif task_type == "asr":
-                logging.info(f"Processing ASR task: {task['path']}")
                 asr_task_worker(task)
-                
-            else: # transcribe type
-                logging.info(f"Processing transcription task: {task['path']}")
+            else: # transcribe
                 gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
-                
+            
+            # Status for FINISH log
+            elapsed = time.time() - start_time
+            m, s = divmod(int(elapsed), 60)
+            remaining_queued = len(task_queue.get_queued_tasks())
+            logging.info(f"WORKER FINISH: [{task_type.upper():<10}] {display_name:^40} in {m}m {s}s | Remaining: {remaining_queued} queued")
+
         except queue.Empty:
             continue
         except Exception as e:
@@ -417,7 +403,12 @@ if debug:
 else:
     level = logging.INFO
 
-logging.basicConfig(stream=sys.stderr, level=level, format="%(asctime)s %(levelname)s: %(message)s")
+logging.basicConfig(
+    stream=sys.stderr, 
+    level=level, 
+    format="%(asctime)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"  # This removes the ,123 part
+)
 
 # Get the root logger
 logger = logging.getLogger()
@@ -434,24 +425,53 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
-last_print_time = None
 
-#This forces a flush to print progress correctly
-def progress(seek, total):
-    sys.stdout.flush()
-    sys.stderr.flush()
-    if docker_status == 'Docker':
-        global last_print_time
-        # Get the current time
-        current_time = time.time()
-    
-        # Check if 5 seconds have passed since the last print
-        if last_print_time is None or (current_time - last_print_time) >= 5:
-            # Update the last print time
-            last_print_time = current_time
-            # Log the message
-            logging.info("")
+class ProgressHandler:
+    def __init__(self, filename):
+        self.filename = filename
+        self.start_time = time.time()
+        self.last_print_time = 0
+        self.interval = 5 
 
+    def __call__(self, seek, total):
+        if docker_status == 'Docker' or debug:
+            current_time = time.time()
+            if self.last_print_time == 0 or (current_time - self.last_print_time) >= self.interval:
+                self.last_print_time = current_time
+                
+                # 1. Math for Metrics
+                pct = int((seek / total) * 100) if total > 0 else 0
+                elapsed = current_time - self.start_time
+                speed = seek / elapsed if elapsed > 0 else 0
+                eta = (total - seek) / speed if speed > 0 else 0
+
+                # 2. Precise Time Formatting (removes milliseconds)
+                def fmt_t(seconds):
+                    m, s = divmod(int(seconds), 60)
+                    h, m = divmod(m, 60)
+                    if h > 0:
+                        return f"{h}:{m:02d}:{s:02d}"
+                    return f"{m:02d}:{s:02d}"
+
+                # 3. Get Queue Stats
+                proc = len(task_queue.get_processing_tasks())
+                queued = len(task_queue.get_queued_tasks())
+
+                # 4. Alignment Logic
+                # :<40  = Left-align, 40 chars wide (Filename)
+                # :>3   = Right-align, 3 chars wide (Percentage)
+                # :>5   = Right-align, 5 chars wide (Seconds)
+                # :>5   = Right-align, 5 chars wide (Time strings)
+                
+                clean_name = (self.filename[:37] + '..') if len(self.filename) > 40 else self.filename
+                
+                logging.info(
+                    f"[ {clean_name:<40}] {pct:>3}% | "
+                    f"{int(seek):>5}/{int(total):<5}s "
+                    f"[{fmt_t(elapsed):>5}<{fmt_t(eta):>5}, {speed:>5.2f}s/s] | "
+                    f"Jobs: {proc} processing, {queued} queued"
+                )
+                
 TIME_OFFSET = 5
 
 def appendLine(result):
@@ -716,7 +736,7 @@ async def asr(
                 return StreamingResponse(
                     iter(task_result.result),
                     media_type="text/plain",
-                    headers={'Source': f'{task.capitalize()}d using stable-ts from Subgen! '}
+                    headers={'Source': f'{task.capitalize()}d using stable-ts from Subgen!'}
                 )
         else:
             logging.error(f"ASR task {task_id} timed out")
@@ -744,7 +764,6 @@ def asr_task_worker(task_data: dict) -> None:
     result = None
     task_id = task_data.get('path', 'unknown')
     result_container = task_data.get('result_container')
-    start_time = time.time()
     
     try:
         task = task_data['task']
@@ -754,16 +773,11 @@ def asr_task_worker(task_data: dict) -> None:
         file_content = task_data['audio_content']
         encode = task_data['encode']
         
-        logging.info(
-            f"ASR {task.capitalize()} processing for '{video_file}' (ID: {task_id})" 
-            if video_file 
-            else f"ASR {task.capitalize()} processing (ID: {task_id})"
-        )
-        
         start_model()
 
         args = {}
-        args['progress_callback'] = progress
+        display_name = os.path.basename(video_file) if video_file else f"ASR-{task_id[:8]}"
+        args['progress_callback'] = ProgressHandler(display_name)
         
         # Handle audio encoding
         if encode:
@@ -778,16 +792,8 @@ def asr_task_worker(task_data: dict) -> None:
         args.update(kwargs)
         
         # Perform transcription
-        result = model.transcribe(task=task, language=language, **args)
+        result = model.transcribe(task=task, language=language, **args, verbose=None)
         appendLine(result)
-
-        elapsed_time = time.time() - start_time
-        minutes, seconds = divmod(int(elapsed_time), 60)
-        logging.info(
-            f"ASR {task.capitalize()} complete for '{video_file}' in {minutes}m {seconds}s (ID: {task_id})"
-            if video_file
-            else f"ASR {task.capitalize()} complete in {minutes}m {seconds}s (ID: {task_id})"
-        )
         
         # Set result for blocking endpoint
         if result_container:
@@ -808,104 +814,47 @@ def asr_task_worker(task_data: dict) -> None:
 @app.post("/detect-language")
 async def detect_language(
     audio_file: UploadFile = File(...),
-    encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),
+    encode: bool = Query(default=True),
     video_file: Union[str, None] = Query(default=None),
-    detect_lang_length: int = Query(default=detect_language_length, description="Detect language on X seconds of the file"),
-    detect_lang_offset: int = Query(default=detect_language_offset, description="Start Detect language X seconds into the file")
+    detect_lang_length: int = Query(default=detect_language_length),
+    detect_lang_offset: int = Query(default=detect_language_offset)
 ):
-    """
-    Detect language endpoint that uses audio content hash for deduplication. 
-    BLOCKS until processing is complete, then returns the result. 
-    """
-    
-    task_id = None
-    
     if force_detected_language_to: 
-        logging.debug(f"Skipping detect language, we have forced it as {force_detected_language_to.to_name()}")
         await audio_file.close()
-        return {
-            "detected_language": force_detected_language_to.to_name(),
-            "language_code": force_detected_language_to.to_iso_639_1()
-        }
+        return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
     
     try:
         file_content = await audio_file.read()
-        
         if not file_content:
-            await audio_file.close()
-            return {
-                "detected_language": "Unknown",
-                "language_code": "und",
-                "status": "error"
-            }
+            return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
+            
+        logging.info(f"API CALL: Immediate detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
         
-        # Generate deterministic hash from audio
-        audio_hash = generate_audio_hash(file_content, "detect_language")
-        task_id = f"detect-{audio_hash}"
+        # --- RUN IMMEDIATELY ---
+        start_model()
         
-        logging.debug(f"Generated audio hash: {audio_hash} for detect-language request")
+        if encode:
+            audio_data = extract_audio_segment_from_content(file_content, detect_lang_offset, detect_lang_length)
+        else:
+            audio_data = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+
+        # Run detection (verbose=False to keep logs clean)
+        result = model.transcribe(audio_data, input_sr=16000, verbose=False)
+        detected = LanguageCode.from_name(result.language)
         
-        logging.info(
-            f"Language detection received for '{video_file}' (ID: {task_id})"
-            if video_file
-            else f"Language detection received (ID: {task_id})"
-        )
+        logging.info(f"API RESULT: {detected.to_name()} ({detected.to_iso_639_1()})")
         
-        # Create result container for this task
-        with task_results_lock: 
-            if task_id not in task_results:
-                task_results[task_id] = TaskResult()
-            task_result = task_results[task_id]
-        
-        # Queue the detection task
-        detect_task_data = {
-            'path': task_id,
-            'type': 'detect_language',
-            'video_file': video_file,
-            'audio_content': file_content,
-            'encode': encode,
-            'detect_lang_length': detect_lang_length,
-            'detect_lang_offset': detect_lang_offset,
-            'result_container': task_result, # Pass result container to worker
+        return {
+            "detected_language": detected.to_name(),
+            "language_code": detected.to_iso_639_1()
         }
-        
-        if task_queue.put(detect_task_data):
-            logging.info(f"Language detection task {task_id} queued - audio hash: {audio_hash}")
-        else:
-            logging.info(f"Language detection task {task_id} already queued/processing - waiting for result")
-        
-        # BLOCK HERE until the worker completes the task
-        timeout = 3600 # 1 hour timeout
-        if task_result.wait(timeout=timeout):
-            if task_result.error:
-                logging.error(f"Language detection task {task_id} failed: {task_result.error}")
-                return {
-                    "detected_language": "Unknown",
-                    "language_code": "und",
-                    "status": "error",
-                    "error": task_result.error
-                }
-            else: 
-                # Return the detection result
-                logging.info(f"Language detection task {task_id} completed successfully")
-                return task_result.result
-        else:
-            logging.error(f"Language detection task {task_id} timed out after {timeout} seconds")
-            return {
-                "detected_language": "Unknown",
-                "language_code": "und",
-                "status": "timeout"
-            }
 
     except Exception as e: 
-        logging.error(f"Error in detect-language endpoint: {e}", exc_info=True)
-        return {
-            "detected_language": "Unknown",
-            "language_code": "und",
-            "status": "error"
-        }
+        logging.error(f"Error in API detect-language: {e}", exc_info=True)
+        return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
     finally: 
         await audio_file.close()
+        delete_model() # Schedules VRAM cleanup if system is idle
 
 # ============================================================================
 # DETECT LANGUAGE WORKER FOR UPLOADED AUDIO
@@ -1197,9 +1146,6 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
     """
 
     try:
-        logging.info(f"Queuing file for processing: {os.path.basename(file_path)}")
-
-        start_time = time.time()
         start_model()
         
         # Check if the file is an audio file before trying to extract audio 
@@ -1213,14 +1159,15 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             data = extracted_audio_file.read()
         
         args = {}
-        args['progress_callback'] = progress
+        display_name = os.path.basename(file_path)
+        args['progress_callback'] = ProgressHandler(display_name)
             
         if custom_regroup and custom_regroup.lower() != 'default':
             args['regroup'] = custom_regroup
             
         args.update(kwargs)
         
-        result = model.transcribe(data, language=force_language.to_iso_639_1(), task=transcription_type, **args)
+        result = model.transcribe(data, language=force_language.to_iso_639_1(), task=transcription_type, verbose=None, **args)
 
         appendLine(result)
 
@@ -1231,10 +1178,6 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             if not force_language: 
                 force_language = LanguageCode.from_string(result.language)
             result.to_srt_vtt(name_subtitle(file_path, force_language), word_level=word_level_highlight)
-
-        elapsed_time = time.time() - start_time
-        minutes, seconds = divmod(int(elapsed_time), 60)
-        logging.info(f"Completed transcription: {os.path.basename(file_path)} in {minutes}m {seconds}s")
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
