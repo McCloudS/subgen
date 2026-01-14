@@ -1,4 +1,4 @@
-subgen_version = '2026.01.16'
+subgen_version = '2026.01.17'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -161,11 +161,10 @@ skip_lang_codes_list = (
     else []
 )
 force_detected_language_to = LanguageCode.from_string(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
-preferred_audio_languages = (
-    [LanguageCode.from_string(code) for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")]
-    if os.getenv('PREFERRED_AUDIO_LANGUAGES')
-    else []
-) # in order of preference
+preferred_audio_languages = [
+    LanguageCode.from_string(code) 
+    for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")
+] # in order of preference
 limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
 skip_if_audio_track_is_in_list = (
     [LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
