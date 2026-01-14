@@ -1,4 +1,4 @@
-subgen_version = '2026.01.15'
+subgen_version = '2026.01.16'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -807,6 +807,39 @@ def asr_task_worker(task_data: dict) -> None:
     finally:
         delete_model()
 
+async def get_audio_chunk(audio_file, offset=detect_language_offset, length=detect_language_length, sample_rate=16000, audio_format=np.int16):
+    """
+    Extract a chunk of audio from a file, starting at the given offset and of the given length.
+    
+    :param audio_file: The audio file (UploadFile or file-like object).
+    :param offset: The offset in seconds to start the extraction.
+    :param length: The length in seconds for the chunk to be extracted.
+    :param sample_rate: The sample rate of the audio (default 16000).
+    :param audio_format: The audio format to interpret (default int16, 2 bytes per sample).
+    
+    :return: A numpy array containing the extracted audio chunk.
+    """
+
+    # Number of bytes per sample (for int16, 2 bytes per sample)
+    bytes_per_sample = np.dtype(audio_format).itemsize
+
+    # Calculate the start byte based on offset and sample rate
+    start_byte = offset * sample_rate * bytes_per_sample
+
+    # Calculate the length in bytes based on the length in seconds
+    length_in_bytes = length * sample_rate * bytes_per_sample
+
+    # Seek to the start position (this assumes the audio_file is a file-like object)
+    await audio_file.seek(start_byte)
+
+    # Read the required chunk of audio (length_in_bytes)
+    chunk = await audio_file.read(length_in_bytes)
+
+    # Convert the chunk into a numpy array (normalized to float32)
+    audio_data = np.frombuffer(chunk, dtype=audio_format).flatten().astype(np.float32) / 32768.0
+
+    return audio_data
+
 # ============================================================================
 # REFACTORED /DETECT-LANGUAGE ENDPOINT WITH HASH-BASED DEDUPLICATION AND BLOCKING
 # ============================================================================
@@ -828,21 +861,21 @@ async def detect_language(
         if not file_content:
             return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
             
-        logging.info(f"API CALL: Immediate detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
+        logging.info(f"Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
         
         # --- RUN IMMEDIATELY ---
         start_model()
         
         if encode:
-            audio_data = extract_audio_segment_from_content(file_content, detect_lang_offset, detect_lang_length)
+            audio_bytes = extract_audio_segment_from_content(await audio_file.read(), detect_lang_offset, detect_lang_length)
+            audio_data = np.frombuffer(audio_bytes, np.int16).flatten().astype(np.float32) / 32768.0
         else:
-            audio_data = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+            audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
-        # Run detection (verbose=False to keep logs clean)
-        result = model.transcribe(audio_data, input_sr=16000, verbose=False)
+        result = model.transcribe(audio_data, input_sr=16000, verbose=None)
         detected = LanguageCode.from_name(result.language)
         
-        logging.info(f"API RESULT: {detected.to_name()} ({detected.to_iso_639_1()})")
+        logging.info(f"Detect Language Result: {detected.to_name()} ({detected.to_iso_639_1()})")
         
         return {
             "detected_language": detected.to_name(),
