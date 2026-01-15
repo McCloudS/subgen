@@ -1,4 +1,4 @@
-subgen_version = '2026.01.17'
+subgen_version = '2026.01.18'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -775,7 +775,7 @@ def asr_task_worker(task_data: dict) -> None:
         start_model()
 
         args = {}
-        display_name = os.path.basename(video_file) if video_file else f"ASR-{task_id[:8]}"
+        display_name = os.path.basename(video_file) if video_file else task_id
         args['progress_callback'] = ProgressHandler(display_name)
         
         # Handle audio encoding
