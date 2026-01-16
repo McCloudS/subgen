@@ -1,4 +1,4 @@
-subgen_version = '2026.01.18'
+subgen_version = '2026.01.19'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -347,11 +347,29 @@ def transcription_worker():
                 if "audio_content" in task: 
                     detect_language_from_upload(task)
                 else: 
-                    detect_language_task(task['path'])
+                    # Pass the full task data so we don't lose the Plex ID
+                    detect_language_task(task['path'], original_task_data=task)
             elif task_type == "asr":
                 asr_task_worker(task)
             else: # transcribe
                 gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
+                
+                # --- METADATA REFRESH LOGIC ---
+                # This runs ONLY after subtitles are successfully generated
+                if 'plex_item_id' in task:
+                    try:
+                        logging.info(f"Refreshing Plex Metadata for item {task['plex_item_id']}")
+                        refresh_plex_metadata(task['plex_item_id'], task['plex_server'], task['plex_token'])
+                    except Exception as e:
+                        logging.error(f"Failed to refresh Plex metadata: {e}")
+                
+                if 'jellyfin_item_id' in task:
+                    try:
+                        logging.info(f"Refreshing Jellyfin Metadata for item {task['jellyfin_item_id']}")
+                        refresh_jellyfin_metadata(task['jellyfin_item_id'], task['jellyfin_server'], task['jellyfin_token'])
+                    except Exception as e:
+                        logging.error(f"Failed to refresh Jellyfin metadata: {e}")
+                # ------------------------------
             
             # Status for FINISH log
             elapsed = time.time() - start_time
@@ -368,7 +386,6 @@ def transcription_worker():
                 task_queue.task_done()
                 task_queue.mark_done(task)
                 delete_model()
-
 # Create worker threads
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
@@ -529,6 +546,7 @@ def receive_tautulli_webhook(
     return ""
 
 @app.post("/plex")
+@app.post("/plex")
 def receive_plex_webhook(
         user_agent: Union[str] = Header(None),
         payload: Union[str] = Form(),
@@ -544,13 +562,32 @@ def receive_plex_webhook(
         logging.debug(f"Plex event detected is: {event}")
 
         if (event == "library.new" and procaddedmedia) or (event == "media.play" and procmediaonplay):
-            fullpath = get_plex_file_name(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
+            rating_key = plex_json['Metadata']['ratingKey']
+            fullpath = get_plex_file_name(rating_key, plexserver, plextoken)
             logging.debug(f"Full file path: {fullpath}")
 
-            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
-            refresh_plex_metadata(plex_json['Metadata']['ratingKey'], plexserver, plextoken)
+            # Queue the current item with its specific ID for refreshing
+            gen_subtitles_queue(
+                path_mapping(fullpath), 
+                transcribe_or_translate, 
+                plex_item_id=rating_key, 
+                plex_server=plexserver, 
+                plex_token=plextoken
+            )
+            
+            # Note: refresh_plex_metadata is removed here; it is now handled by the worker thread.
+
             if plex_queue_next_episode:
-                gen_subtitles_queue(path_mapping(get_plex_file_name(get_next_plex_episode(plex_json['Metadata']['ratingKey'], stay_in_season=False), plexserver, plextoken)), transcribe_or_translate)
+                next_key = get_next_plex_episode(plex_json['Metadata']['ratingKey'], stay_in_season=False)
+                if next_key:
+                    next_file = get_plex_file_name(next_key, plexserver, plextoken)
+                    gen_subtitles_queue(
+                        path_mapping(next_file), 
+                        transcribe_or_translate,
+                        plex_item_id=next_key, # Pass the NEXT ID so it refreshes when done
+                        plex_server=plexserver,
+                        plex_token=plextoken
+                    )
 
             if plex_queue_series or plex_queue_season:
                 current_rating_key = plex_json['Metadata']['ratingKey']
@@ -560,7 +597,15 @@ def receive_plex_webhook(
                     try:
                         # Queue the current episode
                         file_path = path_mapping(get_plex_file_name(current_rating_key, plexserver, plextoken))
-                        gen_subtitles_queue(file_path, transcribe_or_translate)
+                        
+                        gen_subtitles_queue(
+                            file_path, 
+                            transcribe_or_translate,
+                            plex_item_id=current_rating_key, # Pass the specific loop ID for refreshing
+                            plex_server=plexserver,
+                            plex_token=plextoken
+                        )
+                        
                         logging.debug(f"Queued episode with ratingKey {current_rating_key}")
 
                         # Get the next episode
@@ -579,7 +624,7 @@ def receive_plex_webhook(
         logging.error(f"Failed to process Plex webhook: {e}")
 
     return ""
-
+ 
 @app.post("/jellyfin")
 def receive_jellyfin_webhook(
         user_agent: str = Header(None),
@@ -595,12 +640,16 @@ def receive_jellyfin_webhook(
             fullpath = get_jellyfin_file_name(ItemId, jellyfinserver, jellyfintoken)
             logging.debug(f"Full file path: {fullpath}")
 
-            gen_subtitles_queue(path_mapping(fullpath), transcribe_or_translate)
-            try:
-                refresh_jellyfin_metadata(ItemId, jellyfinserver, jellyfintoken)
-                logging.info(f"Metadata for item {ItemId} refreshed successfully.")
-            except Exception as e:
-                logging.error(f"Failed to refresh metadata for item {ItemId}: {e}")
+            # Queue item with Jellyfin metadata ID for delayed refresh
+            gen_subtitles_queue(
+                path_mapping(fullpath), 
+                transcribe_or_translate,
+                jellyfin_item_id=ItemId,
+                jellyfin_server=jellyfinserver,
+                jellyfin_token=jellyfintoken
+            )
+            
+            # Note: refresh_jellyfin_metadata removed here; handled by worker.
     else:
         return {
             "message": "This doesn't appear to be a properly configured Jellyfin webhook, please review the instructions again!"}
@@ -997,7 +1046,7 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
         logging.error(f"Error extracting audio segment: {str(e)}")
         return audio_content # Fallback to original
 
-def detect_language_task(path):
+def detect_language_task(path, original_task_data=None):
     """
     Worker function that detects language for a local file.
     Then queues the actual transcription with the detected language.
@@ -1035,6 +1084,12 @@ def detect_language_task(path):
             'transcribe_or_translate': transcribe_or_translate,
             'force_language': detected_language
         }
+        
+        # Carry over metadata (Plex IDs, etc.) from the original task
+        if original_task_data:
+            for key, value in original_task_data.items():
+                if key not in task_data:
+                    task_data[key] = value
         
         if task_queue.put(task_data):
             logging.debug(f"Queued transcription for detected language: {path}")
@@ -1467,7 +1522,7 @@ def find_default_audio_track_language(audio_tracks):
             return track['language']
     return None
     
-def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE) -> None:
+def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **kwargs) -> None:
     global task_queue
     
     if not has_audio(file_path):
@@ -1483,6 +1538,8 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     if not force_language and should_whiser_detect_audio_language:
         # make a detect language task
         task_id = {'path': file_path, 'type': "detect_language"}
+        # Pass metadata info (kwargs) to the detect task
+        task_id.update(kwargs)
         task_queue.put(task_id)
         logging.debug(f"Added to queue: {task_id['path']} [type: {task_id.get('type', 'transcribe')}]")
         return
@@ -1492,6 +1549,9 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         'transcribe_or_translate': transcription_type,
         'force_language': force_language
     }
+    # Pass metadata info (kwargs) to the transcribe task
+    task.update(kwargs)
+    
     task_queue.put(task)
     logging.debug(f"Added to queue: {task['path']}, {task['transcribe_or_translate']}, {task['force_language']}")
 
