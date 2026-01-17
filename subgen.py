@@ -1,4 +1,4 @@
-subgen_version = '2026.01.19'
+subgen_version = '2026.01.20'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1951,7 +1951,7 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
     """
 
     # Jellyfin API endpoint to refresh metadata for a specific item
-    url = f"{server_ip}/Items/{itemid}/Refresh"
+    url = f"{server_ip}/Items/{itemid}/Refresh?MetadataRefreshMode=FullRefresh"
 
     # Headers to include the Jellyfin token for authentication
     headers = {
