@@ -1,4 +1,4 @@
-subgen_version = '2026.01.21'
+subgen_version = '2026.01.22'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1437,7 +1437,7 @@ def choose_transcribe_language(file_path, forced_language):
     preferred_track_language = find_language_audio_track(audio_tracks, preferred_audio_languages)
 
     if preferred_track_language: 
-        logging.debug(f"Preferred language found: {preferred_track_language}")
+        #logging.debug(f"Preferred language found: {preferred_track_language}")
         return preferred_track_language
     
     default_language = find_default_audio_track_language(audio_tracks)
@@ -1720,7 +1720,7 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
                 # Convert the subtitle stream's language to a LanguageCode instance and compare
                 stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
                 if stream_language == target_language:
-                    logging.debug(f"Subtitles in '{target_language}' language found in the video.")
+                    #logging.debug(f"Subtitles in '{target_language}' language found in the video.")
                     return True
 
             #logging.debug(f"No subtitles in '{target_language}' language found in the video.")
