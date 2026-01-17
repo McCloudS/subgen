@@ -1,4 +1,4 @@
-subgen_version = '2026.01.20'
+subgen_version = '2026.01.21'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -311,6 +311,11 @@ class DeduplicatedQueue(queue.PriorityQueue):
     def is_idle(self):
         with self._lock:
             return self.empty() and len(self._processing) == 0
+
+    def is_active(self, task_id):
+        """Checks if a task_id is currently queued or processing."""
+        with self._lock:
+            return task_id in self._queued or task_id in self._processing
 
     def get_queued_tasks(self):
         with self._lock:
@@ -1417,7 +1422,7 @@ def choose_transcribe_language(file_path, forced_language):
         determined.
     """
     
-    logger.debug(f"choose_transcribe_language({file_path}, {forced_language})")
+    #logger.debug(f"choose_transcribe_language({file_path}, {forced_language})")
     
     if forced_language: 
         logger.debug(f"ENV FORCE_LANGUAGE is set: Forcing language to {forced_language}") 
@@ -1525,6 +1530,11 @@ def find_default_audio_track_language(audio_tracks):
 def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **kwargs) -> None:
     global task_queue
     
+    # Check if this file is already in the queue or being processed
+    if task_queue.is_active(file_path):
+        logging.debug(f"Ignored: {os.path.basename(file_path)} is already queued or processing.")
+        return
+    
     if not has_audio(file_path):
         logging.debug(f"{file_path} doesn't have any audio to transcribe!")
         return
@@ -1541,7 +1551,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         # Pass metadata info (kwargs) to the detect task
         task_id.update(kwargs)
         task_queue.put(task_id)
-        logging.debug(f"Added to queue: {task_id['path']} [type: {task_id.get('type', 'transcribe')}]")
+        #logging.debug(f"Added to queue: {task_id['path']} [type: {task_id.get('type', 'transcribe')}]")
         return
 
     task = {
@@ -1553,7 +1563,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     task.update(kwargs)
     
     task_queue.put(task)
-    logging.debug(f"Added to queue: {task['path']}, {task['transcribe_or_translate']}, {task['force_language']}")
+    #logging.debug(f"Added to queue: {task['path']}, {task['transcribe_or_translate']}, {task['force_language']}")
 
 def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     """
@@ -1622,7 +1632,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         logging.info(f"Skipping {base_name}: Contains a skipped audio language.")
         return True
 
-    logging.debug(f"Processing {base_name}: No skip conditions met.")
+    #logging.debug(f"Processing {base_name}: No skip conditions met.")
     return False
     
 def get_subtitle_languages(video_path):
@@ -1702,7 +1712,7 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
                     logging.debug("Language is not set, but internal subtitles exist.")
                     return True
                 if only_skip_if_subgen_subtitle:
-                    logging.debug("Skipping since only external subgen subtitles are considered.")
+                    #logging.debug("Skipping since only external subgen subtitles are considered.")
                     return False  # Skip if only looking for external subgen subtitles
 
             # Check if any subtitle stream matches the target language
@@ -1713,7 +1723,7 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
                     logging.debug(f"Subtitles in '{target_language}' language found in the video.")
                     return True
 
-            logging.debug(f"No subtitles in '{target_language}' language found in the video.")
+            #logging.debug(f"No subtitles in '{target_language}' language found in the video.")
             return False
 
     except Exception as e:
@@ -1735,7 +1745,7 @@ def has_subtitle_of_language_in_folder(video_file: str, target_language: Languag
     video_folder = os.path.dirname(video_file)
     video_name = os.path.splitext(os.path.basename(video_file))[0]
 
-    logging.debug(f"Searching for subtitles in: {video_folder}")
+    # logging.debug(f"Searching for subtitles in: {video_folder}")
 
     for file_name in os.listdir(video_folder):
         file_path = os.path.join(video_folder, file_name)
