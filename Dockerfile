@@ -32,14 +32,22 @@ COPY --from=builder /subgen/subgen.py .
 COPY --from=builder /subgen/language_code.py .
 COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
 
-# Install runtime dependencies
+# --- NEW SECTION: Install gosu and runtime deps ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     python3 \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONUNBUFFERED=1
 
-# Set command to run the application
+# Copy the entrypoint script and make it executable
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set the entrypoint to the script
+ENTRYPOINT ["/entrypoint.sh"]
+
+# The CMD is now passed as arguments to the entrypoint script
 CMD ["python3", "launcher.py"]
