@@ -4,7 +4,7 @@ COPY requirements.txt entrypoint.sh /
 
 # --- FIX 1: Install gosu ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 python3-pip curl gosu \
+    ffmpeg python3 python3-pip curl gosu tzdata \
     && python3 -m pip install -U --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124 \
     && python3 -m pip install -U --no-cache-dir -r requirements.txt \
     && apt-get purge -y --auto-remove python3-pip \
