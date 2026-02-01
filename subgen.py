@@ -54,7 +54,6 @@ import time
 import queue
 import logging
 import gc
-import random
 import hashlib
 from typing import Union, Any, Optional
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
@@ -65,18 +64,15 @@ from stable_whisper import Segment
 import requests
 import av
 import ffmpeg
-import whisper
 import ast
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 import faster_whisper
 from io import BytesIO
 import io
-import asyncio
 import torch
 import ctypes, ctypes.util
 from typing import List
-from enum import Enum
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values

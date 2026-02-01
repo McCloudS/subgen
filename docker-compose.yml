@@ -1,40 +1,48 @@
-#docker-compose.yml
-version: '2'
 services:
-  subgen:
-    container_name: subgen
-    tty: true
-    image: mccloud/subgen
-    environment:
-       - "WHISPER_MODEL=medium"
-       - "WHISPER_THREADS=4"
-       - "PROCADDEDMEDIA=True"
-       - "PROCMEDIAONPLAY=False"
-       - "NAMESUBLANG=aa"
-       - "SKIPIFINTERNALSUBLANG=eng"
-       - "PLEXTOKEN=plextoken"
-       - "PLEXSERVER=http://plexserver:32400"
-       - "JELLYFINTOKEN=token here"
-       - "JELLYFINSERVER=http://jellyfin:8096"
-       - "WEBHOOKPORT=9000"
-       - "CONCURRENT_TRANSCRIPTIONS=2"
-       - "WORD_LEVEL_HIGHLIGHT=False"
-       - "DEBUG=True"
-       - "USE_PATH_MAPPING=False"
-       - "PATH_MAPPING_FROM=/tv"
-       - "PATH_MAPPING_TO=/Volumes/TV"
-       - "TRANSCRIBE_DEVICE=cpu"
-       - "CLEAR_VRAM_ON_COMPLETE=True"
-       - "MODEL_PATH=./models"
-       - "UPDATE=False"
-       - "APPEND=False"
-       - "USE_MODEL_PROMPT=False"
-       - "CUSTOM_MODEL_PROMPT="
-       - "LRC_FOR_AUDIO_FILES=True"
-       - "CUSTOM_REGROUP=cm_sl=84_sl=42++++++1"
-    volumes:
-       - "${TV}:/tv"
-       - "${MOVIES}:/movies"
-       - "${APPDATA}/subgen/models:/subgen/models"
-    ports:
-       - "9000:9000"
+   subgen:
+      container_name: subgen
+      tty: true
+      image: mccloud/subgen
+      environment:
+         - "WHISPER_MODEL=medium"
+         - "WHISPER_THREADS=4"
+         - "PROCADDEDMEDIA=True"
+         - "PROCMEDIAONPLAY=False"
+         - "NAMESUBLANG=aa"
+         - "SKIPIFINTERNALSUBLANG=eng"
+         - "PLEXTOKEN=plextoken"
+         - "PLEXSERVER=http://plexserver:32400"
+         - "JELLYFINTOKEN=token here"
+         - "JELLYFINSERVER=http://jellyfin:8096"
+         - "WEBHOOKPORT=9000"
+         - "CONCURRENT_TRANSCRIPTIONS=2"
+         - "WORD_LEVEL_HIGHLIGHT=False"
+         - "DEBUG=True"
+         - "USE_PATH_MAPPING=False"
+         - "PATH_MAPPING_FROM=/tv"
+         - "PATH_MAPPING_TO=/Volumes/TV"
+         - "TRANSCRIBE_DEVICE=cpu"
+         - "CLEAR_VRAM_ON_COMPLETE=True"
+         - "MODEL_PATH=./models"
+         - "UPDATE=False"
+         - "APPEND=False"
+         - "USE_MODEL_PROMPT=False"
+         - "CUSTOM_MODEL_PROMPT="
+         - "LRC_FOR_AUDIO_FILES=True"
+         - "CUSTOM_REGROUP=cm_sl=84_sl=42++++++1"
+      volumes:
+         - "${TV}:/tv"
+         - "${MOVIES}:/movies"
+         - "${APPDATA}/subgen/models:/subgen/models"
+      ports:
+         - "9000:9000"
+      # # ⚠️ FOR GPU IMAGE ⚠️
+      # # uncomment folllowing lines to pass nvidia gpu to the container
+      # deploy:
+      #    resources:
+      #       reservations:
+      #          devices:
+      #             - driver: nvidia
+      #               count: 1
+      #               capabilities:
+      #                  - gpu

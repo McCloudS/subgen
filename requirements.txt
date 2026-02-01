@@ -1,10 +1,9 @@
 numpy
-stable-ts
+stable-ts-whisperless
 fastapi
 requests
 faster-whisper
 uvicorn
 python-multipart
 ffmpeg-python
-whisper
 watchdog
