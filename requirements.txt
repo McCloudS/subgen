@@ -1,3 +1,5 @@
+torch==2.10.0+cu124 -f https://download.pytorch.org/whl/torch_stable.html
+torchaudio==2.10.0+cu124 -f https://download.pytorch.org/whl/torch_stable.html
 numpy
 stable-ts-whisperless
 fastapi
