@@ -1226,7 +1226,7 @@ def write_lrc(result, file_path):
             fraction = int((segment.start - int(segment.start)) * 100)
             # remove embedded newlines in text, since some players ignore text after newlines
             text = segment.text[:].replace('\n', '')
-            file.write(f"[{minutes:02d}:{seconds:02d}. {fraction:02d}]{text}\n")
+            file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
 
 def gen_subtitles(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE) -> None:
     """Generates subtitles for a video file. 
