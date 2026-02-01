@@ -1,33 +1,21 @@
-# Stage 1: Builder
-FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04 AS builder
+FROM nvidia/cuda:12.3.2-base-ubuntu22.04
 
-WORKDIR /subgen
-ARG DEBIAN_FRONTEND=noninteractive
+COPY requirements.txt entrypoint.sh /
 
-# Install system dependencies
+# --- FIX 1: Install gosu ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip ffmpeg git tzdata \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-
-# Stage 2: Runtime
-FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
+    ffmpeg python3 python3-pip curl gosu \
+    && python3 -m pip install -U --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu124 \
+    && python3 -m pip install -U --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove python3-pip \
+    && rm -rf \
+    /var/lib/apt/lists/* \
+    /tmp/*
 
 WORKDIR /subgen
 
 # Copy files
-COPY --from=builder /subgen/launcher.py .
-COPY --from=builder /subgen/subgen.py .
-COPY --from=builder /subgen/language_code.py .
-COPY --from=builder /usr/local/lib/python3.10/dist-packages /usr/local/lib/python3.10/dist-packages
-
-# --- FIX 1: Install gosu ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 curl gosu \
-    && rm -rf /var/lib/apt/lists/*
+COPY launcher.py subgen.py language_code.py /subgen/
 
 # --- FIX 2: Create a dedicated cache directory ---
 # This prevents the app from trying to write to root-owned /.cache
@@ -35,14 +23,10 @@ RUN mkdir -p /cache && chmod 777 /cache
 
 # --- FIX 3: Set Environment Vars to use the new cache ---
 # This forces HuggingFace and Matplotlib to write to our writable folder
-ENV XDG_CACHE_HOME=/cache
-ENV HF_HOME=/cache/huggingface
-ENV MPLCONFIGDIR=/cache/matplotlib
-ENV PYTHONUNBUFFERED=1
-
-# Copy and enable entrypoint
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+ENV XDG_CACHE_HOME=/cache \
+    HF_HOME=/cache/huggingface \
+    MPLCONFIGDIR=/cache/matplotlib \
+    PYTHONUNBUFFERED=1 
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "launcher.py"]
