@@ -4,6 +4,8 @@
 <details>
 <summary>Updates:</summary>
 
+Feb 2026: Contributor helped cut the GPU container size in half.  Added `ASR_TIMEOUT` as environment variable to timeout ASR endpoint transcriptions after X seconds.
+
 31 Jan 2026: Added the ability to run the container 'rootless', accepts `PUID` and `PGID` as environment variables and _should_ take `user` at a container level (Podman), let me know!.
 
 13 Jan 2026: Probably fixed the runaway memory problems for CPU only.  Added `MODEL_CLEANUP_DELAY` which will wait X seconds before purging the model to clear up (V)RAM.  This mostly helps with Bazarr or when concurrent transcriptions is 1.  Rewrote ASR (Bazarr) queuing so it should respect queing and follow concurrent transcriptions.  Also fixed the error when too many Bazarr or ASR requests would start to fail.  
@@ -252,6 +254,7 @@ The following environment variables are available in Docker.  They will default 
 | MODEL_CLEANUP_DELAY | 30 | Seconds to wait before clearing the Whisper model from memory. |
 | PUID | 99 | UserID (see: https://docs.linuxserver.io/images/docker-bazarr/#user-group-identifiers) |
 | PGID | 100 | GroupID (see: https://docs.linuxserver.io/images/docker-bazarr/#user-group-identifiers) |
+| ASR_TIMEOUT | 18000 | In seconds (defaults to 5 hours), the amount of time to wait before killing an ASR task for not finishing. |
 
 ### Images:
 `mccloud/subgen:latest` is GPU or CPU <br>
