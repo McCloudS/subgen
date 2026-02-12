@@ -1,4 +1,4 @@
-subgen_version = '2026.02.0'
+subgen_version = '2026.02.9'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -142,6 +142,7 @@ custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
+asr_timeout = int(os.getenv('ASR_TIMEOUT', 18000))
 
 # Skip Configuration - with backwards compatibility
 skipifexternalsub = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
@@ -771,8 +772,7 @@ async def asr(
             logging.info(f"ASR task {task_id} already queued/processing - waiting for result")
         
         # BLOCK HERE until worker completes (respects concurrent_transcriptions)
-        timeout = 3600 # 1 hour
-        if task_result.wait(timeout=timeout):
+        if task_result.wait(timeout=asr_timeout):
             if task_result.error:
                 logging.error(f"ASR task {task_id} failed: {task_result.error}")
                 return {
@@ -792,7 +792,7 @@ async def asr(
             return {
                 "status": "timeout",
                 "task_id": task_id,
-                "message": f"ASR processing timed out after {timeout} seconds"
+                "message": f"ASR processing timed out after {asr_timeout} seconds"
             }
             
     except Exception as e: 
