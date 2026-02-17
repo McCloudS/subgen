@@ -1,0 +1,15 @@
+# Test Requirements for Subgen Memory Leak Tests
+#
+# Install these in addition to the main requirements.txt
+# Usage: pip install -r requirements-test.txt
+
+# Testing framework
+pytest>=9.0.0
+pytest-asyncio>=1.3.0
+pytest-timeout>=2.4.0
+
+# Memory profiling (optional, for advanced profiling)
+# memory-profiler>=0.61.0
+
+# Code coverage (optional)
+# pytest-cov>=4.1.0
