@@ -1063,10 +1063,11 @@ def detect_language_task(path, original_task_data=None):
         start_model()
         
         audio_segment = extract_audio_segment_to_memory(
+        # MEMLEAK-FIX-3: extract_audio_segment_to_memory now returns bytes directly
             path, 
             detect_language_offset, 
             int(detect_language_length)
-        ).read()
+        )
         
         detected_language = LanguageCode.from_name(model.transcribe(audio_segment).language)
         
@@ -1104,7 +1105,10 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
     :param input_file: UploadFile object or path to the input audio file
     :param start_time: Start time in seconds (e.g., 60 for 1 minute)
     :param duration: Duration in seconds (e.g., 30 for 30 seconds)
-    :return: BytesIO object containing the audio segment
+    :return: bytes containing the audio segment, or None on error
+    
+    MEMLEAK-FIX-3: Changed to return bytes directly instead of BytesIO to prevent memory leak.
+    Previously returned BytesIO objects were never closed, causing 480KB-10MB leak per call.
     """
     try:
         if hasattr(input_file, 'file') and hasattr(input_file.file, 'read'): # Handling UploadFile
@@ -1131,7 +1135,8 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         if not out:
             raise ValueError("FFmpeg output is empty, possibly due to invalid input.")
         
-        return io.BytesIO(out) # Convert output to BytesIO for in-memory processing
+        # MEMLEAK-FIX-3: Return bytes directly instead of BytesIO to prevent memory leak
+        return out
 
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr.decode()}")
@@ -1243,8 +1248,9 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         data = file_path
         # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
+        # MEMLEAK-FIX-3: handle_multiple_audio_tracks now returns bytes directly
         if extracted_audio_file:
-            data = extracted_audio_file.read()
+            data = extracted_audio_file
         
         args = {}
         display_name = os.path.basename(file_path)
@@ -1315,10 +1321,13 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
     
     return f"{os.path.splitext(file_path)[0]}{subgen_part}{model_part}.{lang_part}.srt"
     
-def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> BytesIO | None:
+def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> bytes | None:
     """
     Handles the possibility of a media file having multiple audio tracks. 
     
+    
+    MEMLEAK-FIX-3: Changed to return bytes directly instead of BytesIO to prevent memory leak.
+    Previously returned BytesIO objects were never closed, causing memory leaks.
     If the media file has multiple audio tracks, it will extract the audio track of the selected language. Otherwise, it will extract the first audio track.
     
     Parameters:
@@ -1326,7 +1335,7 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
     language (LanguageCode | None): The language of the audio track to search for. If None, it will extract the first audio track.
     
     Returns:
-    io.BytesIO | None: The audio or None if no audio track was extracted.
+    bytes | None: The audio data as bytes, or None if no audio track was extracted.
     """
     audio_bytes = None
     audio_tracks = get_audio_tracks(file_path)
@@ -1349,7 +1358,7 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
             return None
     return audio_bytes
 
-def extract_audio_track_to_memory(input_video_path, track_index) -> BytesIO | None:
+def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None:
     """
     Extract a specific audio track from a video file to memory using FFmpeg. 
 
@@ -1358,7 +1367,10 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> BytesIO | No
         track_index (int): The index of the audio track to extract. If None, skip extraction.
 
     Returns:
-        io.BytesIO | None: The audio data as a BytesIO object, or None if extraction failed.
+        bytes | None: The audio data as bytes, or None if extraction failed.
+        
+        MEMLEAK-FIX-3: Changed to return bytes directly instead of BytesIO to prevent memory leak.
+        Previously returned BytesIO objects were never closed, causing memory leaks.
     """
     if track_index is None:
         logging.warning(f"Skipping audio track extraction for {input_video_path} because track index is None")
@@ -1378,8 +1390,8 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> BytesIO | No
             )
             .run(capture_stdout=True, capture_stderr=True) # Capture output in memory
         )
-        # Return the audio data as a BytesIO object
-        return BytesIO(out)
+        # MEMLEAK-FIX-3: Return bytes directly instead of BytesIO to prevent memory leak
+        return out
 
     except ffmpeg.Error as e:
         print("An error occurred:", e.stderr.decode())

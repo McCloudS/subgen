@@ -10,3 +10,12 @@
 subgen.env
 
 models/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.pytest_cache/
