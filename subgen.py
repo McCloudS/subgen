@@ -232,6 +232,7 @@ class TaskResult:
         return self.done.wait(timeout)
 
 # Dictionary to store task results keyed by task_id
+# MEMLEAK-FIX-1: Entries are cleaned up in /asr endpoint finally block to prevent unbounded growth
 task_results = {}
 task_results_lock = Lock()
 
@@ -800,6 +801,11 @@ async def asr(
         return {"status": "error", "message": f"Error: {str(e)}"}
     finally:
         await audio_file.close()
+        # MEMLEAK-FIX-1: Clean up task_results entry after task completes
+        with task_results_lock:
+            if task_id in task_results:
+                del task_results[task_id]
+                logging.debug(f"Cleaned up task_results entry for {task_id}")
 
 # ============================================================================
 # ASR WORKER FUNCTION
