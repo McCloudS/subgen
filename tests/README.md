@@ -365,3 +365,63 @@ When adding new tests:
 - [pytest markers](https://docs.pytest.org/en/stable/how-to/mark.html)
 - [Context managers](https://docs.python.org/3/library/contextlib.html)
 - [Memory profiling in Python](https://docs.python.org/3/library/gc.html)
+
+## Additional Memory Leaks (Phase 2)
+
+Seven additional memory leaks have been identified for remediation:
+
+4. **LEAK #4**: `DeduplicatedQueue` internal sets never cleaned (~5-20MB per 1000 ops)
+5. **LEAK #5**: PyAV container objects not explicitly closed (~10-50MB per 100 files)
+6. **LEAK #6**: HTTP response objects not closed (~5-10MB per 1000 requests)
+7. **LEAK #7**: XML ElementTree objects not cleared (~10-50MB per 1000 parses)
+8. **LEAK #8**: File Observer never stopped (~2-5MB, thread leak)
+9. **LEAK #9**: Whisper model segments accumulate (~1-5MB per 1000 transcriptions)
+10. **LEAK #10**: FFmpeg process pipes not flushed (~0.5-2MB, edge cases)
+
+### Extended Test Structure
+
+```
+tests/
+├── unit/
+│   ├── test_leak1_task_results.py        # MEMLEAK-FIX-1 (FIXED)
+│   ├── test_leak2_timer_threads.py       # MEMLEAK-FIX-2 (FIXED)
+│   ├── test_leak3_bytesio.py             # MEMLEAK-FIX-3 (FIXED)
+│   ├── test_leak4_deduplicated_queue.py  # LEAK #4 (NEW)
+│   ├── test_leak5_pyav_containers.py     # LEAK #5 (NEW)
+│   ├── test_leak6_http_responses.py      # LEAK #6 (NEW)
+│   ├── test_leak7_xml_elementtree.py     # LEAK #7 (NEW)
+│   └── test_leak8_9_10_combined.py       # LEAKS #8, #9, #10 (NEW)
+```
+
+### Running Tests for New Leaks
+
+```bash
+# All new leak tests
+pytest tests/unit/test_leak*.py -v
+
+# Individual leak tests
+pytest tests/unit/test_leak4_deduplicated_queue.py -v
+pytest tests/unit/test_leak5_pyav_containers.py -v
+pytest tests/unit/test_leak6_http_responses.py -v
+pytest tests/unit/test_leak7_xml_elementtree.py -v
+pytest tests/unit/test_leak8_9_10_combined.py -v
+
+# All memory leak tests (including original 3)
+pytest tests/ -v -m memory_leak
+```
+
+### Priority Order for Fixes
+
+**Priority 1 (Critical)**:
+- LEAK #4: DeduplicatedQueue - unbounded growth in high-volume scenarios
+- LEAK #5: PyAV containers - FFmpeg resource accumulation
+
+**Priority 2 (Important)**:
+- LEAK #6: HTTP responses - affects Plex/Jellyfin integration
+- LEAK #8: File Observer - thread and memory leak in monitor mode
+
+**Priority 3 (Nice-to-Have)**:
+- LEAK #7: XML ElementTree - GC eventually cleans, but optimization worthwhile
+- LEAK #9: Whisper segments - small but accumulates
+- LEAK #10: FFmpeg pipes - edge case, low frequency
+
