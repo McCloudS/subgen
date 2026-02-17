@@ -1158,7 +1158,9 @@ def start_model():
         model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def schedule_model_cleanup():
-    """Schedule model cleanup with a delay to allow concurrent requests."""
+    """Schedule model cleanup with a delay to allow concurrent requests.
+    
+    MEMLEAK-FIX-2: Properly joins cancelled timers to prevent thread accumulation."""
     global model_cleanup_timer, model_cleanup_lock
     
     with model_cleanup_lock:
@@ -1166,6 +1168,8 @@ def schedule_model_cleanup():
         if model_cleanup_timer is not None:
             model_cleanup_timer.cancel()
             logging.debug("Cancelled previous model cleanup timer")
+            # MEMLEAK-FIX-2: Join timer thread to prevent accumulation
+            model_cleanup_timer.join()
         
         # Schedule a new cleanup timer
         model_cleanup_timer = Timer(model_cleanup_delay, perform_model_cleanup)
