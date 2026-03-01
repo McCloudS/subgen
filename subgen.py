@@ -55,6 +55,7 @@ import queue
 import logging
 import gc
 import hashlib
+import asyncio
 from typing import Union, Any, Optional
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
 from fastapi.responses import StreamingResponse
@@ -154,17 +155,17 @@ plex_queue_series = convert_to_bool(os.getenv('PLEX_QUEUE_SERIES', False))
 # Language and Skip Configuration - with backwards compatibility
 skip_lang_codes_list = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES', '').split("|")]
         if get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES')
-    else []
+    else[]
 )
 force_detected_language_to = LanguageCode.from_string(os.getenv('FORCE_DETECTED_LANGUAGE_TO', ''))
-preferred_audio_languages = [
+preferred_audio_languages =[
     LanguageCode.from_string(code) 
     for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")
 ] # in order of preference
 limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
 skip_if_audio_track_is_in_list = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
     if get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS')
-    else []
+    else[]
 )
 
 # Additional Subtitle Configuration - with backwards compatibility
@@ -203,6 +204,11 @@ model = None
 model_cleanup_timer = None
 model_cleanup_lock = Lock()
 
+# Locks to ensure thread-safety during concurrent AI operations
+model_load_lock = Lock()
+active_direct_tasks = 0
+active_direct_tasks_lock = Lock()
+
 in_docker = os.path.exists('/.dockerenv')
 docker_status = "Docker" if in_docker else "Standalone"
 
@@ -230,6 +236,7 @@ class TaskResult:
         return self.done.wait(timeout)
 
 # Dictionary to store task results keyed by task_id
+# Entries are cleaned up in /asr endpoint finally block to prevent unbounded growth
 task_results = {}
 task_results_lock = Lock()
 
@@ -394,7 +401,7 @@ for _ in range(concurrent_transcriptions):
 class MultiplePatternsFilter(logging.Filter):
     def filter(self, record):
         # Define the patterns to search for
-        patterns = [
+        patterns =[
             "Compression ratio threshold is not met",
             "Processing segment at",
             "Log probability threshold is",
@@ -423,7 +430,7 @@ logging.basicConfig(
     stream=sys.stderr, 
     level=level, 
     format="%(asctime)s %(levelname)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"  # This removes the ,123 part
+    datefmt="%Y-%m-%d %H:%M:%S" # This removes the ,123 part
 )
 
 # Get the root logger
@@ -769,8 +776,8 @@ async def asr(
         else:
             logging.info(f"ASR task {task_id} already queued/processing - waiting for result")
         
-        # BLOCK HERE until worker completes (respects concurrent_transcriptions)
-        if task_result.wait(timeout=asr_timeout):
+        # EVENT LOOP BLOCK FIX: Use asyncio.to_thread so FastAPI can still respond to /status
+        if await asyncio.to_thread(task_result.wait, asr_timeout):
             if task_result.error:
                 logging.error(f"ASR task {task_id} failed: {task_result.error}")
                 return {
@@ -798,6 +805,7 @@ async def asr(
         return {"status": "error", "message": f"Error: {str(e)}"}
     finally:
         await audio_file.close()
+        # Clean up task_results entry after task completes
         with task_results_lock:
             if task_id in task_results:
                 del task_results[task_id]
@@ -903,10 +911,13 @@ async def detect_language(
     detect_lang_length: int = Query(default=detect_language_length),
     detect_lang_offset: int = Query(default=detect_language_offset)
 ):
+    global active_direct_tasks
+    
     if force_detected_language_to: 
         await audio_file.close()
         return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
     
+    task_started = False
     try:
         file_content = await audio_file.read()
         if not file_content:
@@ -914,16 +925,29 @@ async def detect_language(
             
         logging.info(f"Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
         
+        # Track that we are directly using the model outside the queue
+        with active_direct_tasks_lock:
+            active_direct_tasks += 1
+        task_started = True
+        
         # --- RUN IMMEDIATELY ---
-        start_model()
+        # EVENT LOOP BLOCK FIX: Offload heavy ops to background thread
+        await asyncio.to_thread(start_model)
         
         if encode:
-            audio_bytes = extract_audio_segment_from_content(await audio_file.read(), detect_lang_offset, detect_lang_length)
+            audio_bytes = await asyncio.to_thread(
+                extract_audio_segment_from_content, 
+                file_content, 
+                detect_lang_offset, 
+                detect_lang_length
+            )
             audio_data = np.frombuffer(audio_bytes, np.int16).flatten().astype(np.float32) / 32768.0
         else:
             audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
-        result = model.transcribe(audio_data, input_sr=16000, verbose=None)
+        # Offload the heavy AI inference to a background thread
+        result = await asyncio.to_thread(model.transcribe, audio_data, input_sr=16000, verbose=None)
+        
         detected = LanguageCode.from_name(result.language)
         
         logging.info(f"Detect Language Result: {detected.to_name()} ({detected.to_iso_639_1()})")
@@ -938,7 +962,11 @@ async def detect_language(
         return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
     finally: 
         await audio_file.close()
-        delete_model() # Schedules VRAM cleanup if system is idle
+        # Decrement counter so delete_model() knows we are done
+        if task_started:
+            with active_direct_tasks_lock:
+                active_direct_tasks -= 1
+            delete_model() # Schedules VRAM cleanup if system is idle
 
 # ============================================================================
 # DETECT LANGUAGE WORKER FOR UPLOADED AUDIO
@@ -1065,6 +1093,7 @@ def detect_language_task(path, original_task_data=None):
         start_model()
         
         audio_segment = extract_audio_segment_to_memory(
+        # extract_audio_segment_to_memory now returns bytes directly
             path, 
             detect_language_offset, 
             int(detect_language_length)
@@ -1108,6 +1137,8 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
     :param duration: Duration in seconds (e.g., 30 for 30 seconds)
     :return: bytes containing the audio segment, or None on error
     
+    Changed to return bytes directly instead of BytesIO to prevent memory leak.
+    Previously returned BytesIO objects were never closed, causing 480KB-10MB leak per call.
     """
     try:
         if hasattr(input_file, 'file') and hasattr(input_file.file, 'read'): # Handling UploadFile
@@ -1134,6 +1165,7 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         if not out:
             raise ValueError("FFmpeg output is empty, possibly due to invalid input.")
         
+        # Return bytes directly instead of BytesIO to prevent memory leak
         return out
 
     except ffmpeg.Error as e:
@@ -1145,12 +1177,15 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
 
 def start_model():
     global model
-    if model is None:
-        logging.debug("Model was purged, need to re-create")
-        model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+    with model_load_lock:
+        if model is None:
+            logging.debug("Model was purged, need to re-create")
+            model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def schedule_model_cleanup():
-    """Schedule model cleanup with a delay to allow concurrent requests."""
+    """Schedule model cleanup with a delay to allow concurrent requests.
+    
+    Properly joins cancelled timers to prevent thread accumulation."""
     global model_cleanup_timer, model_cleanup_lock
     
     with model_cleanup_lock:
@@ -1158,6 +1193,7 @@ def schedule_model_cleanup():
         if model_cleanup_timer is not None:
             model_cleanup_timer.cancel()
             logging.debug("Cancelled previous model cleanup timer")
+            # Join timer thread to prevent accumulation
             model_cleanup_timer.join()
         
         # Schedule a new cleanup timer
@@ -1168,13 +1204,16 @@ def schedule_model_cleanup():
 
 def perform_model_cleanup():
     """Actually perform the model cleanup."""
-    global model, model_cleanup_timer, model_cleanup_lock
+    global model, model_cleanup_timer, model_cleanup_lock, active_direct_tasks
     
     with model_cleanup_lock: 
         logging.debug("Executing scheduled model cleanup")
         
-        if clear_vram_on_complete and task_queue.is_idle():
-            logging.debug("Queue idle; clearing model from memory.")
+        with active_direct_tasks_lock:
+            system_is_idle = task_queue.is_idle() and active_direct_tasks == 0
+            
+        if clear_vram_on_complete and system_is_idle:
+            logging.debug("Queue and direct tasks idle; clearing model from memory.")
             if model: 
                 try:
                     model.model.unload_model()
@@ -1204,12 +1243,16 @@ def delete_model():
     Only schedules a cleanup timer if the system is actually idle.
     This prevents unnecessary timer resets when a large batch is being processed.
     """
+    global active_direct_tasks
     # 1. If we aren't supposed to clear VRAM, don't bother with timers at all.
     if not clear_vram_on_complete:
         return
 
     # 2. Only schedule cleanup if the queue is empty AND no other workers are processing.
-    if task_queue.is_idle():
+    with active_direct_tasks_lock:
+        system_is_idle = task_queue.is_idle() and active_direct_tasks == 0
+
+    if system_is_idle:
         schedule_model_cleanup()
     else:
         # If there are 10 items left in the queue, we simply do nothing. 
@@ -1247,6 +1290,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         data = file_path
         # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
+        # handle_multiple_audio_tracks now returns bytes directly
         if extracted_audio_file:
             data = extracted_audio_file
         
@@ -1323,6 +1367,8 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
     """
     Handles the possibility of a media file having multiple audio tracks. 
     
+    Changed to return bytes directly instead of BytesIO to prevent memory leak.
+    Previously returned BytesIO objects were never closed, causing memory leaks.
     If the media file has multiple audio tracks, it will extract the audio track of the selected language. Otherwise, it will extract the first audio track.
     
     Parameters:
@@ -1364,7 +1410,9 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
     Returns:
         bytes | None: The audio data as bytes, or None if extraction failed.
         
-            """
+        Changed to return bytes directly instead of BytesIO to prevent memory leak.
+        Previously returned BytesIO objects were never closed, causing memory leaks.
+    """
     if track_index is None:
         logging.warning(f"Skipping audio track extraction for {input_video_path} because track index is None")
         return None
@@ -1383,6 +1431,7 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
             )
             .run(capture_stdout=True, capture_stderr=True) # Capture output in memory
         )
+        # Return bytes directly instead of BytesIO to prevent memory leak
         return out
 
     except ffmpeg.Error as e:
@@ -1467,10 +1516,10 @@ def get_audio_tracks(video_file):
     try:
         # Probe the file to get audio stream metadata
         probe = ffmpeg.probe(video_file, select_streams='a')
-        audio_streams = probe.get('streams', [])
+        audio_streams = probe.get('streams',[])
         
         # Extract information for each audio track
-        audio_tracks = []
+        audio_tracks =[]
         for stream in audio_streams:
             audio_track = {
                 "index": int(stream.get("index", None)),
@@ -1488,10 +1537,10 @@ def get_audio_tracks(video_file):
 
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr}")
-        return []
+        return[]
     except Exception as e:
         logging.error(f"An error occurred while reading audio track information: {str(e)}")
-        return []
+        return[]
 
 def find_language_audio_track(audio_tracks, find_languages):
     """
@@ -1551,7 +1600,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
         # Pass metadata info (kwargs) to the detect task
         task_id.update(kwargs)
         task_queue.put(task_id)
-        #logging.debug(f"Added to queue: {task_id['path']} [type: {task_id.get('type', 'transcribe')}]")
+        #logging.debug(f"Added to queue: {task_id['path']}[type: {task_id.get('type', 'transcribe')}]")
         return
 
     task = {
@@ -1641,7 +1690,7 @@ def get_subtitle_languages(video_path):
     :param video_path: Path to the video file
     :return: List of language codes for each subtitle stream
     """
-    languages = []
+    languages =[]
 
     # Open the video file
     with av.open(video_path) as container:
@@ -1701,7 +1750,7 @@ def has_subtitle_language_in_file(video_file: str, target_language: Union[Langua
     try:
         with av.open(video_file) as container:
             # Create a list of subtitle streams with 'language' metadata
-            subtitle_streams = [
+            subtitle_streams =[
                 stream for stream in container.streams 
                 if stream.type == 'subtitle' and 'language' in stream.metadata
             ]
@@ -2022,7 +2071,7 @@ def has_audio(file_path):
         if not is_valid_path(file_path):
             return False
 
-        if not (has_video_extension(file_path) or  has_audio_extension(file_path)):
+        if not (has_video_extension(file_path) or has_audio_extension(file_path)):
             # logging.debug(f"{file_path} is an not a video or audio file, skipping processing. skipping processing")
             return False
 
@@ -2055,11 +2104,11 @@ def is_valid_path(file_path):
         return True    
 
 def has_video_extension(file_name):
-    file_extension = os.path.splitext(file_name)[1].lower()  # Get the file extension
+    file_extension = os.path.splitext(file_name)[1].lower() # Get the file extension
     return file_extension in VIDEO_EXTENSIONS
 
 def has_audio_extension(file_name):
-    file_extension = os.path.splitext(file_name)[1].lower()  # Get the file extension
+    file_extension = os.path.splitext(file_name)[1].lower() # Get the file extension
     return file_extension in AUDIO_EXTENSIONS
 
 
@@ -2106,7 +2155,7 @@ if monitor:
                 self.create_subtitle(event)
 
         def on_created(self, event):
-            time.sleep(5)  # Extra buffer time for new files
+            time.sleep(5) # Extra buffer time for new files
             self.handle_event(event)
 
         def on_modified(self, event):
