@@ -1,4 +1,4 @@
-subgen_version = '2026.03.0'
+subgen_version = '2026.03.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1311,9 +1311,8 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         if is_audio_file and lrc_for_audio_files:
             write_lrc(result, file_name + '.lrc')
         else:
-            if not force_language: 
-                force_language = LanguageCode.from_string(result.language)
-            result.to_srt_vtt(name_subtitle(file_path, force_language), word_level=word_level_highlight)
+            output_language = LanguageCode.from_string(result.language)
+            result.to_srt_vtt(name_subtitle(file_path, output_language), word_level=word_level_highlight)
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
