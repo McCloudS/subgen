@@ -257,7 +257,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `MODEL_PATH` | `./models` | Path where AI models are downloaded and stored. |
 
 ### 🎬 Media Server Integration (Metadata Refreshing)
-*Required if you want Subgen to automatically tell Plex or Jellyfin to refresh the show's metadata so the subtitle immediately appears after generation.*
+*Required if you want Subgen to automatically generate Subtitles off of Webhook Events from Plex or Jellyfin or to tell Plex or Jellyfin to refresh the show's metadata so the subtitle immediately appears after generation.*
 | Variable | Default | Description |
 |---|---|---|
 | `PLEX_SERVER` | *(None)* | Local Plex address (e.g., `http://192.168.1.100:32400`). |
