@@ -14,11 +14,11 @@ Feb 2026: Contributor helped cut the GPU container size in half.  Added `ASR_TIM
 
 12 Aug 2025: Added distil-large-v3.5
 
-7 Feb: Fixed (V)RAM clearing, added PLEX_QUEUE_SEASON, other extraneous fixes or refactorting.  
+7 Feb 2025: Fixed (V)RAM clearing, added PLEX_QUEUE_SEASON, other extraneous fixes or refactorting.  
 
-23 Dec: Added PLEX_QUEUE_NEXT_EPISODE and PLEX_QUEUE_SERIES.  Will automatically start generating subtitles for the next episode in your series, or queue the whole series.  
+23 Dec 2025: Added PLEX_QUEUE_NEXT_EPISODE and PLEX_QUEUE_SERIES.  Will automatically start generating subtitles for the next episode in your series, or queue the whole series.  
 
-4 Dec: Added more ENV settings: DETECT_LANGUAGE_OFFSET, PREFERRED_AUDIO_LANGUAGES, SKIP_IF_AUDIO_TRACK_IS, ONLY_SKIP_IF_SUBGEN_SUBTITLE, SKIP_UNKNOWN_LANGUAGE, SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST, SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE
+4 Dec 2025: Added more ENV settings: DETECT_LANGUAGE_OFFSET, PREFERRED_AUDIO_LANGUAGES, SKIP_IF_AUDIO_TRACK_IS, ONLY_SKIP_IF_SUBGEN_SUBTITLE, SKIP_UNKNOWN_LANGUAGE, SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST, SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE
 
 30 Nov 2024: Signifcant refactoring and handling by Muisje.  Added language code class for more robustness and flexibility and ability to separate audio tracks to make sure you get the one you want.  New ENV Variables: SUBTITLE_LANGUAGE_NAMING_TYPE, SKIP_IF_AUDIO_TRACK_IS, PREFERRED_AUDIO_LANGUAGE, SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST
 
@@ -234,7 +234,6 @@ The following environment variables are available in Docker.  They will default 
 | DETECT_LANGUAGE_LENGTH | 30 | Detect language on the first x seconds of the audio. |
 | SKIP_IF_EXTERNAL_SUBTITLES_EXIST | False | Skip subtitle generation if an external subtitle with the same language code as NAMESUBLANG is present. Used for the case of not regenerating subtitles if I already have `Movie (2002).NAMESUBLANG.srt` from a non-subgen source. |
 | SUBGEN_KWARGS | '{}' | Takes a kwargs python dictionary of options you would like to add/override.  For advanced users.  An example would be `{'vad': True, 'prompt_reset_on_temperature': 0.35}` |
-| SKIP_SUBTITLE_LANGUAGES | '' | Takes a pipe separated `\|` list of 3 letter language codes to not generate subtitles for example 'eng\|deu'|
 | SUBTITLE_LANGUAGE_NAMING_TYPE | 'ISO_639_2_B' | The type of naming format desired, such as 'ISO_639_1', 'ISO_639_2_T', 'ISO_639_2_B', 'NAME', or 'NATIVE', for example: ("es", "spa", "spa", "Spanish", "Español") |
 | SKIP_SUBTITLE_LANGUAGES | '' | Takes a pipe separated `\|` list of 3 letter language codes to skip if the file has audio in that language.  This could be used to skip generating subtitles for a language you don't want, like, I speak English, don't generate English subtitles (for example: 'eng\|deu')|
 | PREFERRED_AUDIO_LANGUAGE | 'eng' | If there are multiple audio tracks in a file, it will prefer this setting |
