@@ -1,4 +1,4 @@
-subgen_version = '2026.03.1'
+subgen_version = '2026.03.6'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -200,6 +200,13 @@ AUDIO_EXTENSIONS = (
 )
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    if transcribe_folders:
+        # Run in a background thread so Uvicorn can finish starting up immediately
+        threading.Thread(target=transcribe_existing, args=(transcribe_folders,), daemon=True).start()
+
 model = None
 model_cleanup_timer = None
 model_cleanup_lock = Lock()
@@ -2191,6 +2198,4 @@ if __name__ == "__main__":
     logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
     logging.info(f"Transcribe device: {transcribe_device}, Model: {whisper_model}")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
-    if transcribe_folders:
-        transcribe_existing(transcribe_folders)
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)
