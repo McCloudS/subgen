@@ -170,6 +170,7 @@ Note you do not require path mappings or media mounts for Bazarr.
 2. Select **Whisper** as the provider.
 3. Set the **Docker Endpoint** to your Subgen IP and port: `http://<your-ip>:9000` *(Note: Do not use `127.0.0.1` if Bazarr is also in a Docker container).*
 4. Subgen generated subtitles are considered a 66% match for episodes and 50% for movies. If expecting auto-search to generated subtitles, you must adjust your mininmum scores accordingly.
+Tip: Consider disabling subtitle upgrades if not using other providers.
 
 ---
 
