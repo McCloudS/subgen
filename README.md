@@ -100,22 +100,6 @@ Some shows just won't have subtitles available, or embedded H265 subtitles might
 
 ---
 
-## ⚡ Quick Start: Bazarr (The Bare Minimum)
-If you just want to plug Subgen into Bazarr and get going, here is the absolute minimum you need to configure in your Subgen Docker container. **No path mapping or media mounts are needed!**
-
-**1. Set your Environment Variables in Subgen:**
-* `TRANSCRIBE_DEVICE`: Set to `cuda` if you have an Nvidia GPU (highly recommended for speed), otherwise leave as `cpu`.
-* `WHISPER_MODEL`: Default is `medium`. Try `large-v3-turbo` if you have a GPU with 8GB+ VRAM for faster, highly accurate results.
-* `CONCURRENT_TRANSCRIPTIONS`: Default is `2`. Lower to `1` if you are running out of RAM/VRAM.
-
-**2. Configure Bazarr:**
-* In Bazarr, go to **Settings > Whisper Provider**.
-* Select **Whisper** as the provider.
-* Set the **Docker Endpoint** to your Subgen IP and port: `http://<your-ip>:9000` *(Note: Do not use `127.0.0.1` if Bazarr is also in a Docker container).*
-* Save! Subgen will now act as an invisible, self-hosted API for Bazarr's transcription requests.
-
----
-
 ## 🛠 Installation & Setup
 
 ### 1. Docker (Recommended)
@@ -179,6 +163,14 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 *   **JSON Header:** `{"source": "Tautulli"}`
 *   **Data (JSON):** 
     > `{"event": "added", "file": "{file}", "filename": "{filename}", "mediatype": "{media_type}"}`
+
+### 🔴 Bazarr
+Note you do not require path mappings or media mounts for Bazarr.
+1. In Bazarr, go to **Settings > Whisper Provider**.
+2. Select **Whisper** as the provider.
+3. Set the **Docker Endpoint** to your Subgen IP and port: `http://<your-ip>:9000` *(Note: Do not use `127.0.0.1` if Bazarr is also in a Docker container).*
+4. Subgen generated subtitles are considered a 66% match for episodes and 50% for movies. If expecting auto-search to generated subtitles, you must adjust your mininmum scores accordingly.
+Tip: Consider disabling subtitle upgrades if not using other providers.
 
 ---
 
