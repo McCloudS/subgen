@@ -144,6 +144,7 @@ detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
 asr_timeout = int(os.getenv('ASR_TIMEOUT', 18000))
+webhook_url_completed = os.getenv('WEBHOOK_URL_COMPLETED', '')
 
 # Skip Configuration - with backwards compatibility
 skipifexternalsub = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
@@ -1278,6 +1279,29 @@ def write_lrc(result, file_path):
             text = segment.text[:].replace('\n', '')
             file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
 
+def send_completion_webhook(source_file_path: str, subtitle_file_path: str, language: LanguageCode, task_type: str):
+    """Sends a JSON POST request to a configured webhook URL upon task completion."""
+    if not webhook_url_completed:
+        return
+        
+    # Dynamically make it past-tense (transcribe -> transcribed, translate -> translated)
+    event_status = f"{task_type}d" if task_type in["transcribe", "translate"] else task_type
+        
+    payload = {
+        "event": event_status,
+        "file": os.path.abspath(source_file_path),
+        "subtitle": os.path.abspath(subtitle_file_path),
+        "language": language.to_iso_639_1()
+    }
+    
+    try:
+        logging.info(f"Sending completion webhook ({event_status}) to {webhook_url_completed}")
+        response = requests.post(webhook_url_completed, json=payload, timeout=10)
+        response.raise_for_status()
+        logging.debug(f"Webhook successfully delivered. Status code: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Failed to send completion webhook: {e}")
+
 def gen_subtitles(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE) -> None:
     """Generates subtitles for a video file. 
 
@@ -1314,12 +1338,19 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
 
         appendLine(result)
 
+        output_language = LanguageCode.from_string(result.language)
+        subtitle_file_path = ""
+
         # If it is an audio file, write the LRC file
         if is_audio_file and lrc_for_audio_files:
-            write_lrc(result, file_name + '.lrc')
+            subtitle_file_path = file_name + '.lrc'
+            write_lrc(result, subtitle_file_path)
         else:
-            output_language = LanguageCode.from_string(result.language)
-            result.to_srt_vtt(name_subtitle(file_path, output_language), word_level=word_level_highlight)
+            subtitle_file_path = name_subtitle(file_path, output_language)
+            result.to_srt_vtt(subtitle_file_path, word_level=word_level_highlight)
+            
+        # Trigger the downstream webhook
+        send_completion_webhook(file_path, subtitle_file_path, output_language, transcription_type)
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
@@ -1678,7 +1709,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     # 7a. Limit to preferred audio languages
     if limit_to_preferred_audio_languages:
         if not any(lang in preferred_audio_languages for lang in audio_langs):
-            preferred_names = [lang.to_name() for lang in preferred_audio_languages]
+            preferred_names =[lang.to_name() for lang in preferred_audio_languages]
             logging.info(f"Skipping {base_name}: No preferred audio tracks found (looking for {', '.join(preferred_names)})")
             return True
 
