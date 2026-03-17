@@ -6,6 +6,8 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+17 Mar 2026: Added `WEBHOOK_URL_COMPLETED`. When a task finishes, Subgen will send a POST request with a JSON structure.
+
 4 Mar 2026: Reformmated the readme and spend an hour with Gemini trying to format it and clean it up and it essentially only gave me icons for headers.  
 
 Feb 2026: Contributor helped cut the GPU container size in half. Added `ASR_TIMEOUT` as environment variable to timeout ASR endpoint transcriptions after X seconds.
@@ -210,6 +212,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `PLEX_QUEUE_NEXT_EPISODE` | `False` | Auto-queues the *next* Plex episode when Subgen is triggered. |
 | `PLEX_QUEUE_SEASON` | `False` | Auto-queues the *entire remaining season* when Subgen is triggered. |
 | `PLEX_QUEUE_SERIES` | `False` | Auto-queues the *entire remaining series* when Subgen is triggered. |
+| `WEBHOOK_URL_COMPLETED` | `''` | Sends a POST to the `WEBHOOK_URL_COMPLETED` URL with a JSON containing: <br><code>{<br>&nbsp;&nbsp;"event": "transcribed",<br>&nbsp;&nbsp;"file": "/absolute/path/to/video.mkv",<br>&nbsp;&nbsp;"subtitle": "/absolute/path/to/video.en.srt",<br>&nbsp;&nbsp;"language": "en"<br>}</code><br>It will not fire on skips, `/asr` or `/detect-language`. |
 
 ### ⏭️ Skip Logic & Audio Targeting
 *Prevent Subgen from wasting time on files that don't need subtitles.*
