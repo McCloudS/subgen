@@ -1,4 +1,4 @@
-subgen_version = '2026.03.6'
+subgen_version = '2026.03.8'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -346,6 +346,7 @@ def transcription_worker():
     """Main worker thread with centralized logging and status tracking."""
     while True:
         task = None
+        next_task = None
         try:
             task = task_queue.get(block=True, timeout=1)
             task_type = task.get("type", "transcribe")
@@ -355,22 +356,21 @@ def transcription_worker():
             # Status for START log
             proc_count = len(task_queue.get_processing_tasks())
             queue_count = len(task_queue.get_queued_tasks())
-            logging.info(f"WORKER START : [{task_type.upper():<10}] {display_name:^40} | Jobs: {proc_count} processing, {queue_count} queued")
+            logging.info(f"WORKER START :[{task_type.upper():<10}] {display_name:^40} | Jobs: {proc_count} processing, {queue_count} queued")
             
             start_time = time.time()
             if task_type == "detect_language": 
                 if "audio_content" in task: 
                     detect_language_from_upload(task)
                 else: 
-                    # Pass the full task data so we don't lose the Plex ID
-                    detect_language_task(task['path'], original_task_data=task)
+                    # Capture the transcription task to queue later
+                    next_task = detect_language_task(task['path'], original_task_data=task)
             elif task_type == "asr":
                 asr_task_worker(task)
             else: # transcribe
                 gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
                 
                 # --- METADATA REFRESH LOGIC ---
-                # This runs ONLY after subtitles are successfully generated
                 if 'plex_item_id' in task:
                     try:
                         logging.info(f"Refreshing Plex Metadata for item {task['plex_item_id']}")
@@ -400,7 +400,16 @@ def transcription_worker():
             if task:
                 task_queue.task_done()
                 task_queue.mark_done(task)
+                
+                # Now that the detect task is removed from processing, it's safe to queue the transcription
+                if next_task:
+                    if task_queue.put(next_task):
+                        logging.debug(f"Queued transcription for detected language: {next_task['path']}")
+                    else:
+                        logging.debug(f"Transcription already queued/processing for: {next_task['path']}")
+                        
                 delete_model()
+         
 # Create worker threads
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
@@ -954,9 +963,9 @@ async def detect_language(
             audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
         # Offload the heavy AI inference to a background thread
-        result = await asyncio.to_thread(model.transcribe, audio_data, input_sr=16000, verbose=None)
+        result = await asyncio.to_thread(model.transcribe, audio_data, input_sr=16000, verbose=False)
         
-        detected = LanguageCode.from_name(result.language)
+        detected = LanguageCode.from_string(result.language)
         
         logging.info(f"Detect Language Result: {detected.to_name()} ({detected.to_iso_639_1()})")
         
@@ -1021,8 +1030,10 @@ def detect_language_from_upload(task_data: dict) -> None:
             args['input_sr'] = 16000
 
         args.update(kwargs)
+        args['verbose'] = False # Hide the confusing progress bar
         
-        detected_language = LanguageCode.from_name(model.transcribe(**args).language)
+        result = model.transcribe(**args)
+        detected_language = LanguageCode.from_string(result.language)
         language_code = detected_language.to_iso_639_1()
         
         logging.info(f"Detected language: {detected_language.to_name()} ({language_code}) - ID: {task_id}")
@@ -1088,7 +1099,7 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
 def detect_language_task(path, original_task_data=None):
     """
     Worker function that detects language for a local file.
-    Then queues the actual transcription with the detected language.
+    Returns the task data to be queued for transcription.
     """
     detected_language = LanguageCode.NONE
     
@@ -1101,13 +1112,14 @@ def detect_language_task(path, original_task_data=None):
         start_model()
         
         audio_segment = extract_audio_segment_to_memory(
-        # extract_audio_segment_to_memory now returns bytes directly
             path, 
             detect_language_offset, 
             int(detect_language_length)
         )
         
-        detected_language = LanguageCode.from_name(model.transcribe(audio_segment).language)
+        # FIX: Hide confusing progress bar and use from_string for ISO codes
+        result = model.transcribe(audio_segment, verbose=False)
+        detected_language = LanguageCode.from_string(result.language)
         
         logging.info(f"Detected language: {detected_language.to_name()}")
 
@@ -1117,24 +1129,21 @@ def detect_language_task(path, original_task_data=None):
     finally:
         delete_model()
         
-        # Queue transcription with detected language
-        task_data = {
-            'path': path,
-            'type': 'transcribe',
-            'transcribe_or_translate': transcribe_or_translate,
-            'force_language': detected_language
-        }
-        
-        # Carry over metadata (Plex IDs, etc.) from the original task
-        if original_task_data:
-            for key, value in original_task_data.items():
-                if key not in task_data:
-                    task_data[key] = value
-        
-        if task_queue.put(task_data):
-            logging.debug(f"Queued transcription for detected language: {path}")
-        else:
-            logging.debug(f"Transcription already queued/processing for: {path}")
+    # Create transcription task with detected language
+    task_data = {
+        'path': path,
+        'type': 'transcribe',
+        'transcribe_or_translate': transcribe_or_translate,
+        'force_language': detected_language
+    }
+    
+    # Carry over metadata (Plex IDs, etc.) from the original task
+    if original_task_data:
+        for key, value in original_task_data.items():
+            if key not in task_data:
+                task_data[key] = value
+                
+    return task_data
 
 def extract_audio_segment_to_memory(input_file, start_time, duration):
     """
