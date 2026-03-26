@@ -3,21 +3,20 @@ FROM ghcr.io/jordimas/ctranslate2:latest-ubuntu22.04-rocm7.2
 COPY entrypoint.sh /
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg python3 python3-pip curl gosu tzdata \
-    && python3 -m pip install -U --no-cache-dir \
-        numpy \
-        fastapi \
-        requests \
-        uvicorn \
-        python-multipart \
-        ffmpeg-python \
-        watchdog \
-    && python3 -m pip install -U --no-cache-dir --no-deps faster-whisper \
-    && python3 -m pip install -U --no-cache-dir --no-deps stable-ts-whisperless \
-    && apt-get purge -y --auto-remove python3-pip \
-    && rm -rf /var/lib/apt/lists/* /tmp/*
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install -U --no-cache-dir \
+    torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
+
+RUN python3 -m pip install -U --no-cache-dir \
+    numpy fastapi requests uvicorn python-multipart ffmpeg-python watchdog
+
+RUN python3 -m pip install -U --no-cache-dir --no-deps faster-whisper
+RUN python3 -m pip install -U --no-cache-dir --no-deps stable-ts-whisperless
 
 WORKDIR /subgen
 
@@ -27,8 +26,7 @@ RUN mkdir -p /cache && chmod 777 /cache
 
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
-    MPLCONFIGDIR=/cache/matplotlib \
-    PYTHONUNBUFFERED=1
+    MPLCONFIGDIR=/cache/matplotlib
 
 ENTRYPOINT ["/entrypoint.sh"]
 
