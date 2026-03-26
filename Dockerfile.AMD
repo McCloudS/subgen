@@ -6,7 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 python3-pip curl gosu tzdata libiomp-dev libomp-dev \
+    ffmpeg python3 python3-pip curl gosu tzdata libomp5 \
+    && ln -s /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/libomp.so \
     && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
