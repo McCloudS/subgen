@@ -5,9 +5,13 @@ COPY entrypoint.sh /
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# --- THE FIX: Force the system to use the ROCm 7.2 libraries ---
-# This overrides PyTorch's bundled 6.2 libraries to prevent the symbol crash.
-ENV LD_LIBRARY_PATH="/opt/rocm-7.2.0/lib:/opt/rocm-7.2.0/lib64:${LD_LIBRARY_PATH}"
+# --- THE FIXES FOR LIBRARY HELL ---
+# 1. LD_LIBRARY_PATH: Tells Linux where the CTranslate2 engine and ROCm libraries live.
+ENV LD_LIBRARY_PATH="/opt/ctranslate2/lib:/opt/rocm-7.2.0/lib:/opt/rocm-7.2.0/lib64:${LD_LIBRARY_PATH}"
+
+# 2. LD_PRELOAD: Forces Linux to load the ROCm 7.2 HSA runtime BEFORE Python starts.
+# This completely blocks PyTorch from poisoning the memory with its older bundled 6.2 runtime.
+ENV LD_PRELOAD="/opt/rocm-7.2.0/lib/libhsa-runtime64.so.1"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg python3 python3-pip curl gosu tzdata libomp5 \
