@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'requirements.txt'
-      - 'Dockerfile.cpu'
+      - 'Dockerfile.AMD'
   workflow_dispatch:
 
 jobs:
