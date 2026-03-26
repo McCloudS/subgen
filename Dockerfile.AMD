@@ -1,47 +1,30 @@
-# Step 1: Use the base image that comes with ROCm and a ROCm-compiled CTranslate2/PyTorch
 FROM ghcr.io/jordimas/ctranslate2:latest-ubuntu22.04-rocm7.2
 
-# Copy the entrypoint script (no requirements.txt is needed anymore)
 COPY entrypoint.sh /
 
-# Step 2: Set DEBIAN_FRONTEND to prevent interactive prompts (e.g., from tzdata) during build
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Step 3: Install system dependencies and Python packages in a multi-step process
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg python3 python3-pip curl gosu tzdata \
-    \
-    # Install the Python packages that do NOT have a problematic torch dependency
     && python3 -m pip install -U --no-cache-dir \
         numpy \
         fastapi \
         requests \
-        faster-whisper \
         uvicorn \
         python-multipart \
         ffmpeg-python \
         watchdog \
-    \
-    # CRITICAL FIX: Install stable-ts-whisperless WITHOUT its dependencies.
-    # This prevents pip from downloading the CUDA version of PyTorch and breaking the
-    # pre-installed ROCm version from the base image.
+    && python3 -m pip install -U --no-cache-dir --no-deps faster-whisper \
     && python3 -m pip install -U --no-cache-dir --no-deps stable-ts-whisperless \
-    \
-    # Clean up apt and pip to reduce final image size
     && apt-get purge -y --auto-remove python3-pip \
-    && rm -rf \
-    /var/lib/apt/lists/* \
-    /tmp/*
+    && rm -rf /var/lib/apt/lists/* /tmp/*
 
 WORKDIR /subgen
 
-# Copy application files
 COPY launcher.py subgen.py language_code.py /subgen/
 
-# Create and set permissions for a writable cache directory
 RUN mkdir -p /cache && chmod 777 /cache
 
-# Set environment variables for runtime, forcing caches into the writable directory
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
     MPLCONFIGDIR=/cache/matplotlib \
