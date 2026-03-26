@@ -13,7 +13,20 @@ RUN python3 -m pip install -U --no-cache-dir \
     torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
 
 RUN python3 -m pip install -U --no-cache-dir \
-    numpy fastapi requests uvicorn python-multipart ffmpeg-python watchdog
+    numpy \
+    fastapi \
+    requests \
+    uvicorn \
+    python-multipart \
+    ffmpeg-python \
+    watchdog \
+    tqdm \
+    more-itertools \
+    transformers \
+    tokenizers \
+    huggingface-hub \
+    av \
+    scipy
 
 RUN python3 -m pip install -U --no-cache-dir --no-deps faster-whisper
 RUN python3 -m pip install -U --no-cache-dir --no-deps stable-ts-whisperless
