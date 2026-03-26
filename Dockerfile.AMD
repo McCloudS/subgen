@@ -5,14 +5,6 @@ COPY entrypoint.sh /
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# --- THE FIXES FOR LIBRARY HELL ---
-# 1. LD_LIBRARY_PATH: Tells Linux where the CTranslate2 engine and ROCm libraries live.
-ENV LD_LIBRARY_PATH="/opt/ctranslate2/lib:/opt/rocm-7.2.0/lib:/opt/rocm-7.2.0/lib64:${LD_LIBRARY_PATH}"
-
-# 2. LD_PRELOAD: Forces Linux to load the ROCm 7.2 HSA runtime BEFORE Python starts.
-# This completely blocks PyTorch from poisoning the memory with its older bundled 6.2 runtime.
-ENV LD_PRELOAD="/opt/rocm-7.2.0/lib/libhsa-runtime64.so.1"
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg python3 python3-pip curl gosu tzdata libomp5 \
     && ln -s /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/libomp.so \
@@ -47,10 +39,21 @@ COPY launcher.py subgen.py language_code.py /subgen/
 
 RUN mkdir -p /cache && chmod 777 /cache
 
+# -------------------------------------------------------------------
+# --- ENVIRONMENT VARIABLES (Baked in for automatic execution) ---
+# -------------------------------------------------------------------
+# 1. Standard caches
 ENV XDG_CACHE_HOME=/cache \
     HF_HOME=/cache/huggingface \
     MPLCONFIGDIR=/cache/matplotlib
 
+# 2. Fix the Library Paths (Points to CTranslate2 and ROCm 7.2)
+ENV LD_LIBRARY_PATH="/opt/ctranslate2/lib:/opt/rocm-7.2.0/lib:/opt/rocm-7.2.0/lib64:${LD_LIBRARY_PATH}"
+
+# 3. Preload the ROCm 7.2 HSA Runtime (Blocks PyTorch from loading its 6.2 version)
+ENV LD_PRELOAD="/opt/rocm-7.2.0/lib/libhsa-runtime64.so.1"
+# -------------------------------------------------------------------
+
 ENTRYPOINT ["/entrypoint.sh"]
 
-CMD ["python3", "launcher.py"]
+CMD ["python3", "-u", "launcher.py"]
