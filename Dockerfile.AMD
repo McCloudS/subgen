@@ -3,6 +3,8 @@ FROM ghcr.io/jordimas/ctranslate2:latest-ubuntu22.04-rocm7.2
 
 COPY requirements.txt entrypoint.sh /
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install system dependencies and Python packages from requirements.txt
 # We DO NOT install torch, as it's provided by the base image.
 RUN apt-get update && apt-get install -y --no-install-recommends \
