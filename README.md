@@ -6,6 +6,8 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+27 Mar 2026: Potentially added ROCm support for AMD GPU/APUs. I don't have anything to test it, so a fair chance it doesn't work at all.  I'm unsure if it will work with AMD APUs.  Image is: `mccloud/subgen:amd`.  It's pretty large right now at ~10gb. In theory, it should see your AMD card the same way it sees any other cuda device. Some light research shows ROCm only 'officially' supports higher end consumer cards and datacenter cards. `HSA_OVERRIDE_GFX_VERSION` can be set to 'trick' your old cards (and maybe APUs) to work, but you'll have to do your own research/googling. 
+
 17 Mar 2026: Added `WEBHOOK_URL_COMPLETED`. When a task finishes, Subgen will send a POST request with a JSON structure.
 
 4 Mar 2026: Reformmated the readme and spend an hour with Gemini trying to format it and clean it up and it essentially only gave me icons for headers.  
