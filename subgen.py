@@ -1,4 +1,4 @@
-subgen_version = '2026.03.8'
+subgen_version = '2026.03.24'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1688,7 +1688,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         return True
 
     # 3. Skip if a subtitle already exists in the target language.
-    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language):
+    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language, only_skip_if_subgen_subtitle):
         lang_name = target_language.to_name()
         logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
         return True
@@ -1702,7 +1702,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
     # 5. Skip if an external subtitle exists in the namesublang language
     if skipifexternalsub and namesublang and LanguageCode.is_valid_language(namesublang):
         external_lang = LanguageCode.from_string(namesublang)
-        if has_subtitle_of_language_in_folder(file_path, external_lang):
+        if has_subtitle_of_language_in_folder(file_path, external_lang, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle):
             lang_name = external_lang.to_name()
             logging.info(f"Skipping {base_name}: External subtitles in {lang_name} already exist.")
             return True
@@ -1780,7 +1780,7 @@ def has_subtitle_language(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language)
+    return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle)
 
 def has_subtitle_language_in_file(video_file: str, target_language: Union[LanguageCode, None]):
     """
