@@ -1,4 +1,4 @@
-subgen_version = '2026.03.24'
+subgen_version = '2026.03.25'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1688,7 +1688,7 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         return True
 
     # 3. Skip if a subtitle already exists in the target language.
-    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language, only_skip_if_subgen_subtitle):
+    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language):
         lang_name = target_language.to_name()
         logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
         return True
