@@ -109,7 +109,7 @@ If you just want to plug Subgen into Bazarr and get going, here is the absolute 
 
 **1. Set your Environment Variables in Subgen:**
 * `TRANSCRIBE_DEVICE`: Set to `cuda` if you have an Nvidia GPU (highly recommended for speed), otherwise leave as `cpu`.
-* `WHISPER_MODEL`: Default is `medium`. Try `large-v3-turbo` if you have a GPU with 8GB+ VRAM for faster, highly accurate results.
+* `WHISPER_MODEL`: Default is `medium`. Try `large-v3-turbo` if you have a GPU with 8GB+ VRAM for faster transcription. **Note:** `large-v3-turbo` only supports transcription — if you need translation (e.g. `TRANSCRIBE_OR_TRANSLATE=translate`), use `large-v3` instead.
 * `CONCURRENT_TRANSCRIPTIONS`: Default is `2`. Lower to `1` if you are running out of RAM/VRAM.
 
 **2. Configure Bazarr:**
@@ -199,7 +199,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_DEVICE` | `cpu` | Device to transcribe on: `cpu`, `gpu`, or `cuda`. |
-| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, etc. |
+| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, etc. **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
 | `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. |
 | `WHISPER_THREADS` | `4` | Number of CPU threads to use during computation. |
 | `COMPUTE_TYPE` | `auto` | Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). |
