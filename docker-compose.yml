@@ -46,3 +46,18 @@ services:
       #               count: 1
       #               capabilities:
       #                  - gpu
+      # # ⚠️ FOR AMD GPU IMAGE ⚠️
+      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
+      # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
+      # # CT2_CUDA_ALLOCATOR fixes GPU page faults on RDNA3 (gfx1100/1101) — OpenNMT/CTranslate2#2021
+      # # HSA_OVERRIDE_GFX_VERSION may be needed for newer RDNA GPUs not yet in ROCm's default target list.
+      #    environment:
+      #       - "CT2_CUDA_ALLOCATOR=cub_caching"
+      #       - "HSA_OVERRIDE_GFX_VERSION=11.0.0"  # adjust to your gfx version (e.g. 11.0.0 for RX 7900 series)
+      #       - "TRANSCRIBE_DEVICE=cuda"
+      #    devices:
+      #       - /dev/kfd
+      #       - /dev/dri
+      #    group_add:
+      #       - video
+      #       - render

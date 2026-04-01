@@ -6,13 +6,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 python3-pip curl gosu tzdata libomp5 \
+    ffmpeg python3 python3-pip curl gosu tzdata libomp5 libdw1 \
     && ln -s /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/libomp.so \
     && ldconfig \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install -U --no-cache-dir \
-    torch torchaudio --index-url https://download.pytorch.org/whl/rocm6.2
+# Install torch with ROCm 7.2 nightly wheels to match the ctranslate2 ROCm 7.2 base image.
+# The previous rocm6.2 wheels caused an HSA ABI mismatch (SIGSEGV on container startup).
+# Nightly is required as stable PyTorch wheels only go up to rocm6.2 currently.
+RUN python3 -m pip install -U --no-cache-dir --pre \
+    torch torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm7.2
 
 RUN python3 -m pip install -U --no-cache-dir \
     numpy \
@@ -50,8 +53,14 @@ ENV XDG_CACHE_HOME=/cache \
 # 2. Fix the Library Paths (Points to CTranslate2 and ROCm 7.2)
 ENV LD_LIBRARY_PATH="/opt/ctranslate2/lib:/opt/rocm-7.2.0/lib:/opt/rocm-7.2.0/lib64:${LD_LIBRARY_PATH}"
 
-# 3. Preload the ROCm 7.2 HSA Runtime (Blocks PyTorch from loading its 6.2 version)
+# 3. Preload the ROCm 7.2 HSA Runtime to ensure both torch and ctranslate2 share
+#    the same HSA runtime (both are now built against ROCm 7.2).
 ENV LD_PRELOAD="/opt/rocm-7.2.0/lib/libhsa-runtime64.so.1"
+
+# 4. Fix GPU memory page faults (Page not present) during ctranslate2 inference on
+#    RDNA3 GPUs (gfx1100/gfx1101). The default allocator causes invalid GPU memory
+#    mappings; cub_caching uses a stable allocation path. See OpenNMT/CTranslate2#2021.
+ENV CT2_CUDA_ALLOCATOR="cub_caching"
 # -------------------------------------------------------------------
 
 ENTRYPOINT ["/entrypoint.sh"]
