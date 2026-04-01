@@ -118,6 +118,11 @@ If you just want to plug Subgen into Bazarr and get going, here is the absolute 
 * Set the **Docker Endpoint** to your Subgen IP and port: `http://<your-ip>:9000` *(Note: Do not use `127.0.0.1` if Bazarr is also in a Docker container).*
 * Save! Subgen will now act as an invisible, self-hosted API for Bazarr's transcription requests.
 
+**3. Disable Auto-Sync for Subgen subtitles (important):**
+Subgen already produces accurately timed subtitles. If you have Bazarr's **Automatic Subtitles Audio Synchronization** enabled, you must exclude `whisperai` from it — otherwise Bazarr will run ffsubsync on top of already-synced subtitles and degrade their quality.
+* In Bazarr, go to **Settings > Subtitles > Audio Synchronization**.
+* Under **"Do not sync subtitles downloaded from those providers"**, add **`whisperai`**.
+
 ---
 
 ## 🛠 Installation & Setup
