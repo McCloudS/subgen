@@ -1,4 +1,4 @@
-subgen_version = '2026.03.25'
+subgen_version = '2026.04.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1688,10 +1688,24 @@ def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
         return True
 
     # 3. Skip if a subtitle already exists in the target language.
-    if skip_if_to_transcribe_sub_already_exist and has_subtitle_language(file_path, target_language):
-        lang_name = target_language.to_name()
-        logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
-        return True
+    if skip_if_to_transcribe_sub_already_exist:
+        if has_subtitle_language(file_path, target_language):
+            lang_name = target_language.to_name()
+            logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
+            return True
+            
+        # Since NAMESUBLANG overrides the output filename, check if it exists in the folder
+        if namesublang and LanguageCode.is_valid_language(namesublang):
+            external_lang = LanguageCode.from_string(namesublang)
+            if has_subtitle_of_language_in_folder(file_path, external_lang, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle):
+                logging.info(f"Skipping {base_name}: Subtitles already exist in custom name '{namesublang}'.")
+                return True
+                
+        # Check: Does the exact file Subgen intends to create already exist?
+        expected_output = name_subtitle(file_path, target_language)
+        if os.path.exists(expected_output):
+            logging.info(f"Skipping {base_name}: Generated subtitle '{os.path.basename(expected_output)}' already exists.")
+            return True
 
     # 4. Skip if an internal subtitle exists in skipifinternalsublang language.
     if skipifinternalsublang and has_subtitle_language_in_file(file_path, skipifinternalsublang):
