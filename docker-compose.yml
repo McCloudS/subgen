@@ -36,7 +36,7 @@ services:
          - "${APPDATA}/subgen/models:/subgen/models"
       ports:
          - "9000:9000"
-      # # ⚠️ FOR GPU IMAGE ⚠️
+      # # ⚠️ FOR Nvidia GPU IMAGE ⚠️
       # # uncomment folllowing lines to pass nvidia gpu to the container
       # deploy:
       #    resources:
@@ -46,9 +46,12 @@ services:
       #               count: 1
       #               capabilities:
       #                  - gpu
-      # # ⚠️ FOR AMD GPU IMAGE ⚠️
+      #
+      #
+      # # ⚠️ For Native Linux AMD GPU IMAGE ⚠️
       # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
       # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
+      # # 
       # # CT2_CUDA_ALLOCATOR fixes GPU page faults on RDNA3 (gfx1100/1101) — OpenNMT/CTranslate2#2021
       # # HSA_OVERRIDE_GFX_VERSION may be needed for newer RDNA GPUs not yet in ROCm's default target list.
       #    environment:
@@ -61,3 +64,19 @@ services:
       #    group_add:
       #       - video
       #       - render
+      #
+      #
+      # # ⚠️ For WSL AMD GPU IMAGE ⚠️
+      # # Requirements
+      # # WSL ubuntu 22.04 matching the CTranslate2 container base os running via WSL 2.
+      # # Librocmdxg https://github.com/ROCm/librocdxg
+      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
+      # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
+      #    environment:
+      #       - "HSA_ENABLE_DXG_DETECTION=1"
+      #       - "TRANSCRIBE_DEVICE=cuda"
+      #    devices:
+      #       - /dev/dxg
+      #    volumes:
+      #       - /usr/lib/wsl/lib/libdxcore.so:/lib/libdxcore.so
+      #       - /opt/rocm/lib/librocdxg.so:/lib/librocdxg.so
