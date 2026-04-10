@@ -1,4 +1,4 @@
-subgen_version = '2026.04.1'
+subgen_version = '2026.04.3'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -47,6 +47,7 @@ from datetime import datetime
 from threading import Lock, Event, Timer
 import os
 import json
+import subprocess
 import xml.etree.ElementTree as ET
 import threading
 import sys
@@ -832,6 +833,72 @@ async def asr(
 # ASR WORKER FUNCTION
 # ============================================================================
 
+def get_audio_start_time(video_path: str) -> float:
+    """
+    Use ffprobe to detect the audio stream start_time offset from a video file.
+    
+    Some containers (especially Amazon WEB-DL) have audio streams that start
+    later than the video stream. Bazarr compensates with adelay silence padding,
+    but Whisper ignores digital silence, causing all timestamps to be early by
+    the start_time offset.
+    
+    Returns the audio start_time in seconds, or 0.0 if not detectable.
+    """
+    if not video_path or not os.path.isfile(video_path):
+        return 0.0
+    
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+             '-show_entries', 'stream=start_time',
+             '-of', 'json', video_path],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return 0.0
+        
+        data = json.loads(result.stdout)
+        streams = data.get('streams', [])
+        if streams:
+            start_time = float(streams[0].get('start_time', 0))
+            if start_time > 0.1:  # only apply for significant offsets
+                logging.info(f"Detected audio start_time offset: {start_time:.3f}s for {os.path.basename(video_path)}")
+                return start_time
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, ValueError, OSError) as e:
+        logging.debug(f"Could not detect audio start_time for {video_path}: {e}")
+    
+    return 0.0
+
+
+def apply_timestamp_offset(result, offset: float) -> None:
+    """
+    Shift all segment and word timestamps forward by the given offset.
+    
+    This compensates for audio start_time offsets in containers where the
+    audio stream starts later than the video stream. Whisper produces
+    timestamps relative to the audio stream start, but subtitles need
+    to be aligned to the video/container timeline.
+    
+    Note: Segment.start/end are properties that delegate to the first/last
+    word timestamps, so we only need to shift word timestamps to avoid
+    double-application. For segments without words, we shift _default_start/end.
+    """
+    if offset <= 0:
+        return
+    
+    for segment in result.segments:
+        if hasattr(segment, 'words') and segment.words:
+            for word in segment.words:
+                word.start += offset
+                word.end += offset
+        else:
+            # Segments without words use _default_start/_default_end
+            segment._default_start += offset
+            segment._default_end += offset
+    
+    logging.info(f"Applied +{offset:.3f}s timestamp offset to {len(result.segments)} segments")
+
+
 def asr_task_worker(task_data: dict) -> None:
     """
     Worker function that processes ASR tasks from the queue. 
@@ -867,8 +934,18 @@ def asr_task_worker(task_data: dict) -> None:
 
         args.update(kwargs)
         
+        # Detect audio start_time offset from source file (if accessible)
+        audio_offset = get_audio_start_time(video_file) if video_file else 0.0
+        
         # Perform transcription
         result = model.transcribe(task=task, language=language, **args, verbose=None)
+        
+        # Apply audio start_time offset to compensate for container timing
+        # Whisper ignores silence padding (adelay) from Bazarr, so timestamps
+        # are relative to audio stream start, not container start
+        if audio_offset > 0:
+            apply_timestamp_offset(result, audio_offset)
+        
         appendLine(result)
         
         # Set result for blocking endpoint
