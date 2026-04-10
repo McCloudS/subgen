@@ -6,6 +6,8 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+11 Apr 2026: Fixed subtitle timing on files with audio stream offsets (common in Amazon WEB-DL). Whisper ignores silence padding, causing subtitles to be early by the offset amount. Subgen now detects this via ffprobe and compensates automatically when the source video file is accessible. See [Audio Start-Time Offset Fix](#-audio-start-time-offset-fix) for details.
+
 27 Mar 2026: Potentially added ROCm support for AMD GPU/APUs. I don't have anything to test it, so a fair chance it doesn't work at all.  I'm unsure if it will work with AMD APUs.  Image is: `mccloud/subgen:amd`.  It's pretty large right now at ~10gb. In theory, it should see your AMD card the same way it sees any other cuda device. Some light research shows ROCm only 'officially' supports higher end consumer cards and datacenter cards. `HSA_OVERRIDE_GFX_VERSION` can be set to 'trick' your old cards (and maybe APUs) to work, but you'll have to do your own research/googling. 
 
 17 Mar 2026: Added `WEBHOOK_URL_COMPLETED`. When a task finishes, Subgen will send a POST request with a JSON structure.
@@ -122,6 +124,29 @@ If you just want to plug Subgen into Bazarr and get going, here is the absolute 
 Subgen already produces accurately timed subtitles. If you have Bazarr's **Automatic Subtitles Audio Synchronization** enabled, you must exclude `whisperai` from it — otherwise Bazarr will run ffsubsync on top of already-synced subtitles and degrade their quality.
 * In Bazarr, go to **Settings > Subtitles > Audio Synchronization**.
 * Under **"Do not sync subtitles downloaded from those providers"**, add **`whisperai`**.
+
+---
+
+## 🔧 Audio Start-Time Offset Fix
+
+Some media containers — particularly Amazon WEB-DL files — have an audio stream that starts later than the video stream (e.g., audio `start_time` of ~4 seconds). When Bazarr extracts audio from these files, it compensates by prepending silence via ffmpeg's `adelay` filter. However, Whisper's speech recognition completely ignores this digital silence, producing timestamps that are early by the offset amount (e.g., every subtitle appears ~4 seconds too early).
+
+Subgen now automatically detects and compensates for this. When the source video file is accessible, it uses `ffprobe` to read the audio stream's `start_time` metadata, then shifts all Whisper timestamps forward by that amount after transcription.
+
+**This fix is fully backwards compatible.** If the video file is not accessible, or has no audio offset (i.e. `start_time` is 0), behaviour is completely unchanged.
+
+### How to enable it (Bazarr)
+
+1. **Mount your media into the Subgen container** with the same paths that Bazarr sees. For example, if Bazarr sees TV shows at `/tv`, add a volume mount so Subgen also sees `/tv`:
+   ```yaml
+   volumes:
+     - /path/to/your/tv:/tv
+     - /path/to/your/movies:/movies
+   ```
+
+2. **Enable "Pass Video Name" in Bazarr.** Go to **Settings > Whisper Provider** and check the **Pass Video Name** option. This tells Bazarr to send the video file path alongside the audio, allowing Subgen to look up the source file and detect any audio offset.
+
+That's it. No new environment variables are required. Files without an audio offset are unaffected.
 
 ---
 
