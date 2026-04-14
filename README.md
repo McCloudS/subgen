@@ -253,7 +253,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `SKIP_IF_TARGET_SUBTITLES_EXIST` | `True` | Skips if an auto-generated subtitle in your desired language already exists. |
 | `SKIP_IF_EXTERNAL_SUBTITLES_EXIST`| `False` | Skips if an external subtitle matching `SUBTITLE_LANGUAGE_NAME` is found. |
 | `SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE`| `eng` | Skips if the file contains an embedded sub with this 3-letter code. |
-| `SKIP_SUBTITLE_LANGUAGES` | `''` | Pipe-separated list (e.g., `eng&#124;spa`). Skips if the file *has audio* in these languages. |
+| `SKIP_SUBTITLE_LANGUAGES` | `''` | Pipe-separated list (e.g., `eng\|spa`). Skips if the file *has audio* in these languages. |
 | `SKIP_IF_AUDIO_LANGUAGES` | `''` | Pipe-separated list (ISO 639-2). Skips generation if the file has audio tracks in these languages. |
 | `PREFERRED_AUDIO_LANGUAGES` | `eng` | Pipe-separated list. If multiple audio tracks exist, prefer transcribing this one. |
 | `LIMIT_TO_PREFERRED_AUDIO_LANGUAGE`| `False` | If True, skips files that do not have any audio tracks matching your preferred list. |
