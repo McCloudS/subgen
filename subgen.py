@@ -1,4 +1,4 @@
-subgen_version = '2026.04.3'
+subgen_version = '2026.04.5'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -411,6 +411,14 @@ def transcription_worker():
                         
                 delete_model()
          
+# Force ROCm/HIP context initialization on the main thread first for AMD GPUs
+if transcribe_device == "cuda" and getattr(torch.version, 'hip', None) is not None:
+    try:
+        logging.info("AMD ROCm detected: Initializing model on main thread to establish HIP context...")
+        start_model()
+    except Exception as e:
+        logging.error(f"Failed to initialize ROCm on main thread: {e}")
+
 # Create worker threads
 for _ in range(concurrent_transcriptions):
     threading.Thread(target=transcription_worker, daemon=True).start()
