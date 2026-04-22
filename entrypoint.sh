@@ -45,5 +45,14 @@ echo "Fixing permissions on /cache..."
 chown -R "$PUID":"$PGID" /cache
 chown -R "$PUID":"$PGID" /tmp 2>/dev/null || true
 
+# fix group for dri devices
+if [ -e "/dev/dri/renderD128" ]; then
+  echo "Adding group for /dev/dri/renderD128"
+  GID=`stat -c "%g" /dev/dri/renderD128`
+  groupadd -g $GID render2
+  GROUP=`getent group $GID | cut -d: -f1`
+  usermod -aG $GROUP subgen
+fi
+
 echo "Dropping root privileges and starting application..."
-exec gosu "$PUID":"$PGID" "$@"
+exec gosu "$PUID" "$@"

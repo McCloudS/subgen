@@ -410,14 +410,6 @@ def transcription_worker():
                         logging.debug(f"Transcription already queued/processing for: {next_task['path']}")
                         
                 delete_model()
-         
-# Force ROCm/HIP context initialization on the main thread first for AMD GPUs
-if transcribe_device == "cuda" and getattr(torch.version, 'hip', None) is not None:
-    try:
-        logging.info("AMD ROCm detected: Initializing model on main thread to establish HIP context...")
-        start_model()
-    except Exception as e:
-        logging.error(f"Failed to initialize ROCm on main thread: {e}")
 
 # Create worker threads
 for _ in range(concurrent_transcriptions):
