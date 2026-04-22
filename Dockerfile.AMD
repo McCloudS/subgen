@@ -1,4 +1,4 @@
-FROM ghcr.io/jordimas/ctranslate2:latest-ubuntu22.04-rocm7.2
+FROM ghcr.io/opennmt/ctranslate2:latest-ubuntu22.04-rocm7.2
 
 COPY entrypoint.sh /
 
