@@ -1,4 +1,4 @@
-subgen_version = '2026.04.6'
+subgen_version = '2026.04.8'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -757,9 +757,14 @@ async def asr(
         
         # Generate deterministic hash from audio (and optionally task/language)
         audio_hash = generate_audio_hash(file_content, task, language)
-        task_id = f"asr-{audio_hash}"
         
-        logging.debug(f"Generated audio hash: {audio_hash} for ASR request")
+        # FIX: Use video file path if available to match TRANSCRIBE tasks
+        if video_file:
+            task_id = path_mapping(video_file)
+            logging.debug(f"Using mapped video file path as task ID for ASR request: {task_id}")
+        else:
+            task_id = f"asr-{audio_hash}"
+            logging.debug(f"Generated audio hash: {audio_hash} for ASR request")
         
         # Handle forced language
         final_language = language
@@ -848,8 +853,7 @@ def get_audio_start_time(video_path: str) -> float:
         return 0.0
     
     try:
-        result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+        result = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0',
              '-show_entries', 'stream=start_time',
              '-of', 'json', video_path],
             capture_output=True, text=True, timeout=10
@@ -1438,8 +1442,17 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         # Trigger the downstream webhook
         send_completion_webhook(file_path, subtitle_file_path, output_language, transcription_type)
 
+        # FIX: Provide the generated subtitle result to any waiting ASR endpoint requests
+        with task_results_lock:
+            if file_path in task_results:
+                task_results[file_path].set_result(result.to_srt_vtt(filepath=None, word_level=word_level_highlight))
+
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
+        # FIX: Inform waiting ASR endpoint requests of the error so they don't hang
+        with task_results_lock:
+            if file_path in task_results:
+                task_results[file_path].set_error(str(e))
 
     finally:
         delete_model()
