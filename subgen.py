@@ -58,7 +58,7 @@ import gc
 import hashlib
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Union, Any, Optional
+from typing import Union
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
 from fastapi.responses import StreamingResponse
 import numpy as np
@@ -71,10 +71,9 @@ import ast
 from watchdog.observers.polling import PollingObserver as Observer
 from watchdog.events import FileSystemEventHandler
 import faster_whisper
-from io import BytesIO
-import io
 import torch
-import ctypes, ctypes.util
+import ctypes
+import ctypes.util
 from typing import List
 
 def convert_to_bool(in_bool):
@@ -916,7 +915,7 @@ def asr_task_worker(task_data: dict) -> None:
         task = task_data['task']
         language = task_data['language']
         video_file = task_data.get('video_file')
-        initial_prompt = task_data.get('initial_prompt')
+        _initial_prompt = task_data.get('initial_prompt')
         file_content = task_data['audio_content']
         encode = task_data['encode']
         
@@ -1021,7 +1020,7 @@ async def detect_language(
         if not file_content:
             return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
             
-        logging.info(f"Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
+        logging.info("Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
         
         # Track that we are directly using the model outside the queue
         with active_direct_tasks_lock:
@@ -1095,7 +1094,7 @@ def detect_language_from_upload(task_data: dict) -> None:
         start_model()
 
         args = {}
-        args['progress_callback'] = progress
+        args['progress_callback'] = None
         
         # Handle audio extraction
         if encode:
@@ -2168,7 +2167,7 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
     }
 
     users = json.loads(requests.get(f"{server_ip}/Users", headers=headers).content)
-    jellyfin_admin = get_jellyfin_admin(users)
+    _jellyfin_admin = get_jellyfin_admin(users)
 
     response = requests.post(url, headers=headers)
 
