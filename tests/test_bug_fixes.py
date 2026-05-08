@@ -1,5 +1,5 @@
 """
-Phase 3 TDD tests — written first, then bugs fixed to make them pass.
+Regression tests for specific bug fixes.
 
 Bugs covered:
 1. get_subtitle_languages() has no try/except around av.open() — propagates exception
