@@ -131,10 +131,12 @@ class LanguageCode(Enum):
     def from_name(name : str):
         """Convert a language name (either English or native) to LanguageCode enum."""
         for lang in LanguageCode:
+            if lang.name_en is None or lang.name_native is None:
+                continue
             if lang.name_en.lower() == name.lower() or lang.name_native.lower() == name.lower():
                 return lang
-        LanguageCode.NONE
-        
+        return LanguageCode.NONE
+
 
     @staticmethod    
     def from_string(value: str):

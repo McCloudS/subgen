@@ -57,6 +57,7 @@ import logging
 import gc
 import hashlib
 import asyncio
+from contextlib import asynccontextmanager
 from typing import Union, Any, Optional
 from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
 from fastapi.responses import StreamingResponse
@@ -201,13 +202,13 @@ AUDIO_EXTENSIONS = (
     ".amr", ".vox", ".tak", ".spx", ".m4b", ".mka"
 )
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if transcribe_folders:
-        # Run in a background thread so Uvicorn can finish starting up immediately
         threading.Thread(target=transcribe_existing, args=(transcribe_folders,), daemon=True).start()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 model = None
 model_cleanup_timer = None
@@ -570,7 +571,6 @@ def receive_tautulli_webhook(
 
     return ""
 
-@app.post("/plex")
 @app.post("/plex")
 def receive_plex_webhook(
         user_agent: Union[str] = Header(None),
@@ -1524,6 +1524,7 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
             + "\n".join([f"  - {track['index']}: {track['codec']} {track['language']} {('default' if track['default'] else '')}" for track in audio_tracks])
         )
 
+        audio_track = None
         if language is not None:
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
@@ -1840,20 +1841,19 @@ def get_subtitle_languages(video_path):
     :param video_path: Path to the video file
     :return: List of language codes for each subtitle stream
     """
-    languages =[]
+    languages = []
 
-    # Open the video file
-    with av.open(video_path) as container:
-        # Iterate through each audio stream
-        for stream in container.streams.subtitles:
-            # Access the metadata for each audio stream
-            lang_code = stream.metadata.get('language')
-            if lang_code:
-                languages.append(LanguageCode.from_iso_639_2(lang_code))
-            else:
-                # Append 'und' (undefined) if no language metadata is present
-                languages.append(LanguageCode.NONE)
-    
+    try:
+        with av.open(video_path) as container:
+            for stream in container.streams.subtitles:
+                lang_code = stream.metadata.get('language')
+                if lang_code:
+                    languages.append(LanguageCode.from_iso_639_2(lang_code))
+                else:
+                    languages.append(LanguageCode.NONE)
+    except Exception as e:
+        logging.warning(f"Could not read subtitle streams from {video_path}: {e}")
+
     return languages
 
 def get_file_name_without_extension(file_path):
@@ -2167,13 +2167,9 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
         "Authorization": f"MediaBrowser Token={jellyfin_token}",
     }
 
-    # Cheap way to get the admin user id, and save it for later use.
     users = json.loads(requests.get(f"{server_ip}/Users", headers=headers).content)
     jellyfin_admin = get_jellyfin_admin(users)
 
-    response = requests.get(f"{server_ip}/Users/{jellyfin_admin}/Items/{itemid}/Refresh", headers=headers)
-
-    # Sending the PUT request to refresh metadata
     response = requests.post(url, headers=headers)
 
     # Check if the request was successful
@@ -2321,10 +2317,10 @@ def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None 
             for file in files:
                 file_path = os.path.join(root, file)
                 gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
-    # if the path specified was actually a single file and not a folder, process it
-    if os.path.isfile(path):
-        if has_audio(path):
-            gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage) 
+        # if the path specified was actually a single file and not a folder, process it
+        if os.path.isfile(path):
+            if has_audio(path):
+                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage) 
      # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
