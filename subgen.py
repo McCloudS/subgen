@@ -42,39 +42,41 @@ Users can gradually migrate to the new names. Both will work simultaneously duri
 transition period. The old names may be deprecated in future versions. 
 """
 
-from language_code import LanguageCode
-from datetime import datetime
-from threading import Lock, Event, Timer
-import os
-import json
-import subprocess
-import xml.etree.ElementTree as ET
-import threading
-import sys
-import time
-import queue
-import logging
-import gc
-import hashlib
-import asyncio
-from contextlib import asynccontextmanager
-from typing import Union
-from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
-from fastapi.responses import StreamingResponse
-import numpy as np
-import stable_whisper
-from stable_whisper import Segment
-import requests
-import av
-import ffmpeg
 import ast
-from watchdog.observers.polling import PollingObserver as Observer
-from watchdog.events import FileSystemEventHandler
-import faster_whisper
-import torch
+import asyncio
 import ctypes
 import ctypes.util
-from typing import List
+import gc
+import hashlib
+import json
+import logging
+import os
+import queue
+import subprocess
+import sys
+import threading
+import time
+import xml.etree.ElementTree as ET
+from contextlib import asynccontextmanager
+from datetime import datetime
+from threading import Event, Lock, Timer
+from typing import List, Union
+
+import av
+import faster_whisper
+import ffmpeg
+import numpy as np
+import requests
+import stable_whisper
+import torch
+from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
+from stable_whisper import Segment
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers.polling import PollingObserver as Observer
+
+from language_code import LanguageCode
+
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
