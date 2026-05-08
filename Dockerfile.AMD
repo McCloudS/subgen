@@ -9,7 +9,9 @@ ARG HIP_ARCHITECTURES="gfx1010;gfx1011;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;g
 ARG CXX_FLAGS="-msse4.1 -O3 -Wno-deprecated-literal-operator"
 ARG HIP_FLAGS="-O3 -Wno-deprecated-literal-operator"
 
-RUN apt-get update && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         rocm-hip-runtime-dev hipblas-common-dev hipblas-dev hipcub-dev \
         hiprand-dev rocprim-dev rocrand-dev rocthrust-dev \
@@ -81,9 +83,11 @@ FROM rocm/dev-ubuntu-22.04:7.2
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    rocm-hip-libraries openmpi-bin libgomp1 python3-pip \
-    ffmpeg python3 curl gosu tzdata libomp5 libdw1 \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        rocm-hip-libraries openmpi-bin libgomp1 python3-pip \
+        ffmpeg python3 curl gosu tzdata libomp5 libdw1 \
     && ln -s /usr/lib/x86_64-linux-gnu/libomp.so.5 /usr/lib/x86_64-linux-gnu/libomp.so \
     && ldconfig \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -93,20 +97,21 @@ ENV ROCM_ROOT=/opt/rocm
 
 # Bring in the freshly built CTranslate2
 COPY --from=builder $CTRANSLATE2_ROOT $CTRANSLATE2_ROOT
-RUN python3 -m pip --no-cache-dir install $CTRANSLATE2_ROOT/*.whl && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install $CTRANSLATE2_ROOT/*.whl && \
     rm $CTRANSLATE2_ROOT/*.whl
 
-# torch nightly with rocm7.2
-RUN python3 -m pip install -U --no-cache-dir --pre \
-    torch torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm7.2
+# torch nightly with rocm7.2 — own layer so app dep changes don't re-download torch
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install -U --pre \
+        torch torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm7.2
 
-# Application Python deps
-RUN python3 -m pip install -U --no-cache-dir \
-    numpy fastapi requests uvicorn python-multipart ffmpeg-python \
-    watchdog tqdm more-itertools transformers tokenizers huggingface-hub av scipy
-
-RUN python3 -m pip install -U --no-cache-dir --no-deps faster-whisper
-RUN python3 -m pip install -U --no-cache-dir --no-deps stable-ts-whisperless
+# Application Python deps — merged into one layer
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install -U \
+        numpy fastapi requests uvicorn python-multipart ffmpeg-python \
+        watchdog tqdm more-itertools transformers tokenizers huggingface-hub av scipy \
+    && python3 -m pip install -U --no-deps faster-whisper stable-ts-whisperless
 
 # Application files
 COPY entrypoint.sh /

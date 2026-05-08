@@ -8,7 +8,9 @@ on:
       - 'language_code.py'
       - 'launcher.py'
       - 'requirements.txt'
+      - 'entrypoint.sh'
       - 'Dockerfile.AMD'
+      - '.github/workflows/build_amd.yml'
   workflow_dispatch:
 
 concurrency:
@@ -27,11 +29,6 @@ jobs:
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          image: tonistiigi/binfmt:qemu-v7.0.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,3 +49,5 @@ jobs:
           tags: |
             mccloud/subgen:amd
             mccloud/subgen:${{ env.version }}-amd
+          cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
+          cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max

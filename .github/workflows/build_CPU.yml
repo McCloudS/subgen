@@ -8,7 +8,9 @@ on:
       - 'language_code.py'
       - 'launcher.py'
       - 'requirements.txt'
+      - 'entrypoint.sh'
       - 'Dockerfile.cpu'
+      - '.github/workflows/build_CPU.yml'
   workflow_dispatch:
 
 concurrency:
@@ -52,3 +54,5 @@ jobs:
           tags: |
             mccloud/subgen:cpu
             mccloud/subgen:${{ env.version }}-cpu
+          cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
+          cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max

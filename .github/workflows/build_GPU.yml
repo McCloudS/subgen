@@ -8,7 +8,9 @@ on:
       - 'language_code.py'
       - 'launcher.py'
       - 'requirements.txt'
+      - 'entrypoint.sh'
       - 'Dockerfile'
+      - '.github/workflows/build_GPU.yml'
   workflow_dispatch:
 
 concurrency:
@@ -28,6 +30,9 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -43,3 +48,5 @@ jobs:
           tags: |
             mccloud/subgen:latest
             mccloud/subgen:${{ env.version }}
+          cache-from: type=registry,ref=mccloud/subgen:buildcache
+          cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
