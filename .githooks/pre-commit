@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Auto-bump the patch version in subgen.py whenever it is staged for commit.
+set -euo pipefail
+
+if ! git diff --cached --name-only | grep -q '^subgen\.py$'; then
+  exit 0
+fi
+
+current=$(sed -n "s/.*subgen_version = '\([^']*\)'.*/\1/p" subgen.py)
+if [ -z "$current" ]; then
+  echo "pre-commit: could not read subgen_version — skipping auto-bump" >&2
+  exit 0
+fi
+
+year_now=$(date +%Y)
+month_now=$(date +%m)
+year_cur=$(echo "$current" | cut -d. -f1)
+month_cur=$(echo "$current" | cut -d. -f2)
+patch_cur=$(echo "$current" | cut -d. -f3)
+
+if [ "$year_now" = "$year_cur" ] && [ "$month_now" = "$month_cur" ]; then
+  new_version="$year_now.$month_now.$((patch_cur + 1))"
+else
+  new_version="$year_now.$month_now.1"
+fi
+
+sed -i '' "s/subgen_version = '$current'/subgen_version = '$new_version'/" subgen.py
+git add subgen.py
+echo "pre-commit: bumped subgen_version $current → $new_version"
