@@ -2168,9 +2168,6 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
         "Authorization": f"MediaBrowser Token={jellyfin_token}",
     }
 
-    users = json.loads(requests.get(f"{server_ip}/Users", headers=headers).content)
-    _jellyfin_admin = get_jellyfin_admin(users)
-
     response = requests.post(url, headers=headers)
 
     # Check if the request was successful
