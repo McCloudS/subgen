@@ -124,7 +124,7 @@ procaddedmedia = get_env_with_fallback('PROCESS_ADDED_MEDIA', 'PROCADDEDMEDIA', 
 procmediaonplay = get_env_with_fallback('PROCESS_MEDIA_ON_PLAY', 'PROCMEDIAONPLAY', True, convert_to_bool)
 
 # Subtitle Configuration - with backwards compatibility
-namesublang = get_env_with_fallback('SUBTITLE_LANGUAGE_NAME', 'NAMESUBLANG', '')
+subtitle_language_name = get_env_with_fallback('SUBTITLE_LANGUAGE_NAME', 'NAMESUBLANG', '')
 
 # System Configuration - with backwards compatibility
 webhookport = get_env_with_fallback('WEBHOOK_PORT', 'WEBHOOKPORT', 9000, int)
@@ -150,14 +150,14 @@ asr_timeout = int(os.getenv('ASR_TIMEOUT', 18000))
 webhook_url_completed = os.getenv('WEBHOOK_URL_COMPLETED', '')
 
 # Skip Configuration - with backwards compatibility
-skipifexternalsub = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
-skip_if_to_transcribe_sub_already_exist = get_env_with_fallback('SKIP_IF_TARGET_SUBTITLES_EXIST', 'SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True, convert_to_bool)
-skipifinternalsublang = LanguageCode.from_string(get_env_with_fallback('SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE', 'SKIPIFINTERNALSUBLANG', ''))
+skip_if_external_sub_exists = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
+skip_if_target_subtitle_exists = get_env_with_fallback('SKIP_IF_TARGET_SUBTITLES_EXIST', 'SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True, convert_to_bool)
+skip_if_internal_sub_language = LanguageCode.from_string(get_env_with_fallback('SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE', 'SKIPIFINTERNALSUBLANG', ''))
 plex_queue_next_episode = convert_to_bool(os.getenv('PLEX_QUEUE_NEXT_EPISODE', False))
 plex_queue_season = convert_to_bool(os.getenv('PLEX_QUEUE_SEASON', False))
 plex_queue_series = convert_to_bool(os.getenv('PLEX_QUEUE_SERIES', False))
 # Language and Skip Configuration - with backwards compatibility
-skip_lang_codes_list = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES', '').split("|")]
+skip_subtitle_languages = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES', '').split("|")]
         if get_env_with_fallback('SKIP_SUBTITLE_LANGUAGES', 'SKIP_LANG_CODES')
     else[]
 )
@@ -166,18 +166,18 @@ preferred_audio_languages =[
     LanguageCode.from_string(code) 
     for code in os.getenv('PREFERRED_AUDIO_LANGUAGES', 'eng').split("|")
 ] # in order of preference
-limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False)) #TODO: add support for this
-skip_if_audio_track_is_in_list = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
+limit_to_preferred_audio_languages = convert_to_bool(os.getenv('LIMIT_TO_PREFERRED_AUDIO_LANGUAGE', False))
+skip_audio_languages = ([LanguageCode.from_string(code) for code in get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS', '').split("|")]
     if get_env_with_fallback('SKIP_IF_AUDIO_LANGUAGES', 'SKIP_IF_AUDIO_TRACK_IS')
     else[]
 )
 
 # Additional Subtitle Configuration - with backwards compatibility
 subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_639_2_B')
-only_skip_if_subgen_subtitle = get_env_with_fallback('SKIP_ONLY_SUBGEN_SUBTITLES', 'ONLY_SKIP_IF_SUBGEN_SUBTITLE', False, convert_to_bool)
+only_match_subgen_subtitles = get_env_with_fallback('SKIP_ONLY_SUBGEN_SUBTITLES', 'ONLY_SKIP_IF_SUBGEN_SUBTITLE', False, convert_to_bool)
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
-skip_if_language_is_not_set_but_subtitles_exist = get_env_with_fallback('SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST', 'SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False, convert_to_bool)
-should_whiser_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
+skip_if_no_audio_language_but_subtitles_exist = get_env_with_fallback('SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST', 'SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False, convert_to_bool)
+should_whisper_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
 show_in_subname_subgen = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_SUBGEN', True))
 show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True))
 
@@ -371,7 +371,7 @@ def transcription_worker():
             elif task_type == "asr":
                 asr_task_worker(task)
             else: # transcribe
-                gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'])
+                gen_subtitles(task['path'], task['transcribe_or_translate'], task['force_language'], audio_tracks=task.get('audio_tracks'))
                 
                 # --- METADATA REFRESH LOGIC ---
                 if 'plex_item_id' in task:
@@ -474,44 +474,37 @@ class ProgressHandler:
         self.filename = filename
         self.start_time = time.time()
         self.last_print_time = 0
-        self.interval = 5 
+        self.interval = 5
+
+    @staticmethod
+    def _fmt_t(seconds):
+        """Format seconds as [H:]MM:SS without milliseconds."""
+        m, s = divmod(int(seconds), 60)
+        h, m = divmod(m, 60)
+        if h > 0:
+            return f"{h}:{m:02d}:{s:02d}"
+        return f"{m:02d}:{s:02d}"
 
     def __call__(self, seek, total):
         if docker_status == 'Docker' or debug:
             current_time = time.time()
             if self.last_print_time == 0 or (current_time - self.last_print_time) >= self.interval:
                 self.last_print_time = current_time
-                
-                # 1. Math for Metrics
+
                 pct = int((seek / total) * 100) if total > 0 else 0
                 elapsed = current_time - self.start_time
                 speed = seek / elapsed if elapsed > 0 else 0
                 eta = (total - seek) / speed if speed > 0 else 0
 
-                # 2. Precise Time Formatting (removes milliseconds)
-                def fmt_t(seconds):
-                    m, s = divmod(int(seconds), 60)
-                    h, m = divmod(m, 60)
-                    if h > 0:
-                        return f"{h}:{m:02d}:{s:02d}"
-                    return f"{m:02d}:{s:02d}"
-
-                # 3. Get Queue Stats
                 proc = len(task_queue.get_processing_tasks())
                 queued = len(task_queue.get_queued_tasks())
 
-                # 4. Alignment Logic
-                # :<40  = Left-align, 40 chars wide (Filename)
-                # :>3   = Right-align, 3 chars wide (Percentage)
-                # :>5   = Right-align, 5 chars wide (Seconds)
-                # :>5   = Right-align, 5 chars wide (Time strings)
-                
                 clean_name = (self.filename[:37] + '..') if len(self.filename) > 40 else self.filename
-                
+
                 logging.info(
                     f"[ {clean_name:<40}] {pct:>3}% | "
                     f"{int(seek):>5}/{int(total):<5}s "
-                    f"[{fmt_t(elapsed):>5}<{fmt_t(eta):>5}, {speed:>5.2f}s/s] | "
+                    f"[{self._fmt_t(elapsed):>5}<{self._fmt_t(eta):>5}, {speed:>5.2f}s/s] | "
                     f"Jobs: {proc} processing, {queued} queued"
                 )
                 
@@ -579,8 +572,6 @@ def receive_plex_webhook(
 ):
     try:
         plex_json = json.loads(payload)
-        #logging.debug(f"Raw response: {payload}")
-
         if "PlexMediaServer" not in user_agent:
             return {"message": "This doesn't appear to be a properly configured Plex webhook, please review the instructions again"}
 
@@ -687,8 +678,6 @@ def receive_emby_webhook(
         user_agent: Union[str, None] = Header(None),
         data: Union[str, None] = Form(None),
 ):
-    #logging.debug("Raw response: %s", data)
-
     if not data:
         return ""
 
@@ -1358,7 +1347,7 @@ def delete_model():
         # The very last worker to finish the last item will trigger the timer.
         logging.debug("Tasks still in queue or processing; skipping model cleanup scheduling.")
 
-def isAudioFileExtension(file_extension):
+def is_audio_file_extension(file_extension):
     return file_extension.casefold() in AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
@@ -1393,26 +1382,26 @@ def send_completion_webhook(source_file_path: str, subtitle_file_path: str, lang
     except Exception as e:
         logging.error(f"Failed to send completion webhook: {e}")
 
-def gen_subtitles(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE) -> None:
-    """Generates subtitles for a video file. 
+def gen_subtitles(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, audio_tracks=None) -> None:
+    """Generates subtitles for a video file.
 
     Args:
-        file_path: str - The path to the video file. 
+        file_path: str - The path to the video file.
         transcription_type: str - The type of transcription or translation to perform.
-        force_language: str - The language to force for transcription or translation. Default is None. 
+        force_language: LanguageCode - The language to force for transcription or translation.
+        audio_tracks: Pre-fetched audio track list; fetched from file if not provided.
     """
 
     try:
         start_model()
-        
-        # Check if the file is an audio file before trying to extract audio 
+
+        # Check if the file is an audio file before trying to extract audio
         file_name, file_extension = os.path.splitext(file_path)
-        is_audio_file = isAudioFileExtension(file_extension)
-        
+        is_audio_file = is_audio_file_extension(file_extension)
+
         data = file_path
         # Extract audio from the file if it has multiple audio tracks
-        extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language)
-        # handle_multiple_audio_tracks now returns bytes directly
+        extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language, audio_tracks=audio_tracks)
         if extracted_audio_file:
             data = extracted_audio_file
         
@@ -1469,9 +1458,9 @@ def define_subtitle_language_naming(language: LanguageCode, type):
     Returns:
         str: The language name in the specified format. If an invalid type is provided, it defaults to the language's name.
     """
-    if namesublang: 
-        return namesublang
-        # If we are translating, then we ALWAYS output an english file. 
+    if subtitle_language_name:
+        return subtitle_language_name
+    # If we are translating, then we ALWAYS output an english file.
     switch_dict = {
         "ISO_639_1": language.to_iso_639_1,
         "ISO_639_2_T": language.to_iso_639_2_t,
@@ -1500,23 +1489,25 @@ def name_subtitle(file_path: str, language: LanguageCode) -> str:
     
     return f"{os.path.splitext(file_path)[0]}{subgen_part}{model_part}.{lang_part}.srt"
     
-def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None) -> bytes | None:
+def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None = None, audio_tracks=None) -> bytes | None:
     """
-    Handles the possibility of a media file having multiple audio tracks. 
-    
-    Changed to return bytes directly instead of BytesIO to prevent memory leak.
-    Previously returned BytesIO objects were never closed, causing memory leaks.
-    If the media file has multiple audio tracks, it will extract the audio track of the selected language. Otherwise, it will extract the first audio track.
-    
+    Handles the possibility of a media file having multiple audio tracks.
+
+    Returns bytes directly instead of BytesIO to prevent memory leak.
+    If the media file has multiple audio tracks, extracts the audio track of
+    the selected language; otherwise extracts the first audio track.
+
     Parameters:
     file_path (str): The path to the media file.
-    language (LanguageCode | None): The language of the audio track to search for. If None, it will extract the first audio track.
-    
+    language (LanguageCode | None): The language of the audio track to search for.
+    audio_tracks: Pre-fetched audio track list; fetched from file if not provided.
+
     Returns:
     bytes | None: The audio data as bytes, or None if no audio track was extracted.
     """
     audio_bytes = None
-    audio_tracks = get_audio_tracks(file_path)
+    if audio_tracks is None:
+        audio_tracks = get_audio_tracks(file_path)
 
     if len(audio_tracks) > 1:
         logging.debug(f"Handling multiple audio tracks from {file_path} and planning to extract audio track of language {language}")
@@ -1592,44 +1583,41 @@ def get_audio_track_by_language(audio_tracks, language):
             return track
     return None
 
-def choose_transcribe_language(file_path, forced_language):
+def choose_transcribe_language(file_path, forced_language, audio_tracks=None):
     """
     Determines the language to be used for transcription based on the provided
-    file path and language preferences. 
+    file path and language preferences.
 
     Args:
         file_path: The path to the file for which the audio tracks are analyzed.
         forced_language: The language to force for transcription if specified.
+        audio_tracks: Pre-fetched audio track list; if None, fetched from file.
 
     Returns:
         The language code to be used for transcription. It prioritizes the
         `forced_language`, then the environment variable `force_detected_language_to`,
         then the preferred audio language if available, and finally the default
-        language of the audio tracks. Returns None if no language preference is
-        determined.
+        language of the audio tracks. Returns LanguageCode.NONE if undetermined.
     """
-    
-    #logger.debug(f"choose_transcribe_language({file_path}, {forced_language})")
-    
-    if forced_language: 
-        logger.debug(f"ENV FORCE_LANGUAGE is set: Forcing language to {forced_language}") 
+    if forced_language:
+        logging.debug(f"ENV FORCE_LANGUAGE is set: Forcing language to {forced_language}")
         return forced_language
 
-    if force_detected_language_to: 
-        logger.debug(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
+    if force_detected_language_to:
+        logging.debug(f"ENV FORCE_DETECTED_LANGUAGE_TO is set: Forcing detected language to {force_detected_language_to}")
         return force_detected_language_to
 
-    audio_tracks = get_audio_tracks(file_path)
-    
+    if audio_tracks is None:
+        audio_tracks = get_audio_tracks(file_path)
+
     preferred_track_language = find_language_audio_track(audio_tracks, preferred_audio_languages)
 
-    if preferred_track_language: 
-        #logging.debug(f"Preferred language found: {preferred_track_language}")
+    if preferred_track_language:
         return preferred_track_language
-    
+
     default_language = find_default_audio_track_language(audio_tracks)
-    if default_language: 
-        logger.debug(f"Default language found: {default_language}")
+    if default_language:
+        logging.debug(f"Default language found: {default_language}")
         return default_language
 
     return LanguageCode.NONE
@@ -1714,131 +1702,141 @@ def find_default_audio_track_language(audio_tracks):
             return track['language']
     return None
     
-def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **kwargs) -> None:
+def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **task_kwargs) -> None:
     global task_queue
-    
+
     # Check if this file is already in the queue or being processed
     if task_queue.is_active(file_path):
         logging.debug(f"Ignored: {os.path.basename(file_path)} is already queued or processing.")
         return
-    
+
     if not has_audio(file_path):
         logging.debug(f"{file_path} doesn't have any audio to transcribe!")
         return
-    
-    force_language = choose_transcribe_language(file_path, force_language)
 
-    if should_skip_file(file_path, force_language): # skip a file before we waste time detecting it's language
+    # Probe audio tracks once and pass to both helpers to avoid triple ffprobe
+    audio_tracks = get_audio_tracks(file_path)
+    audio_langs = [track['language'] for track in audio_tracks]
+
+    force_language = choose_transcribe_language(file_path, force_language, audio_tracks=audio_tracks)
+
+    if should_skip_file(file_path, force_language, audio_langs=audio_langs):
         return
-    
-    # check if we would like to detect audio language in case of no audio language specified. Will return here again with specified language from whisper
-    if not force_language and should_whiser_detect_audio_language:
-        # make a detect language task
-        task_id = {'path': file_path, 'type': "detect_language"}
-        # Pass metadata info (kwargs) to the detect task
-        task_id.update(kwargs)
-        task_queue.put(task_id)
-        #logging.debug(f"Added to queue: {task_id['path']}[type: {task_id.get('type', 'transcribe')}]")
+
+    # Detect audio language via Whisper if no language is known and detection is enabled
+    if not force_language and should_whisper_detect_audio_language:
+        detect_task = {'path': file_path, 'type': "detect_language"}
+        detect_task.update(task_kwargs)
+        task_queue.put(detect_task)
         return
 
     task = {
         'path': file_path,
         'transcribe_or_translate': transcription_type,
-        'force_language': force_language
+        'force_language': force_language,
+        'audio_tracks': audio_tracks,  # cached — avoids re-probing in gen_subtitles
     }
-    # Pass metadata info (kwargs) to the transcribe task
-    task.update(kwargs)
-    
-    task_queue.put(task)
-    #logging.debug(f"Added to queue: {task['path']}, {task['transcribe_or_translate']}, {task['force_language']}")
+    task.update(task_kwargs)
 
-def should_skip_file(file_path: str, target_language: LanguageCode) -> bool:
+    task_queue.put(task)
+
+def should_skip_file(file_path: str, target_language: LanguageCode, audio_langs=None) -> bool:
     """
     Determines if subtitle generation should be skipped for a file.
 
     Args:
         file_path: Path to the media file.
         target_language: The desired language for transcription.
+        audio_langs: Pre-fetched list of audio LanguageCodes; fetched if not provided.
 
     Returns:
         True if the file should be skipped, False otherwise.
     """
     base_name = os.path.basename(file_path)
     file_name, file_ext = os.path.splitext(base_name)
-    if transcribe_or_translate == 'translate': 
-        target_language = LanguageCode.ENGLISH # Force our target language as english if we are translating
+    if transcribe_or_translate == 'translate':
+        target_language = LanguageCode.ENGLISH  # Force our target language as english if we are translating
+
     # 1. Skip if it's an audio file and an LRC file already exists.
-    if isAudioFileExtension(file_ext) and lrc_for_audio_files:
+    if is_audio_file_extension(file_ext) and lrc_for_audio_files:
         lrc_path = os.path.join(os.path.dirname(file_path), f"{file_name}.lrc")
         if os.path.exists(lrc_path):
             logging.info(f"Skipping {base_name}: LRC file already exists.")
             return True
 
-    # 2. Skip if language detection failed and we are configured to skip unknowns.
-    if skip_unknown_language and target_language == LanguageCode.NONE:
-        logging.info(f"Skipping {base_name}: Unknown language and skip_unknown_language is enabled.")
+    # 2. Audio language is unknown — two independent skip conditions for this case.
+    if target_language == LanguageCode.NONE:
+        if skip_unknown_language:
+            logging.info(f"Skipping {base_name}: Audio language unknown and SKIP_UNKNOWN_LANGUAGE is enabled.")
+            return True
+        if skip_if_no_audio_language_but_subtitles_exist and get_subtitle_languages(file_path):
+            logging.info(f"Skipping {base_name}: Audio language unknown but internal subtitles already exist.")
+            return True
+
+    # 3. Audio track checks (cheap — audio_langs pre-fetched by caller).
+    if audio_langs is None:
+        audio_langs = get_audio_languages(file_path)
+
+    # 3a. Skip if audio language is not in the preferred list.
+    if limit_to_preferred_audio_languages:
+        if not any(lang in preferred_audio_languages for lang in audio_langs):
+            preferred_names = [lang.to_name() for lang in preferred_audio_languages]
+            logging.info(f"Skipping {base_name}: No preferred audio tracks found (looking for {', '.join(preferred_names)})")
+            return True
+
+    # 3b. Skip if audio language is in the explicit skip list.
+    if any(lang in skip_audio_languages for lang in audio_langs):
+        logging.info(f"Skipping {base_name}: Contains a skipped audio language.")
         return True
 
-    # 3. Skip if a subtitle already exists in the target language.
-    if skip_if_to_transcribe_sub_already_exist:
-        if has_subtitle_language(file_path, target_language):
+    # 4. Skip if a subtitle already exists in the target language.
+    if skip_if_target_subtitle_exists:
+        if subtitle_exists_in_language(file_path, target_language):
             lang_name = target_language.to_name()
             logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
             return True
-            
-        # Since NAMESUBLANG overrides the output filename, check if it exists in the folder
-        if namesublang and LanguageCode.is_valid_language(namesublang):
-            external_lang = LanguageCode.from_string(namesublang)
-            if has_subtitle_of_language_in_folder(file_path, external_lang, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle):
-                logging.info(f"Skipping {base_name}: Subtitles already exist in custom name '{namesublang}'.")
+
+        # Since SUBTITLE_LANGUAGE_NAME overrides the output filename, check if it exists in the folder.
+        if subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name):
+            external_lang = LanguageCode.from_string(subtitle_language_name)
+            if has_external_subtitle_in_language(file_path, external_lang, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles):
+                logging.info(f"Skipping {base_name}: Subtitles already exist in custom name '{subtitle_language_name}'.")
                 return True
-                
+
         # Check: Does the exact file Subgen intends to create already exist?
         expected_output = name_subtitle(file_path, target_language)
         if os.path.exists(expected_output):
             logging.info(f"Skipping {base_name}: Generated subtitle '{os.path.basename(expected_output)}' already exists.")
             return True
 
-    # 4. Skip if an internal subtitle exists in skipifinternalsublang language.
-    if skipifinternalsublang and has_subtitle_language_in_file(file_path, skipifinternalsublang):
-        lang_name = skipifinternalsublang.to_name()
+    # 5. Internal subtitle checks (grouped — both examine streams inside the container).
+
+    # 5a. Skip if an internal subtitle exists in the specifically configured language.
+    if skip_if_internal_sub_language and has_internal_subtitle_in_language(file_path, skip_if_internal_sub_language):
+        lang_name = skip_if_internal_sub_language.to_name()
         logging.info(f"Skipping {base_name}: Internal subtitles in {lang_name} already exist.")
         return True
 
-    # 5. Skip if an external subtitle exists in the namesublang language
-    if skipifexternalsub and namesublang and LanguageCode.is_valid_language(namesublang):
-        external_lang = LanguageCode.from_string(namesublang)
-        if has_subtitle_of_language_in_folder(file_path, external_lang, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle):
+    # 5b. Skip if any embedded subtitle language is in the skip list.
+    if skip_subtitle_languages and any(lang in skip_subtitle_languages for lang in get_subtitle_languages(file_path)):
+        logging.info(f"Skipping {base_name}: Contains a skipped subtitle language.")
+        return True
+
+    # 6. Skip if an external subtitle exists matching the custom subtitle_language_name.
+    #    Note: this overlaps with check 4b when skip_if_target_subtitle_exists is also True;
+    #    it only adds distinct behaviour when skip_if_target_subtitle_exists is False.
+    if skip_if_external_sub_exists and subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name):
+        external_lang = LanguageCode.from_string(subtitle_language_name)
+        if has_external_subtitle_in_language(file_path, external_lang, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles):
             lang_name = external_lang.to_name()
             logging.info(f"Skipping {base_name}: External subtitles in {lang_name} already exist.")
             return True
 
-    # 6. Skip if any subtitle language is in the skip list.
-    if any(lang in skip_lang_codes_list for lang in get_subtitle_languages(file_path)):
-        logging.info(f"Skipping {base_name}: Contains a skipped subtitle language.")
-        return True
-
-    # 7. Audio track checks
-    audio_langs = get_audio_languages(file_path)
-
-    # 7a. Limit to preferred audio languages
-    if limit_to_preferred_audio_languages:
-        if not any(lang in preferred_audio_languages for lang in audio_langs):
-            preferred_names =[lang.to_name() for lang in preferred_audio_languages]
-            logging.info(f"Skipping {base_name}: No preferred audio tracks found (looking for {', '.join(preferred_names)})")
-            return True
-
-    # 7b. Skip if the audio track language is in the skip list
-    if any(lang in skip_if_audio_track_is_in_list for lang in audio_langs):
-        logging.info(f"Skipping {base_name}: Contains a skipped audio language.")
-        return True
-
-    #logging.debug(f"Processing {base_name}: No skip conditions met.")
     return False
     
 def get_subtitle_languages(video_path):
     """
-    Extract language codes from each audio stream in the video file using pyav.
+    Extract language codes from each subtitle stream in the video file using pyav.
     :param video_path: Path to the video file
     :return: List of language codes for each subtitle stream
     """
@@ -1857,10 +1855,6 @@ def get_subtitle_languages(video_path):
 
     return languages
 
-def get_file_name_without_extension(file_path):
-    file_name, file_extension = os.path.splitext(file_path)
-    return file_name
-
 def get_audio_languages(video_path):
     """
     Extract language codes from each audio stream in the video file.
@@ -1871,7 +1865,7 @@ def get_audio_languages(video_path):
     audio_tracks = get_audio_tracks(video_path)
     return [track['language'] for track in audio_tracks] 
 
-def has_subtitle_language(video_file, target_language: LanguageCode):
+def subtitle_exists_in_language(video_file, target_language: LanguageCode):
     """
     Determines if a subtitle file with the target language is available for a specified video file.
 
@@ -1885,58 +1879,39 @@ def has_subtitle_language(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    return has_subtitle_language_in_file(video_file, target_language) or has_subtitle_of_language_in_folder(video_file, target_language, recursion=True, only_skip_if_subgen_subtitle=only_skip_if_subgen_subtitle)
+    return has_internal_subtitle_in_language(video_file, target_language) or has_external_subtitle_in_language(video_file, target_language, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles)
 
-def has_subtitle_language_in_file(video_file: str, target_language: Union[LanguageCode, None]):
+def has_internal_subtitle_in_language(video_file: str, target_language: LanguageCode) -> bool:
     """
-    Checks if a video file contains subtitles with a specific language.
+    Checks whether a video container has an embedded subtitle track in the given language.
 
     Args:
-        video_file (str): The path to the video file.
-        target_language (LanguageCode | None): The language of the subtitle file to search for.
+        video_file: Path to the video file.
+        target_language: The language to search for.
 
     Returns:
-        bool: True if a subtitle file with the target language is found, False otherwise.
+        True if a matching embedded subtitle stream is found, False otherwise.
     """
     try:
         with av.open(video_file) as container:
-            # Create a list of subtitle streams with 'language' metadata
-            subtitle_streams =[
-                stream for stream in container.streams 
-                if stream.type == 'subtitle' and 'language' in stream.metadata
-            ]
-
-            # Skip logic if target_language is None
-            if target_language is LanguageCode.NONE:
-                if skip_if_language_is_not_set_but_subtitles_exist and subtitle_streams:
-                    logging.debug("Language is not set, but internal subtitles exist.")
-                    return True
-                if only_skip_if_subgen_subtitle:
-                    #logging.debug("Skipping since only external subgen subtitles are considered.")
-                    return False  # Skip if only looking for external subgen subtitles
-
-            # Check if any subtitle stream matches the target language
-            for stream in subtitle_streams:
-                # Convert the subtitle stream's language to a LanguageCode instance and compare
-                stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
-                if stream_language == target_language:
-                    #logging.debug(f"Subtitles in '{target_language}' language found in the video.")
-                    return True
-
-            #logging.debug(f"No subtitles in '{target_language}' language found in the video.")
+            for stream in container.streams:
+                if stream.type == 'subtitle' and 'language' in stream.metadata:
+                    stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
+                    if stream_language == target_language:
+                        return True
             return False
 
     except Exception as e:
         logging.error(f"An error occurred while checking the file with pyav: {type(e).__name__}: {e}")
         return False
 
-def has_subtitle_of_language_in_folder(video_file: str, target_language: LanguageCode, recursion: bool = True, only_skip_if_subgen_subtitle: bool = False) -> bool:
+def has_external_subtitle_in_language(video_file: str, target_language: LanguageCode, recursion: bool = True, only_match_subgen_subtitles: bool = False) -> bool:
     """Checks if the given folder has a subtitle file with the given language.
     Args:
         video_file (str): The path of the video file.
         target_language (LanguageCode): The language of the subtitle file to search for.
         recursion (bool): If True, search subfolders. If False, only the current folder.
-        only_skip_if_subgen_subtitle (bool): If True, only skip if subtitles are auto-generated ("subgen").
+        only_match_subgen_subtitles (bool): If True, only skip if subtitles are auto-generated ("subgen").
     Returns:
         bool: True if a matching subtitle file is found, False otherwise.
     """
@@ -1944,8 +1919,6 @@ def has_subtitle_of_language_in_folder(video_file: str, target_language: Languag
 
     video_folder = os.path.dirname(video_file)
     video_name = os.path.splitext(os.path.basename(video_file))[0]
-
-    # logging.debug(f"Searching for subtitles in: {video_folder}")
 
     for file_name in os.listdir(video_folder):
         file_path = os.path.join(video_folder, file_name)
@@ -1964,25 +1937,24 @@ def has_subtitle_of_language_in_folder(video_file: str, target_language: Languag
             # Check for "subgen"
             has_subgen = "subgen" in subtitle_parts
 
-            # Special handling if only skipping for subgen subtitles
+            # When audio language is unknown, decide based on whether this subtitle counts.
             if target_language == LanguageCode.NONE:
-                if only_skip_if_subgen_subtitle:
+                if only_match_subgen_subtitles:
                     if has_subgen:
-                        logging.debug("Skipping subtitles because they are auto-generated ('subgen').")
-                        return False
-                logging.debug("Skipping subtitles because language is NONE.")
-                return True  # Default behavior if subtitles exist
+                        return True   # Subgen subtitle exists → counts as covered → skip
+                    continue          # Non-subgen subtitle → ignore, keep looking
+                return True           # Any subtitle found → skip
 
             # Check if the subtitle file matches the target language
             if is_valid_subtitle_language(subtitle_parts, target_language):
-                if only_skip_if_subgen_subtitle and not has_subgen:
+                if only_match_subgen_subtitles and not has_subgen:
                     continue  # Ignore non-subgen subtitles if flag is set
                 logging.debug(f"Found matching subtitle: {file_name} for language {target_language.name} (subgen={has_subgen})")
                 return True
 
         # Recursively search subfolders
         elif os.path.isdir(file_path) and recursion:
-            if has_subtitle_of_language_in_folder(os.path.join(file_path, os.path.basename(video_file)), target_language, False, only_skip_if_subgen_subtitle):
+            if has_external_subtitle_in_language(os.path.join(file_path, os.path.basename(video_file)), target_language, False, only_match_subgen_subtitles):
                 return True
 
     return False
@@ -2216,7 +2188,6 @@ def has_audio(file_path):
             return False
 
         if not (has_video_extension(file_path) or has_audio_extension(file_path)):
-            # logging.debug(f"{file_path} is an not a video or audio file, skipping processing. skipping processing")
             return False
 
         with av.open(file_path) as container:
@@ -2281,31 +2252,30 @@ def is_file_stable(file_path, wait_time=2, check_intervals=3):
 
     return False  # File is still changing
 
-if monitor:
-    # Define a handler class that will process new files
-    class NewFileHandler(FileSystemEventHandler):
-        def create_subtitle(self, event):
-            # Only process if it's a file
-            if not event.is_directory:
-                file_path = event.src_path
-                if has_audio(file_path):
-                    logging.info(f"File: {path_mapping(file_path)} was added")
-                    gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate)
+class NewFileHandler(FileSystemEventHandler):
+    """Watchdog handler that queues newly created or modified media files."""
 
-        def handle_event(self, event):
-            """Wait for stability before processing the file."""
+    def create_subtitle(self, event):
+        if not event.is_directory:
             file_path = event.src_path
-            if is_file_stable(file_path):
-                self.create_subtitle(event)
+            if has_audio(file_path):
+                logging.info(f"File: {path_mapping(file_path)} was added")
+                gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate)
 
-        def on_created(self, event):
-            time.sleep(5) # Extra buffer time for new files
-            self.handle_event(event)
+    def handle_event(self, event):
+        """Wait for file stability before processing."""
+        if is_file_stable(event.src_path):
+            self.create_subtitle(event)
 
-        def on_modified(self, event):
-            self.handle_event(event)
+    def on_created(self, event):
+        time.sleep(5)  # Extra buffer time for new files
+        self.handle_event(event)
 
-def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None = None):
+    def on_modified(self, event):
+        self.handle_event(event)
+
+
+def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = LanguageCode.NONE):
     transcribe_folders = transcribe_folders.split("|")
     logging.info("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
@@ -2318,8 +2288,8 @@ def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None 
         # if the path specified was actually a single file and not a folder, process it
         if os.path.isfile(path):
             if has_audio(path):
-                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage) 
-     # Set up the observer to watch for new files
+                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
+    # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
         for path in transcribe_folders:
