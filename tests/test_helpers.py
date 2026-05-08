@@ -129,6 +129,6 @@ class TestFileExtensions:
         assert subgen.has_audio_extension(fname) is False
 
     def test_is_audio_file_extension_case_insensitive(self):
-        assert subgen.isAudioFileExtension(".MP3") is True
-        assert subgen.isAudioFileExtension(".mp3") is True
-        assert subgen.isAudioFileExtension(".Flac") is True
+        assert subgen.is_audio_file_extension(".MP3") is True
+        assert subgen.is_audio_file_extension(".mp3") is True
+        assert subgen.is_audio_file_extension(".Flac") is True

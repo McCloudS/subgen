@@ -2,8 +2,8 @@
 Tests for should_skip_file().
 
 should_skip_file() reads many module-level globals (skip_unknown_language,
-skip_if_to_transcribe_sub_already_exist, etc.) and calls several functions
-that touch the file system (has_subtitle_language, get_subtitle_languages, ...).
+skip_if_target_subtitle_exists, etc.) and calls several functions
+that touch the file system (subtitle_exists_in_language, get_subtitle_languages, ...).
 Both are patched here with monkeypatch / unittest.mock.
 """
 import sys
@@ -26,16 +26,16 @@ def _patch_defaults(monkeypatch):
     monkeypatch.setattr(subgen, "transcribe_or_translate", "transcribe")
     monkeypatch.setattr(subgen, "lrc_for_audio_files", True)
     monkeypatch.setattr(subgen, "skip_unknown_language", False)
-    monkeypatch.setattr(subgen, "skip_if_to_transcribe_sub_already_exist", False)
-    monkeypatch.setattr(subgen, "skipifinternalsublang", LanguageCode.NONE)
-    monkeypatch.setattr(subgen, "skipifexternalsub", False)
-    monkeypatch.setattr(subgen, "namesublang", "")
-    monkeypatch.setattr(subgen, "skip_lang_codes_list", [])
+    monkeypatch.setattr(subgen, "skip_if_target_subtitle_exists", False)
+    monkeypatch.setattr(subgen, "skip_if_internal_sub_language", LanguageCode.NONE)
+    monkeypatch.setattr(subgen, "skip_if_external_sub_exists", False)
+    monkeypatch.setattr(subgen, "subtitle_language_name", "")
+    monkeypatch.setattr(subgen, "skip_subtitle_languages", [])
     monkeypatch.setattr(subgen, "limit_to_preferred_audio_languages", False)
     monkeypatch.setattr(subgen, "preferred_audio_languages", [LanguageCode.ENGLISH])
-    monkeypatch.setattr(subgen, "skip_if_audio_track_is_in_list", [])
-    monkeypatch.setattr(subgen, "only_skip_if_subgen_subtitle", False)
-    monkeypatch.setattr(subgen, "skip_if_language_is_not_set_but_subtitles_exist", False)
+    monkeypatch.setattr(subgen, "skip_audio_languages", [])
+    monkeypatch.setattr(subgen, "only_match_subgen_subtitles", False)
+    monkeypatch.setattr(subgen, "skip_if_no_audio_language_but_subtitles_exist", False)
 
 
 class TestLrcSkip:
@@ -101,9 +101,9 @@ class TestUnknownLanguageSkip:
 class TestSubtitleExistsSkip:
     def test_skip_when_subtitle_exists(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skip_if_to_transcribe_sub_already_exist", True)
+        monkeypatch.setattr(subgen, "skip_if_target_subtitle_exists", True)
         with (
-            patch.object(subgen, "has_subtitle_language", return_value=True),
+            patch.object(subgen, "subtitle_exists_in_language", return_value=True),
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
         ):
@@ -113,9 +113,9 @@ class TestSubtitleExistsSkip:
 
     def test_no_skip_when_subtitle_missing(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skip_if_to_transcribe_sub_already_exist", True)
+        monkeypatch.setattr(subgen, "skip_if_target_subtitle_exists", True)
         with (
-            patch.object(subgen, "has_subtitle_language", return_value=False),
+            patch.object(subgen, "subtitle_exists_in_language", return_value=False),
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
         ):
@@ -127,9 +127,9 @@ class TestSubtitleExistsSkip:
 class TestInternalSubtitleLanguageSkip:
     def test_skip_internal_subtitle_match(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skipifinternalsublang", LanguageCode.ENGLISH)
+        monkeypatch.setattr(subgen, "skip_if_internal_sub_language", LanguageCode.ENGLISH)
         with (
-            patch.object(subgen, "has_subtitle_language_in_file", return_value=True),
+            patch.object(subgen, "has_internal_subtitle_in_language", return_value=True),
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
         ):
@@ -139,9 +139,9 @@ class TestInternalSubtitleLanguageSkip:
 
     def test_no_skip_internal_subtitle_no_match(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skipifinternalsublang", LanguageCode.ENGLISH)
+        monkeypatch.setattr(subgen, "skip_if_internal_sub_language", LanguageCode.ENGLISH)
         with (
-            patch.object(subgen, "has_subtitle_language_in_file", return_value=False),
+            patch.object(subgen, "has_internal_subtitle_in_language", return_value=False),
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
         ):
@@ -153,7 +153,7 @@ class TestInternalSubtitleLanguageSkip:
 class TestAudioTrackSkip:
     def test_skip_audio_in_skip_list(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skip_if_audio_track_is_in_list", [LanguageCode.ENGLISH])
+        monkeypatch.setattr(subgen, "skip_audio_languages", [LanguageCode.ENGLISH])
         with (
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[LanguageCode.ENGLISH]),
@@ -190,7 +190,7 @@ class TestAudioTrackSkip:
 class TestSubtitleLanguageListSkip:
     def test_skip_when_subtitle_lang_in_skip_list(self, monkeypatch, tmp_path):
         _patch_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skip_lang_codes_list", [LanguageCode.ENGLISH])
+        monkeypatch.setattr(subgen, "skip_subtitle_languages", [LanguageCode.ENGLISH])
         with (
             patch.object(subgen, "get_subtitle_languages", return_value=[LanguageCode.ENGLISH]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
@@ -206,9 +206,9 @@ class TestTranslateForceTarget:
         A file that already has an English subtitle should be skipped."""
         _patch_defaults(monkeypatch)
         monkeypatch.setattr(subgen, "transcribe_or_translate", "translate")
-        monkeypatch.setattr(subgen, "skip_if_to_transcribe_sub_already_exist", True)
+        monkeypatch.setattr(subgen, "skip_if_target_subtitle_exists", True)
         with (
-            patch.object(subgen, "has_subtitle_language") as mock_has,
+            patch.object(subgen, "subtitle_exists_in_language") as mock_has,
             patch.object(subgen, "get_subtitle_languages", return_value=[]),
             patch.object(subgen, "get_audio_languages", return_value=[]),
         ):
