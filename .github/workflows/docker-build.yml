@@ -28,6 +28,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Sanitize ref name for Docker tag
+        id: tag
+        run: echo "value=$(echo '${{ github.ref_name }}' | sed 's/[^a-zA-Z0-9._-]/-/g')" >> $GITHUB_OUTPUT
+
       - name: Build image
         uses: docker/build-push-action@v5
         with:
@@ -38,6 +42,6 @@ jobs:
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
           tags: |
             ghcr.io/mclouds/subgen:latest
-            ghcr.io/mclouds/subgen:${{ github.ref_name }}
+            ghcr.io/mclouds/subgen:${{ steps.tag.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

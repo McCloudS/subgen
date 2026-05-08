@@ -1,6 +1,7 @@
 # Test-only dependencies — does NOT include ML packages (stable-ts, faster-whisper, torch).
 # Those are mocked in tests/conftest.py so CI stays fast and GPU-free.
 pytest>=7.4
+pytest-timeout>=2.1
 pytest-asyncio>=0.23
 httpx>=0.25
 requests-mock>=1.11

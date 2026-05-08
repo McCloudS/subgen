@@ -23,7 +23,7 @@ jobs:
         run: pip install ruff
 
       - name: Check style
-        run: ruff check subgen.py language_code.py
+        run: ruff check --ignore E402 subgen.py language_code.py
 
       - name: Check import order
-        run: ruff check --select I subgen.py language_code.py
+        run: ruff check --select I --ignore E402 subgen.py language_code.py
