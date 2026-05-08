@@ -37,9 +37,9 @@ class TestTautulliQueuesTask:
         monkeypatch.setattr(subgen, "procaddedmedia", True)
         # Prevent has_audio() from touching the file system
         monkeypatch.setattr(subgen, "has_audio", lambda path: True)
-        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang: False)
-        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang: lang)
-        monkeypatch.setattr(subgen, "should_whiser_detect_audio_language", False)
+        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang, audio_langs=None: False)
+        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang, audio_tracks=None: lang)
+        monkeypatch.setattr(subgen, "should_whisper_detect_audio_language", False)
 
         client.post(
             "/tautulli",
@@ -61,9 +61,9 @@ class TestPathMappingApplied:
         monkeypatch.setattr(subgen, "path_mapping_from", "/tv")
         monkeypatch.setattr(subgen, "path_mapping_to", "/Volumes/TV")
         monkeypatch.setattr(subgen, "has_audio", lambda path: True)
-        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang: False)
-        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang: lang)
-        monkeypatch.setattr(subgen, "should_whiser_detect_audio_language", False)
+        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang, audio_langs=None: False)
+        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang, audio_tracks=None: lang)
+        monkeypatch.setattr(subgen, "should_whisper_detect_audio_language", False)
 
         client.post(
             "/tautulli",
@@ -80,9 +80,9 @@ class TestEmbyQueuesTask:
     def test_emby_library_new_adds_to_queue(self, client, monkeypatch, reset_queue):
         monkeypatch.setattr(subgen, "procaddedmedia", True)
         monkeypatch.setattr(subgen, "has_audio", lambda path: True)
-        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang: False)
-        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang: lang)
-        monkeypatch.setattr(subgen, "should_whiser_detect_audio_language", False)
+        monkeypatch.setattr(subgen, "should_skip_file", lambda path, lang, audio_langs=None: False)
+        monkeypatch.setattr(subgen, "choose_transcribe_language", lambda path, lang, audio_tracks=None: lang)
+        monkeypatch.setattr(subgen, "should_whisper_detect_audio_language", False)
 
         data = {"Event": "library.new", "Item": {"Path": "/media/movie.mkv"}}
         client.post("/emby", data={"data": json.dumps(data)})
