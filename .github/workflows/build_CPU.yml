@@ -1,24 +1,31 @@
-name: Build_Subgen_Dockerfile_CPU
+name: Build CPU Docker image
 
 on:
   push:
+    branches: ["main"]
     paths:
+      - 'subgen.py'
+      - 'language_code.py'
+      - 'launcher.py'
       - 'requirements.txt'
+      - 'entrypoint.sh'
       - 'Dockerfile.cpu'
+      - '.github/workflows/build_CPU.yml'
   workflow_dispatch:
 
+concurrency:
+  group: docker-cpu-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  docker:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
+  build:
+    runs-on: [self-hosted]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Get version from subgen.py
-        id: get_version
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
@@ -26,7 +33,6 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          #platforms: all
           image: tonistiigi/binfmt:qemu-v7.0.0
 
       - name: Set up Docker Buildx
@@ -38,13 +44,15 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push CPU Docker image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
           file: ./Dockerfile.cpu
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             mccloud/subgen:cpu
             mccloud/subgen:${{ env.version }}-cpu
+          cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
+          cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max

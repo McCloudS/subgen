@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Check style
+        run: ruff check --ignore E402 subgen.py language_code.py
+
+      - name: Check import order
+        run: ruff check --select I --ignore E402 subgen.py language_code.py

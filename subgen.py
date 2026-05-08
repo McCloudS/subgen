@@ -1,4 +1,4 @@
-subgen_version = '2026.04.8'
+subgen_version = '2026.05.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -42,39 +42,41 @@ Users can gradually migrate to the new names. Both will work simultaneously duri
 transition period. The old names may be deprecated in future versions. 
 """
 
-from language_code import LanguageCode
-from datetime import datetime
-from threading import Lock, Event, Timer
-import os
-import json
-import subprocess
-import xml.etree.ElementTree as ET
-import threading
-import sys
-import time
-import queue
-import logging
+import ast
+import asyncio
+import ctypes
+import ctypes.util
 import gc
 import hashlib
-import asyncio
-from typing import Union, Any, Optional
-from fastapi import FastAPI, File, UploadFile, Query, Header, Body, Form, Request
-from fastapi.responses import StreamingResponse
-import numpy as np
-import stable_whisper
-from stable_whisper import Segment
-import requests
+import json
+import logging
+import os
+import queue
+import subprocess
+import sys
+import threading
+import time
+import xml.etree.ElementTree as ET
+from contextlib import asynccontextmanager
+from datetime import datetime
+from threading import Event, Lock, Timer
+from typing import List, Union
+
 import av
-import ffmpeg
-import ast
-from watchdog.observers.polling import PollingObserver as Observer
-from watchdog.events import FileSystemEventHandler
 import faster_whisper
-from io import BytesIO
-import io
+import ffmpeg
+import numpy as np
+import requests
+import stable_whisper
 import torch
-import ctypes, ctypes.util
-from typing import List
+from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
+from stable_whisper import Segment
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers.polling import PollingObserver as Observer
+
+from language_code import LanguageCode
+
 
 def convert_to_bool(in_bool):
     # Convert the input to string and lower case, then check against true values
@@ -201,13 +203,13 @@ AUDIO_EXTENSIONS = (
     ".amr", ".vox", ".tak", ".spx", ".m4b", ".mka"
 )
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if transcribe_folders:
-        # Run in a background thread so Uvicorn can finish starting up immediately
         threading.Thread(target=transcribe_existing, args=(transcribe_folders,), daemon=True).start()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 model = None
 model_cleanup_timer = None
@@ -571,7 +573,6 @@ def receive_tautulli_webhook(
     return ""
 
 @app.post("/plex")
-@app.post("/plex")
 def receive_plex_webhook(
         user_agent: Union[str] = Header(None),
         payload: Union[str] = Form(),
@@ -916,7 +917,7 @@ def asr_task_worker(task_data: dict) -> None:
         task = task_data['task']
         language = task_data['language']
         video_file = task_data.get('video_file')
-        initial_prompt = task_data.get('initial_prompt')
+        _initial_prompt = task_data.get('initial_prompt')
         file_content = task_data['audio_content']
         encode = task_data['encode']
         
@@ -1021,7 +1022,7 @@ async def detect_language(
         if not file_content:
             return {"detected_language": "Unknown", "language_code": "und", "status": "error"}
             
-        logging.info(f"Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
+        logging.info("Immediate language detection (Queue Bypass)" + (f" for {video_file}" if video_file else ""))
         
         # Track that we are directly using the model outside the queue
         with active_direct_tasks_lock:
@@ -1095,7 +1096,7 @@ def detect_language_from_upload(task_data: dict) -> None:
         start_model()
 
         args = {}
-        args['progress_callback'] = progress
+        args['progress_callback'] = None
         
         # Handle audio extraction
         if encode:
@@ -1524,6 +1525,7 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
             + "\n".join([f"  - {track['index']}: {track['codec']} {track['language']} {('default' if track['default'] else '')}" for track in audio_tracks])
         )
 
+        audio_track = None
         if language is not None:
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
@@ -1840,20 +1842,19 @@ def get_subtitle_languages(video_path):
     :param video_path: Path to the video file
     :return: List of language codes for each subtitle stream
     """
-    languages =[]
+    languages = []
 
-    # Open the video file
-    with av.open(video_path) as container:
-        # Iterate through each audio stream
-        for stream in container.streams.subtitles:
-            # Access the metadata for each audio stream
-            lang_code = stream.metadata.get('language')
-            if lang_code:
-                languages.append(LanguageCode.from_iso_639_2(lang_code))
-            else:
-                # Append 'und' (undefined) if no language metadata is present
-                languages.append(LanguageCode.NONE)
-    
+    try:
+        with av.open(video_path) as container:
+            for stream in container.streams.subtitles:
+                lang_code = stream.metadata.get('language')
+                if lang_code:
+                    languages.append(LanguageCode.from_iso_639_2(lang_code))
+                else:
+                    languages.append(LanguageCode.NONE)
+    except Exception as e:
+        logging.warning(f"Could not read subtitle streams from {video_path}: {e}")
+
     return languages
 
 def get_file_name_without_extension(file_path):
@@ -2167,13 +2168,6 @@ def refresh_jellyfin_metadata(itemid: str, server_ip: str, jellyfin_token: str) 
         "Authorization": f"MediaBrowser Token={jellyfin_token}",
     }
 
-    # Cheap way to get the admin user id, and save it for later use.
-    users = json.loads(requests.get(f"{server_ip}/Users", headers=headers).content)
-    jellyfin_admin = get_jellyfin_admin(users)
-
-    response = requests.get(f"{server_ip}/Users/{jellyfin_admin}/Items/{itemid}/Refresh", headers=headers)
-
-    # Sending the PUT request to refresh metadata
     response = requests.post(url, headers=headers)
 
     # Check if the request was successful
@@ -2321,10 +2315,10 @@ def transcribe_existing(transcribe_folders, forceLanguage : LanguageCode | None 
             for file in files:
                 file_path = os.path.join(root, file)
                 gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
-    # if the path specified was actually a single file and not a folder, process it
-    if os.path.isfile(path):
-        if has_audio(path):
-            gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage) 
+        # if the path specified was actually a single file and not a folder, process it
+        if os.path.isfile(path):
+            if has_audio(path):
+                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage) 
      # Set up the observer to watch for new files
     if monitor:
         observer = Observer()

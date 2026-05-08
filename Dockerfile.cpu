@@ -1,56 +1,50 @@
-# === Stage 1: Build dependencies and install packages ===
+# === Stage 1: Install dependencies ===
 FROM python:3.11-slim-bullseye AS builder
 
 WORKDIR /subgen
 
-# Install required build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    git \
-    tzdata \
-    && rm -rf /var/lib/apt/lists/*
+# Runtime build tools only — git and ffmpeg not needed here
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        tzdata
 
-# Copy and install dependencies
+# Torch — own layer so requirements.txt changes don't bust it
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install torch torchaudio \
+        --extra-index-url https://download.pytorch.org/whl/cpu
+
+# App dependencies — only rebuilds when requirements.txt changes
 COPY requirements.txt .
-# Note: Using /install prefix to easily copy to next stage
-RUN pip install --no-cache-dir --prefix=/install torch torchaudio --extra-index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir --prefix=/install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install -r requirements.txt \
+        --extra-index-url https://download.pytorch.org/whl/cpu
 
-# === Stage 2: Create a minimal runtime image ===
+# === Stage 2: Minimal runtime image ===
 FROM python:3.11-slim-bullseye AS runtime
 
 WORKDIR /subgen
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    curl \
-    gosu \
-    tzdata \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg curl gosu tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only necessary files from builder stage
+# Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy source code
+# App files last — changes here don't bust the layers above
 COPY launcher.py subgen.py language_code.py /subgen/
 
-# --- ROOTLESS / PERMISSION FIXES ---
-
-# 1. Create a dedicated cache directory
-# This ensures HuggingFace/Matplotlib don't try to write to root-owned /root/.cache
 RUN mkdir -p /cache && chmod 777 /cache
 
-# 2. Redirect Application Caches to the new directory
-ENV XDG_CACHE_HOME=/cache
-ENV HF_HOME=/cache/huggingface
-ENV MPLCONFIGDIR=/cache/matplotlib
-ENV PYTHONUNBUFFERED=1
+ENV XDG_CACHE_HOME=/cache \
+    HF_HOME=/cache/huggingface \
+    MPLCONFIGDIR=/cache/matplotlib \
+    PYTHONUNBUFFERED=1
 
-# 3. Add the entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-
-# Set the entrypoint to the script, and the default command to python
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "launcher.py"]
