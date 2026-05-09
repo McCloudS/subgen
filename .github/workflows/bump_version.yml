@@ -1,0 +1,55 @@
+name: Bump version
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'subgen.py'
+
+# Prevent two bumps racing if PRs merge back-to-back
+concurrency:
+  group: bump-version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    # Skip the commit this workflow itself creates to avoid an infinite loop
+    if: "!startsWith(github.event.head_commit.message, 'Bump version to')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use the default token — contents: write permission above is enough
+          ref: main
+          fetch-depth: 1
+
+      - name: Compute new version
+        id: ver
+        run: |
+          current=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
+          year_now=$(date +%Y)
+          month_now=$(date +%m)
+          year_cur=$(echo "$current" | cut -d. -f1)
+          month_cur=$(echo "$current" | cut -d. -f2)
+          patch_cur=$(echo "$current" | cut -d. -f3)
+
+          if [ "$year_now" = "$year_cur" ] && [ "$month_now" = "$month_cur" ]; then
+            new_version="$year_now.$month_now.$((patch_cur + 1))"
+          else
+            new_version="$year_now.$month_now.1"
+          fi
+
+          sed -i "s/subgen_version = '$current'/subgen_version = '$new_version'/" subgen.py
+          echo "old=$current" >> $GITHUB_OUTPUT
+          echo "new=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add subgen.py
+          git commit -m "Bump version to ${{ steps.ver.outputs.new }}"
+          git push
