@@ -887,8 +887,10 @@ def apply_timestamp_offset(result, offset: float) -> None:
                 word.end += offset
         else:
             # Segments without words use _default_start/_default_end
-            segment._default_start += offset
-            segment._default_end += offset
+            if hasattr(segment, '_default_start'):
+                segment._default_start += offset
+            if hasattr(segment, '_default_end'):
+                segment._default_end += offset
     
     logging.info(f"Applied +{offset:.3f}s timestamp offset to {len(result.segments)} segments")
 
@@ -1276,19 +1278,23 @@ def schedule_model_cleanup():
     Properly joins cancelled timers to prevent thread accumulation."""
     global model_cleanup_timer, model_cleanup_lock
     
+    previous_timer = None
     with model_cleanup_lock:
         # Cancel any existing timer
         if model_cleanup_timer is not None:
             model_cleanup_timer.cancel()
             logging.debug("Cancelled previous model cleanup timer")
-            # Join timer thread to prevent accumulation
-            model_cleanup_timer.join()
-        
+            previous_timer = model_cleanup_timer
+
         # Schedule a new cleanup timer
         model_cleanup_timer = Timer(model_cleanup_delay, perform_model_cleanup)
         model_cleanup_timer.daemon = True
         model_cleanup_timer.start()
         logging.debug(f"Model cleanup scheduled in {model_cleanup_delay} seconds")
+
+    # Join outside the lock to avoid deadlock if the callback already started
+    if previous_timer is not None:
+        previous_timer.join(timeout=1)
 
 def perform_model_cleanup():
     """Actually perform the model cleanup."""
@@ -1564,7 +1570,7 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
         return out
 
     except ffmpeg.Error as e:
-        print("An error occurred:", e.stderr.decode())
+        logging.error(f"FFmpeg error: {e.stderr.decode()}")
         return None
 
 def get_audio_track_by_language(audio_tracks, language):
@@ -1648,9 +1654,9 @@ def get_audio_tracks(video_file):
         audio_tracks =[]
         for stream in audio_streams:
             audio_track = {
-                "index": int(stream.get("index", None)),
+                "index": int(stream.get("index", 0)),
                 "codec": stream.get("codec_name", "Unknown"),
-                "channels": int(stream.get("channels", None)),
+                "channels": int(stream.get("channels", 0)),
                 "language": LanguageCode.from_iso_639_2(stream.get("tags", {}).get("language", "Unknown")),
                 "title": stream.get("tags", {}).get("title", "None"),
                 "default": stream.get("disposition", {}).get("default", 0) == 1,
@@ -1923,7 +1929,12 @@ def has_external_subtitle_in_language(video_file: str, target_language: Language
     video_folder = os.path.dirname(video_file)
     video_name = os.path.splitext(os.path.basename(video_file))[0]
 
-    for file_name in os.listdir(video_folder):
+    try:
+        dir_entries = os.listdir(video_folder)
+    except OSError as e:
+        logging.warning(f"Could not list directory {video_folder}: {e}")
+        return False
+    for file_name in dir_entries:
         file_path = os.path.join(video_folder, file_name)
 
         # If it's a file and has a subtitle extension
@@ -2020,7 +2031,11 @@ def get_next_plex_episode(current_episode_rating_key, stay_in_season: bool = Fal
         next_season_number = None
         for episode in episodes:
             if episode.get("ratingKey") == current_episode_rating_key:
-                current_episode_number = int(episode.get("index"))
+                ep_index = episode.get("index")
+                if ep_index is None:
+                    logging.warning(f"Episode ratingKey {current_episode_rating_key} has no index attribute")
+                    return None
+                current_episode_number = int(ep_index)
                 current_season_number = episode.get("parentIndex")
                 break
             #if rating_key_element is None:
@@ -2032,12 +2047,14 @@ def get_next_plex_episode(current_episode_rating_key, stay_in_season: bool = Fal
           if current_episode_number == episodes_in_season:
               return None # End of season
           for episode in episodes:
-            if int(episode.get("index")) == int(current_episode_number)+1:
+            ep_index = episode.get("index")
+            if ep_index is not None and int(ep_index) == int(current_episode_number)+1:
                 return episode.get("ratingKey")
         else: # Not staying in season, find the next overall episode
           # Find next season if it exists
           for season in seasons:
-              if int(season.get("index")) == int(current_season_number)+1:
+              s_index = season.get("index")
+              if s_index is not None and int(s_index) == int(current_season_number)+1:
                   #print(f"next season is: {episode.get('ratingKey')}")
                   #print(season.get("title"))
                   next_season_number = season.get("ratingKey")
@@ -2054,7 +2071,8 @@ def get_next_plex_episode(current_episode_rating_key, stay_in_season: bool = Fal
               else:
                 return None
           for episode in episodes:
-            if int(episode.get("index")) == int(current_episode_number)+1:
+            ep_index = episode.get("index")
+            if ep_index is not None and int(ep_index) == int(current_episode_number)+1:
                 return episode.get("ratingKey")
 
         logging.debug(f"No next episode found for {get_plex_file_name(current_episode_rating_key, plexserver, plextoken)}, possibly end of season or series")
@@ -2087,7 +2105,10 @@ def get_plex_file_name(itemid: str, server_ip: str, plex_token: str) -> str:
 
     if response.status_code == 200:
         root = ET.fromstring(response.content)
-        fullpath = root.find(".//Part").attrib['file']
+        part = root.find(".//Part")
+        if part is None:
+            raise Exception("No Part element found in Plex XML response")
+        fullpath = part.attrib['file']
         return fullpath
     else:
         raise Exception(f"Error: {response.status_code}")
