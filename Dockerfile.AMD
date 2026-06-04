@@ -110,6 +110,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install -U \
         numpy fastapi requests uvicorn python-multipart ffmpeg-python \
         watchdog tqdm more-itertools transformers tokenizers huggingface-hub av scipy \
+        onnxruntime \
     && python3 -m pip install -U --no-deps faster-whisper stable-ts-whisperless
 
 # Application files
