@@ -177,6 +177,7 @@ subtitle_language_naming_type = os.getenv('SUBTITLE_LANGUAGE_NAMING_TYPE', 'ISO_
 only_match_subgen_subtitles = get_env_with_fallback('SKIP_ONLY_SUBGEN_SUBTITLES', 'ONLY_SKIP_IF_SUBGEN_SUBTITLE', False, convert_to_bool)
 skip_unknown_language = convert_to_bool(os.getenv('SKIP_UNKNOWN_LANGUAGE', False))
 skip_if_no_audio_language_but_subtitles_exist = get_env_with_fallback('SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST', 'SKIP_IF_LANGUAGE_IS_NOT_SET_BUT_SUBTITLES_EXIST', False, convert_to_bool)
+ignore_forced_subtitles = convert_to_bool(os.getenv('IGNORE_FORCED_SUBTITLES', True))
 should_whisper_detect_audio_language = convert_to_bool(os.getenv('SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE', False))
 show_in_subname_subgen = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_SUBGEN', True))
 show_in_subname_model = convert_to_bool(os.getenv('SHOW_IN_SUBNAME_MODEL', True))
@@ -1846,6 +1847,9 @@ def should_skip_file(file_path: str, target_language: LanguageCode, audio_langs=
 def get_subtitle_languages(video_path):
     """
     Extract language codes from each subtitle stream in the video file using pyav.
+    Forced subtitle tracks are excluded when ignore_forced_subtitles is enabled,
+    because a forced track only covers a small portion of dialogue and should not
+    be treated as full subtitle coverage.
     :param video_path: Path to the video file
     :return: List of language codes for each subtitle stream
     """
@@ -1854,6 +1858,9 @@ def get_subtitle_languages(video_path):
     try:
         with av.open(video_path) as container:
             for stream in container.streams.subtitles:
+                if ignore_forced_subtitles and 'forced' in stream.disposition:
+                    logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_path}")
+                    continue
                 lang_code = stream.metadata.get('language')
                 if lang_code:
                     languages.append(LanguageCode.from_iso_639_2(lang_code))
@@ -1893,6 +1900,9 @@ def subtitle_exists_in_language(video_file, target_language: LanguageCode):
 def has_internal_subtitle_in_language(video_file: str, target_language: LanguageCode) -> bool:
     """
     Checks whether a video container has an embedded subtitle track in the given language.
+    Forced subtitle tracks are excluded when ignore_forced_subtitles is enabled,
+    because a forced track only covers a small portion of dialogue and should not
+    be treated as full subtitle coverage.
 
     Args:
         video_file: Path to the video file.
@@ -1905,6 +1915,9 @@ def has_internal_subtitle_in_language(video_file: str, target_language: Language
         with av.open(video_file) as container:
             for stream in container.streams:
                 if stream.type == 'subtitle' and 'language' in stream.metadata:
+                    if ignore_forced_subtitles and 'forced' in stream.disposition:
+                        logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_file}")
+                        continue
                     stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
                     if stream_language == target_language:
                         return True
