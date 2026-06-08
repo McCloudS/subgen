@@ -1,4 +1,4 @@
-subgen_version = '2026.06.1'
+subgen_version = '2026.06.2'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -153,6 +153,7 @@ webhook_url_completed = os.getenv('WEBHOOK_URL_COMPLETED', '')
 skip_if_external_sub_exists = get_env_with_fallback('SKIP_IF_EXTERNAL_SUBTITLES_EXIST', 'SKIPIFEXTERNALSUB', False, convert_to_bool)
 skip_if_target_subtitle_exists = get_env_with_fallback('SKIP_IF_TARGET_SUBTITLES_EXIST', 'SKIP_IF_TO_TRANSCRIBE_SUB_ALREADY_EXIST', True, convert_to_bool)
 skip_if_internal_sub_language = LanguageCode.from_string(get_env_with_fallback('SKIP_IF_INTERNAL_SUBTITLES_LANGUAGE', 'SKIPIFINTERNALSUBLANG', ''))
+ignore_forced_subtitles = convert_to_bool(os.getenv('IGNORE_FORCED_SUBTITLES', True))
 plex_queue_next_episode = convert_to_bool(os.getenv('PLEX_QUEUE_NEXT_EPISODE', False))
 plex_queue_season = convert_to_bool(os.getenv('PLEX_QUEUE_SEASON', False))
 plex_queue_series = convert_to_bool(os.getenv('PLEX_QUEUE_SERIES', False))
@@ -1858,8 +1859,8 @@ def get_subtitle_languages(video_path):
     try:
         with av.open(video_path) as container:
             for stream in container.streams.subtitles:
-                if ignore_forced_subtitles and 'forced' in stream.disposition:
-                    logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_path}")
+                if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
+                    logging.debug(f"get_subtitle_languages: skipping forced subtitle stream in {video_path}")
                     continue
                 lang_code = stream.metadata.get('language')
                 if lang_code:
@@ -1914,11 +1915,18 @@ def has_internal_subtitle_in_language(video_file: str, target_language: Language
     try:
         with av.open(video_file) as container:
             for stream in container.streams:
+                lang_tag = stream.metadata.get('language', '') if stream.metadata else ''
+                is_forced = bool(stream.disposition & av.stream.Disposition.forced)
+                logging.debug(
+                    f"has_internal_subtitle_in_language: stream #{stream.index} "
+                    f"type={stream.type!r} lang={lang_tag!r} forced={is_forced} "
+                    f"target={target_language}"
+                )
                 if stream.type == 'subtitle' and 'language' in stream.metadata:
-                    if ignore_forced_subtitles and 'forced' in stream.disposition:
-                        logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_file}")
+                    if ignore_forced_subtitles and is_forced:
+                        logging.debug(f"Skipping forced subtitle stream (language={lang_tag}) in {video_file}")
                         continue
-                    stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
+                    stream_language = LanguageCode.from_string(lang_tag.lower())
                     if stream_language == target_language:
                         return True
             return False
