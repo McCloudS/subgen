@@ -6,7 +6,7 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
-8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. Silero VAD is now **on by default** (`VAD_FILTER=true`) to filter silence before transcription, reducing hallucinations. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
+8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
 
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
@@ -229,7 +229,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
-| `VAD_FILTER` | `True` | Run Silero VAD before transcription to strip silence. Reduces hallucinations on quiet segments. Set to `False` to disable. |
+| `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. |
 | `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
 ### ⚡ Processing Triggers & Queuing
