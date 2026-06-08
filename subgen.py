@@ -520,6 +520,35 @@ TIME_OFFSET = 5
 # Segmenter ported from bazarr-openai-whisperbridge (Netflix-style guidelines).
 # ============================================================================
 
+def _fmt_duration(seconds: float) -> str:
+    """Format seconds as MM:SS for progress logging."""
+    m, s = divmod(int(seconds), 60)
+    return f"{m:02d}:{s:02d}"
+
+def _consume_segments_with_progress(gen, info, display_name: str) -> list:
+    """
+    Drain a faster-whisper segment generator, emitting a single INFO progress
+    line every 10 percentage-points of audio processed.
+
+    Uses info.duration (original timeline) as the denominator so the percentage
+    reflects wall-clock position rather than VAD-stripped position.
+    """
+    total = info.duration or 0.0
+    segments = []
+    last_bucket = -1
+    for seg in gen:
+        segments.append(seg)
+        if total > 0:
+            bucket = int(seg.end / total * 10)  # 0–10
+            if bucket > last_bucket:
+                last_bucket = bucket
+                pct = min(bucket * 10, 100)
+                logging.info(
+                    f"[{display_name}] transcribing … {pct}%"
+                    f" ({_fmt_duration(seg.end)} / {_fmt_duration(total)})"
+                )
+    return segments
+
 @dataclass
 class TranscriptionResult:
     """Lightweight result container replacing stable-ts WhisperResult."""
@@ -1039,10 +1068,7 @@ def asr_task_worker(task_data: dict) -> None:
             **fw_kwargs,
         )
         display_name = os.path.basename(video_file) if video_file else task_id
-        fw_segments = []
-        for seg in fw_segments_gen:
-            fw_segments.append(seg)
-            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
+        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
@@ -1529,10 +1555,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             **fw_kwargs,
         )
         display_name = os.path.basename(file_path)
-        fw_segments = []
-        for seg in fw_segments_gen:
-            fw_segments.append(seg)
-            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
+        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
