@@ -130,7 +130,6 @@ subtitle_language_name = get_env_with_fallback('SUBTITLE_LANGUAGE_NAME', 'NAMESU
 
 # System Configuration - with backwards compatibility
 webhookport = get_env_with_fallback('WEBHOOK_PORT', 'WEBHOOKPORT', 9000, int)
-word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))  # deprecated — no-op without stable-ts
 debug = convert_to_bool(os.getenv('DEBUG', True))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
@@ -144,7 +143,6 @@ compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
 reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
-custom_regroup = os.getenv('CUSTOM_REGROUP', '')  # deprecated — use MAX_LINE_LENGTH / GAP_SPLIT_SECS
 max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', True))

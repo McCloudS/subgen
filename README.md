@@ -6,6 +6,8 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. Silero VAD is now **on by default** (`VAD_FILTER=true`) to filter silence before transcription, reducing hallucinations. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
+
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
 11 Apr 2026: Fixed subtitle timing on files with audio stream offsets (common in Amazon WEB-DL). Whisper ignores silence padding, causing subtitles to be early by the offset amount. Subgen now detects this via ffprobe and compensates automatically when the source video file is accessible. See [Audio Start-Time Offset Fix](#-audio-start-time-offset-fix) for details.
@@ -43,23 +45,17 @@ There will be some minor hiccups, so please identify them as we work through thi
 
 14 Aug 2024: Cleaned up usage of kwargs across the board a bit. Added ability for /asr to encode or not, so you don't need to worry about what files/formats you upload.
 
-3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from whisper, faster-whisper, or stable-ts. This won't be exposed via the webui, it's best to set directly.
+3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from faster-whisper. This won't be exposed via the webui, it's best to set directly.
 
 21 Apr 2024: Fixed queuing with thanks to https://github.com/xhzhu0628 @ https://github.com/McCloudS/subgen/pull/85. Bazarr intentionally doesn't follow `CONCURRENT_TRANSCRIPTIONS` because it needs a time sensitive response.
 
 31 Mar 2024: Removed `/subsync` endpoint and general refactoring. Open an issue if you were using it!
-
-24 Mar 2024: ~~Added a 'webui' to configure environment variables. You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want). The config will prioritize OS Env Variables, then the .env file, then the defaults. You can access it at `http://subgen:9000/`~~
-
-23 Mar 2024: Added `CUSTOM_REGROUP` to try to 'clean up' subtitles a bit.  
 
 22 Mar 2024: Added LRC capability via see: `LRC_FOR_AUDIO_FILES | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'`
 
 21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured. See below in Launcher section. Removed 'Transformers' as an option. While I usually don't like to remove features, I don't think anyone is using this and the results are wildly unpredictable and often cause out of memory errors. Added two new environment variables called `USE_MODEL_PROMPT` and `CUSTOM_MODEL_PROMPT`. If `USE_MODEL_PROMPT` is `True` it will use `CUSTOM_MODEL_PROMPT` if set, otherwise will default to using the pre-configured language pairings. These pre-configurated translations are geared towards fixing some audio that may not have punctionation. We can prompt it to try to force the use of punctuation during transcription.
 
 19 Mar 2024: Added a `MONITOR` environment variable. Will 'watch' or 'monitor' your `TRANSCRIBE_FOLDERS` for changes and run on them. Useful if you just want to paste files into a folder and get subtitles.   
-
-6 Mar 2024: Added a `/subsync` endpoint that can attempt to align/synchronize subtitles to a file. Takes audio_file, subtitle_file, language (2 letter code), and outputs an srt.
 
 5 Mar 2024: Cleaned up logging. Added timestamps option (if Debug = True, timestamps will print in logs).
 
@@ -87,9 +83,7 @@ There will be some minor hiccups, so please identify them as we work through thi
 
 22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below. If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.
 
-19 Oct 2023: And we're back! Uses faster-whisper and stable-ts. Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time. As of now, this is not a docker image on dockerhub. The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts. Quick and dirty to meet dependencies: pip or `pip3 install flask requests stable-ts faster-whisper`
-
-This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one set up yet. Tesla T4 is in the mail!
+19 Oct 2023: And we're back! Uses faster-whisper. Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time. As of now, this is not a docker image on dockerhub. The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts. Quick and dirty to meet dependencies: pip or `pip3 install flask requests faster-whisper`
 
 2 Feb 2023: Added Tautulli webhooks back in. Didn't realize Plex webhooks was PlexPass only. See below for instructions to add it back in.
 
@@ -101,7 +95,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 ## 🎬 What is this?
 Subgen transcribes your personal media to create subtitles (`.srt` or `.lrc`) from audio/video files. It can transcribe non-English languages to themselves, or translate foreign languages into English. 
 
-It is designed to integrate perfectly with **Bazarr** (as a Whisper Provider), or run via webhooks triggered directly by your **Plex, Emby, Jellyfin, or Tautulli** servers whenever media is added or played. Under the hood, it uses `stable-ts` and `faster-whisper`, fully supporting both CPU and Nvidia GPU (CUDA) transcoding.
+It is designed to integrate perfectly with **Bazarr** (as a Whisper Provider), or run via webhooks triggered directly by your **Plex, Emby, Jellyfin, or Tautulli** servers whenever media is added or played. Under the hood, it uses `faster-whisper` for AI transcription and a built-in Netflix-style subtitle segmenter for clean, readable output. Both CPU and Nvidia GPU (CUDA) are supported.
 
 ## 🤔 Why?
 Some shows just won't have subtitles available, or embedded H265 subtitles might be wildly out of sync. This gap-fills everything else by generating highly accurate subtitles locally on your own hardware. 
@@ -158,6 +152,8 @@ That's it. No new environment variables are required. Files without an audio off
 The easiest way to run Subgen is via Docker. We maintain an image on Docker Hub (`mccloud/subgen`).
 * `mccloud/subgen:latest` (Supports both CPU and GPU/CUDA)
 * `mccloud/subgen:cpu` (Smaller image, CPU only)
+* `mccloud/subgen:amd` (ROCm/AMD GPU)
+* `mccloud/subgen:dev` (Latest development build — may be unstable)
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
@@ -220,7 +216,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 
 ## ⚙️ Configuration (Environment Variables)
 
-*Note: Subgen recently standardized environment variables (e.g., `PLEX_TOKEN`). Legacy names (e.g., `PLEXTOKEN`) are still fully supported for backwards compatibility!*
+*Note: Subgen recently standardized environment variable names (e.g., `PLEX_TOKEN`). Legacy names (e.g., `PLEXTOKEN`) are still fully supported for backwards compatibility!*
 
 ### 🧠 Core Whisper & AI Settings
 | Variable | Default | Description |
@@ -233,7 +229,8 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
-| `SUBGEN_KWARGS` | `{}` | JSON dict to pass pure kwargs to Whisper (e.g. `{'vad': True}`). For advanced users. |
+| `VAD_FILTER` | `True` | Run Silero VAD before transcription to strip silence. Reduces hallucinations on quiet segments. Set to `False` to disable. |
+| `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
 ### ⚡ Processing Triggers & Queuing
 *(Not relevant for Bazarr users)*
@@ -275,11 +272,11 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `SUBTITLE_LANGUAGE_NAME` | `aa` | Subtitle file name language code (e.g. `en`). Defaults to `aa` so it floats to the top of Plex's list. |
 | `SUBTITLE_LANGUAGE_NAMING_TYPE`| `ISO_639_2_B` | Format to name files (`ISO_639_1`, `ISO_639_2_T`, `NAME`, `NATIVE`). |
 | `LRC_FOR_AUDIO_FILES` | `True` | Generates `.lrc` instead of `.srt` if processing pure audio files (e.g., mp3, flac). |
-| `WORD_LEVEL_HIGHLIGHT` | `False` | Highlights words dynamically as they are spoken in the subtitle. |
+| `MAX_LINE_LENGTH` | `42` | Maximum characters per subtitle line. Lines are balanced across two rows where possible. |
+| `GAP_SPLIT_SECS` | `0.4` | Silence gap in seconds between words that forces a new subtitle card. |
 | `APPEND` | `False` | Appends a "Transcribed by whisperAI..." watermark at the very end of the `.srt`. |
 | `SHOW_IN_SUBNAME_SUBGEN` | `True` | Adds `.subgen` to the output file name. |
 | `SHOW_IN_SUBNAME_MODEL` | `True` | Adds the model used (e.g., `.medium`) to the output file name. |
-| `CUSTOM_REGROUP` | `cm_sl=84_sl=42++++++1` | Stable-TS grouping. Try to 'clean up' subtitles a bit. Set to `default` to use base Stable-TS. |
 
 ### 📂 System, Paths & Network Settings
 | Variable | Default | Description |
@@ -316,6 +313,6 @@ Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catala
 ## ❤️ Credits
 * [Whisper.cpp](https://github.com/ggerganov/whisper.cpp) for original implementation
 * Google & FFmpeg
-* [stable-ts](https://github.com/jianfch/stable-ts) & [faster-whisper](https://github.com/guillaumekln/faster-whisper)
+* [faster-whisper](https://github.com/guillaumekln/faster-whisper)
 * [Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice) for Bazarr HTTP webhook logic.
 * Community Contributors
