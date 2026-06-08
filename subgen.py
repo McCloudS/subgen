@@ -56,7 +56,6 @@ import queue
 import re
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 import wave
@@ -1022,35 +1021,28 @@ def asr_task_worker(task_data: dict) -> None:
         # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS
         fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
 
-        # Prepare audio: encoded bytes go to a tempfile; raw PCM → numpy float32
-        tmp_path = None
-        try:
-            if encode:
-                with tempfile.NamedTemporaryFile(suffix='.audio', delete=False) as tmp:
-                    tmp.write(file_content)
-                    tmp_path = tmp.name
-                audio = tmp_path
-            else:
-                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+        # Prepare audio: encoded bytes → BytesIO (in-memory); raw PCM → numpy float32
+        if encode:
+            audio = io.BytesIO(file_content)
+        else:
+            audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
 
-            # Detect audio start_time offset from source file (if accessible)
-            audio_offset = get_audio_start_time(video_file) if video_file else 0.0
+        # Detect audio start_time offset from source file (if accessible)
+        audio_offset = get_audio_start_time(video_file) if video_file else 0.0
 
-            # Perform transcription
-            fw_segments_gen, info = model.transcribe(
-                audio,
-                task=task,
-                language=language or None,
-                word_timestamps=True,
-                **fw_kwargs,
-            )
-            fw_segments = list(fw_segments_gen)
-        finally:
-            if tmp_path:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+        # Perform transcription; consume generator with per-segment progress logging
+        fw_segments_gen, info = model.transcribe(
+            audio,
+            task=task,
+            language=language or None,
+            word_timestamps=True,
+            **fw_kwargs,
+        )
+        display_name = os.path.basename(video_file) if video_file else task_id
+        fw_segments = []
+        for seg in fw_segments_gen:
+            fw_segments.append(seg)
+            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
@@ -1534,7 +1526,11 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             word_timestamps=True,
             **fw_kwargs,
         )
-        fw_segments = list(fw_segments_gen)
+        display_name = os.path.basename(file_path)
+        fw_segments = []
+        for seg in fw_segments_gen:
+            fw_segments.append(seg)
+            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
