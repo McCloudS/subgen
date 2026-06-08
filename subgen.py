@@ -145,7 +145,7 @@ reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', F
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
-vad_filter = convert_to_bool(os.getenv('VAD_FILTER', True))
+vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
@@ -439,7 +439,8 @@ class MultiplePatternsFilter(logging.Filter):
             "misdetection possible",
             "srt was added",
             "doesn't have any audio to transcribe",
-            "Calling on_"
+            "Calling on_",
+            "VAD filter kept the following audio segments"
         ]
         # Return False if any of the patterns are found, True otherwise
         return not any(pattern in record.getMessage() for pattern in patterns)
@@ -520,33 +521,21 @@ TIME_OFFSET = 5
 # Segmenter ported from bazarr-openai-whisperbridge (Netflix-style guidelines).
 # ============================================================================
 
-def _fmt_duration(seconds: float) -> str:
-    """Format seconds as MM:SS for progress logging."""
-    m, s = divmod(int(seconds), 60)
-    return f"{m:02d}:{s:02d}"
-
 def _consume_segments_with_progress(gen, info, display_name: str) -> list:
     """
-    Drain a faster-whisper segment generator, emitting a single INFO progress
-    line every 10 percentage-points of audio processed.
+    Drain a faster-whisper segment generator, logging progress through
+    ProgressHandler (same format as main-branch: %, seek/total s, ETA,
+    speed, queue status — throttled to once every 5 wall-clock seconds).
 
-    Uses info.duration (original timeline) as the denominator so the percentage
-    reflects wall-clock position rather than VAD-stripped position.
+    Uses info.duration (original timeline) as the denominator so the
+    percentage reflects the full audio position even when VAD is enabled.
     """
+    progress = ProgressHandler(display_name)
     total = info.duration or 0.0
     segments = []
-    last_bucket = -1
     for seg in gen:
         segments.append(seg)
-        if total > 0:
-            bucket = int(seg.end / total * 10)  # 0–10
-            if bucket > last_bucket:
-                last_bucket = bucket
-                pct = min(bucket * 10, 100)
-                logging.info(
-                    f"[{display_name}] transcribing … {pct}%"
-                    f" ({_fmt_duration(seg.end)} / {_fmt_duration(total)})"
-                )
+        progress(seg.end, total)
     return segments
 
 @dataclass
