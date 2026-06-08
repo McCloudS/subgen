@@ -147,6 +147,7 @@ lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 custom_regroup = os.getenv('CUSTOM_REGROUP', '')  # deprecated — use MAX_LINE_LENGTH / GAP_SPLIT_SECS
 max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
+vad_filter = convert_to_bool(os.getenv('VAD_FILTER', True))
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
@@ -1036,6 +1037,7 @@ def asr_task_worker(task_data: dict) -> None:
             task=task,
             language=language or None,
             word_timestamps=True,
+            vad_filter=vad_filter,
             **fw_kwargs,
         )
         display_name = os.path.basename(video_file) if video_file else task_id
@@ -1524,6 +1526,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             language=force_language.to_iso_639_1() or None,
             task=transcription_type,
             word_timestamps=True,
+            vad_filter=vad_filter,
             **fw_kwargs,
         )
         display_name = os.path.basename(file_path)
