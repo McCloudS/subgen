@@ -40,6 +40,11 @@ class TestGetSubtitleLanguagesException:
         """Happy path: still returns languages when av.open works."""
         stream = MagicMock()
         stream.metadata = {"language": "eng"}
+        # Make stream.disposition & <anything> return 0 (falsy) so the forced-subtitle
+        # check does not skip this stream. av is fully mocked so we can't use the real
+        # Disposition type — configure __and__ directly instead.
+        stream.disposition = MagicMock()
+        stream.disposition.__and__ = MagicMock(return_value=0)
         container = MagicMock()
         container.__enter__ = MagicMock(return_value=container)
         container.__exit__ = MagicMock(return_value=False)
