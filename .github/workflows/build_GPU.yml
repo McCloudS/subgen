@@ -2,7 +2,7 @@ name: Build GPU Docker image
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths:
       - 'subgen.py'
       - 'language_code.py'
@@ -30,6 +30,14 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
+      - name: Compute Docker tags
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            printf 'docker_tags=mccloud/subgen:latest\nmccloud/subgen:%s' "$version" >> $GITHUB_ENV
+          else
+            echo "docker_tags=mccloud/subgen:dev" >> $GITHUB_ENV
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -45,8 +53,6 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: |
-            mccloud/subgen:latest
-            mccloud/subgen:${{ env.version }}
+          tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:buildcache
           cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max

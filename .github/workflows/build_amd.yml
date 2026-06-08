@@ -2,7 +2,7 @@ name: Build AMD Docker image
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths:
       - 'subgen.py'
       - 'language_code.py'
@@ -30,6 +30,14 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
+      - name: Compute Docker tags
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            printf 'docker_tags=mccloud/subgen:amd\nmccloud/subgen:%s-amd' "$version" >> $GITHUB_ENV
+          else
+            echo "docker_tags=mccloud/subgen:dev-amd" >> $GITHUB_ENV
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -46,8 +54,6 @@ jobs:
           file: ./Dockerfile.AMD
           platforms: linux/amd64
           push: true
-          tags: |
-            mccloud/subgen:amd
-            mccloud/subgen:${{ env.version }}-amd
+          tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
           cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
