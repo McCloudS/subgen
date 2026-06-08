@@ -11,7 +11,6 @@ from unittest.mock import MagicMock
 # Mock heavy dependencies that are not installed in CI
 # ---------------------------------------------------------------------------
 _MOCKED_MODULES = [
-    "stable_whisper",
     "faster_whisper",
     "torch",
     "av",
@@ -27,13 +26,8 @@ for _mod in _MOCKED_MODULES:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
 
-# Give the version mocks a usable string so /status doesn't blow up
-sys.modules["stable_whisper"].__version__ = "1.0.0"
+# Give the version mock a usable string so /status doesn't blow up
 sys.modules["faster_whisper"].__version__ = "1.0.0"
-
-# Ensure sub-attribute imports work
-# e.g. `from stable_whisper import Segment`
-sys.modules["stable_whisper"].Segment = MagicMock()
 
 # Ensure watchdog attribute imports work
 # e.g. `from watchdog.observers.polling import PollingObserver as Observer`

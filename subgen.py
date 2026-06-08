@@ -520,6 +520,35 @@ TIME_OFFSET = 5
 # Segmenter ported from bazarr-openai-whisperbridge (Netflix-style guidelines).
 # ============================================================================
 
+def _fmt_duration(seconds: float) -> str:
+    """Format seconds as MM:SS for progress logging."""
+    m, s = divmod(int(seconds), 60)
+    return f"{m:02d}:{s:02d}"
+
+def _consume_segments_with_progress(gen, info, display_name: str) -> list:
+    """
+    Drain a faster-whisper segment generator, emitting a single INFO progress
+    line every 10 percentage-points of audio processed.
+
+    Uses info.duration (original timeline) as the denominator so the percentage
+    reflects wall-clock position rather than VAD-stripped position.
+    """
+    total = info.duration or 0.0
+    segments = []
+    last_bucket = -1
+    for seg in gen:
+        segments.append(seg)
+        if total > 0:
+            bucket = int(seg.end / total * 10)  # 0–10
+            if bucket > last_bucket:
+                last_bucket = bucket
+                pct = min(bucket * 10, 100)
+                logging.info(
+                    f"[{display_name}] transcribing … {pct}%"
+                    f" ({_fmt_duration(seg.end)} / {_fmt_duration(total)})"
+                )
+    return segments
+
 @dataclass
 class TranscriptionResult:
     """Lightweight result container replacing stable-ts WhisperResult."""
@@ -1039,10 +1068,7 @@ def asr_task_worker(task_data: dict) -> None:
             **fw_kwargs,
         )
         display_name = os.path.basename(video_file) if video_file else task_id
-        fw_segments = []
-        for seg in fw_segments_gen:
-            fw_segments.append(seg)
-            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
+        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
@@ -1514,7 +1540,8 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language, audio_tracks=audio_tracks)
         if extracted_audio_file:
-            data = extracted_audio_file
+            # handle_multiple_audio_tracks returns WAV bytes; wrap in BytesIO for faster-whisper
+            data = io.BytesIO(extracted_audio_file)
         
         # Build faster-whisper kwargs; strip any stable-ts-specific keys
         fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
@@ -1528,10 +1555,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             **fw_kwargs,
         )
         display_name = os.path.basename(file_path)
-        fw_segments = []
-        for seg in fw_segments_gen:
-            fw_segments.append(seg)
-            logging.debug(f"[{display_name}] transcribed {seg.start:.1f}s–{seg.end:.1f}s: {seg.text.strip()}")
+        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
 
         words = extract_words(fw_segments)
         result = TranscriptionResult(
@@ -1974,7 +1998,7 @@ def get_subtitle_languages(video_path):
     try:
         with av.open(video_path) as container:
             for stream in container.streams.subtitles:
-                if ignore_forced_subtitles and 'forced' in stream.disposition:
+                if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
                     logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_path}")
                     continue
                 lang_code = stream.metadata.get('language')
@@ -2031,7 +2055,7 @@ def has_internal_subtitle_in_language(video_file: str, target_language: Language
         with av.open(video_file) as container:
             for stream in container.streams:
                 if stream.type == 'subtitle' and 'language' in stream.metadata:
-                    if ignore_forced_subtitles and 'forced' in stream.disposition:
+                    if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
                         logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_file}")
                         continue
                     stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
