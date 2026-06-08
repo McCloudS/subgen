@@ -2045,11 +2045,18 @@ def has_internal_subtitle_in_language(video_file: str, target_language: Language
     try:
         with av.open(video_file) as container:
             for stream in container.streams:
+                lang_tag = stream.metadata.get('language', '') if stream.metadata else ''
+                is_forced = bool(stream.disposition & av.stream.Disposition.forced)
+                logging.debug(
+                    f"has_internal_subtitle_in_language: stream #{stream.index} "
+                    f"type={stream.type!r} lang={lang_tag!r} forced={is_forced} "
+                    f"target={target_language}"
+                )
                 if stream.type == 'subtitle' and 'language' in stream.metadata:
-                    if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
-                        logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_file}")
+                    if ignore_forced_subtitles and is_forced:
+                        logging.debug(f"Skipping forced subtitle stream (language={lang_tag}) in {video_file}")
                         continue
-                    stream_language = LanguageCode.from_string(stream.metadata.get('language', '').lower())
+                    stream_language = LanguageCode.from_string(lang_tag.lower())
                     if stream_language == target_language:
                         return True
             return False
