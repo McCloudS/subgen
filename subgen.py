@@ -1697,7 +1697,8 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language, audio_tracks=audio_tracks)
         if extracted_audio_file:
-            data = extracted_audio_file
+            # handle_multiple_audio_tracks returns WAV bytes; wrap in BytesIO for faster-whisper
+            data = io.BytesIO(extracted_audio_file)
         
         # Build faster-whisper kwargs; strip any stable-ts-specific keys
         fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
@@ -2163,7 +2164,7 @@ def get_subtitle_languages(video_path):
         with av.open(video_path) as container:
             for stream in container.streams.subtitles:
                 if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
-                    logging.debug(f"get_subtitle_languages: skipping forced subtitle stream in {video_path}")
+                    logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_path}")
                     continue
                 lang_code = stream.metadata.get('language')
                 if lang_code:
