@@ -2,7 +2,7 @@ name: Build CPU Docker image
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths:
       - 'subgen.py'
       - 'language_code.py'
@@ -30,6 +30,14 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
+      - name: Compute Docker tags
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            printf 'docker_tags=mccloud/subgen:cpu\nmccloud/subgen:%s-cpu' "$version" >> $GITHUB_ENV
+          else
+            echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
+          fi
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -51,8 +59,6 @@ jobs:
           file: ./Dockerfile.cpu
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            mccloud/subgen:cpu
-            mccloud/subgen:${{ env.version }}-cpu
+          tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
           cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max
