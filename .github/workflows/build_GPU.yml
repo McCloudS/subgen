@@ -13,8 +13,6 @@ on:
       - 'Dockerfile.cpu'
       - 'Dockerfile.AMD'
       - '.github/workflows/build_GPU.yml'
-      - '.github/workflows/build_CPU.yml'
-      - '.github/workflows/build_amd.yml'
   workflow_dispatch:
 
 concurrency:
@@ -118,7 +116,14 @@ jobs:
             echo "docker_tags=mccloud/subgen:dev-amd" >> $GITHUB_ENV
           fi
 
+      # keep-state: true + a fixed name prevents the BuildKit container from being
+      # destroyed between runs. BuildKit checks its local OCI store for layer digests
+      # before hitting the registry, so the 12 GB amd-buildcache download is skipped
+      # on every run after the first. Registry cache is kept as a cold-start fallback.
       - uses: docker/setup-buildx-action@v3
+        with:
+          name: subgen-amd-builder
+          keep-state: true
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
