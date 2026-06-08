@@ -1054,6 +1054,7 @@ def asr_task_worker(task_data: dict) -> None:
             language=language or None,
             word_timestamps=True,
             vad_filter=vad_filter,
+            condition_on_previous_text=False,
             **fw_kwargs,
         )
         display_name = os.path.basename(video_file) if video_file else task_id
@@ -1541,6 +1542,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             task=transcription_type,
             word_timestamps=True,
             vad_filter=vad_filter,
+            condition_on_previous_text=False,
             **fw_kwargs,
         )
         display_name = os.path.basename(file_path)
