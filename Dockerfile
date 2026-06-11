@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.3.2-base-ubuntu22.04
+FROM nvidia/cuda:12.8.1-base-ubuntu22.04
 
 # Apt packages — own layer so pip changes don't re-run apt
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Torch — large and rarely changes; own layer so requirements.txt changes don't bust it
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install -U torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+    python3 -m pip install -U torch torchaudio --index-url https://download.pytorch.org/whl/cu128
 
 # App dependencies — only rebuilds when requirements.txt changes
 COPY requirements.txt /
