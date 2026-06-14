@@ -310,6 +310,36 @@ Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catala
 
 ---
 
+## 🔗 OpenAI-Compatible API Endpoints
+
+Subgen exposes two endpoints that match the [OpenAI Whisper API](https://platform.openai.com/docs/api-reference/audio), so it can be used as a drop-in backend for any client that targets that API (Open WebUI, Obsidian plugins, etc.).
+
+| Endpoint | Description |
+|---|---|
+| `POST /v1/audio/transcriptions` | Transcribe audio to text in the source language |
+| `POST /v1/audio/translations` | Transcribe and translate audio to English |
+
+**Supported parameters:**
+
+| Parameter | Description |
+|---|---|
+| `file` | Audio file (any format ffmpeg can decode) |
+| `language` | Source language ISO-639-1 code (transcriptions only; auto-detected if omitted) |
+| `prompt` | Optional context passed to Whisper |
+| `response_format` | `json` (default), `text`, `srt`, `vtt`, `verbose_json` |
+| `model` | Accepted but ignored — subgen uses its configured model |
+| `temperature` | Accepted but ignored |
+
+**Example:**
+```bash
+curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "response_format=json"
+# {"text": "..."}
+```
+
+`verbose_json` returns segments with start/end timestamps and word-level timestamps.
+
 ## 🪲 Known Issues
 * It uses trained AI models; there *will* occasionally be mistranslations or hallucinations based on background noise.
 
