@@ -826,6 +826,152 @@ async def asr(
                 del task_results[task_id]
                 logging.debug(f"Cleaned up task_results entry for {task_id}")
 
+_OPENAI_MEDIA_TYPES = {
+    "json": "application/json",
+    "verbose_json": "application/json",
+    "text": "text/plain",
+    "srt": "text/plain",
+    "vtt": "text/vtt",
+}
+
+
+@app.post("/v1/audio/transcriptions")
+async def openai_transcriptions(
+    file: UploadFile = File(...),
+    model: str = Form(default="whisper-1"),
+    language: Union[str, None] = Form(default=None),
+    prompt: Union[str, None] = Form(default=None),
+    response_format: str = Form(default="json"),
+    temperature: float = Form(default=0.0),
+):
+    """OpenAI-compatible transcription endpoint (/v1/audio/transcriptions)."""
+    task_id = None
+    valid_formats = {"json", "text", "srt", "vtt", "verbose_json"}
+    if response_format not in valid_formats:
+        return {"error": f"response_format must be one of {sorted(valid_formats)}"}
+
+    try:
+        file_content = await file.read()
+        if not file_content:
+            return {"error": "Audio file is empty"}
+
+        audio_hash = generate_audio_hash(file_content, "transcribe", language)
+        task_id = f"oai-{audio_hash}"
+
+        final_language = language
+        if force_detected_language_to:
+            final_language = force_detected_language_to.to_iso_639_1()
+
+        with task_results_lock:
+            if task_id not in task_results:
+                task_results[task_id] = TaskResult()
+            task_result = task_results[task_id]
+
+        asr_task_data = {
+            'path': task_id,
+            'type': 'asr',
+            'task': 'transcribe',
+            'language': final_language,
+            'video_file': None,
+            'initial_prompt': prompt,
+            'audio_content': file_content,
+            'encode': True,
+            'output_format': response_format,
+            'word_timestamps': response_format == 'verbose_json',
+            'result_container': task_result,
+        }
+
+        if task_queue.put(asr_task_data):
+            logging.info(f"OpenAI transcription task {task_id} queued")
+        else:
+            logging.info(f"OpenAI transcription task {task_id} already queued/processing - waiting")
+
+        if await asyncio.to_thread(task_result.wait, asr_timeout):
+            if task_result.error:
+                return {"error": task_result.error}
+            return StreamingResponse(
+                iter([task_result.result]),
+                media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
+            )
+        else:
+            return {"error": f"Transcription timed out after {asr_timeout} seconds"}
+
+    except Exception as e:
+        logging.error(f"Error in OpenAI transcriptions endpoint: {e}", exc_info=True)
+        return {"error": str(e)}
+    finally:
+        await file.close()
+        with task_results_lock:
+            if task_id and task_id in task_results:
+                del task_results[task_id]
+
+
+@app.post("/v1/audio/translations")
+async def openai_translations(
+    file: UploadFile = File(...),
+    model: str = Form(default="whisper-1"),
+    prompt: Union[str, None] = Form(default=None),
+    response_format: str = Form(default="json"),
+    temperature: float = Form(default=0.0),
+):
+    """OpenAI-compatible translation endpoint (/v1/audio/translations). Always translates to English."""
+    task_id = None
+    valid_formats = {"json", "text", "srt", "vtt", "verbose_json"}
+    if response_format not in valid_formats:
+        return {"error": f"response_format must be one of {sorted(valid_formats)}"}
+
+    try:
+        file_content = await file.read()
+        if not file_content:
+            return {"error": "Audio file is empty"}
+
+        audio_hash = generate_audio_hash(file_content, "translate", None)
+        task_id = f"oai-{audio_hash}"
+
+        with task_results_lock:
+            if task_id not in task_results:
+                task_results[task_id] = TaskResult()
+            task_result = task_results[task_id]
+
+        asr_task_data = {
+            'path': task_id,
+            'type': 'asr',
+            'task': 'translate',
+            'language': None,
+            'video_file': None,
+            'initial_prompt': prompt,
+            'audio_content': file_content,
+            'encode': True,
+            'output_format': response_format,
+            'word_timestamps': response_format == 'verbose_json',
+            'result_container': task_result,
+        }
+
+        if task_queue.put(asr_task_data):
+            logging.info(f"OpenAI translation task {task_id} queued")
+        else:
+            logging.info(f"OpenAI translation task {task_id} already queued/processing - waiting")
+
+        if await asyncio.to_thread(task_result.wait, asr_timeout):
+            if task_result.error:
+                return {"error": task_result.error}
+            return StreamingResponse(
+                iter([task_result.result]),
+                media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
+            )
+        else:
+            return {"error": f"Translation timed out after {asr_timeout} seconds"}
+
+    except Exception as e:
+        logging.error(f"Error in OpenAI translations endpoint: {e}", exc_info=True)
+        return {"error": str(e)}
+    finally:
+        await file.close()
+        with task_results_lock:
+            if task_id and task_id in task_results:
+                del task_results[task_id]
+
+
 # ============================================================================
 # ASR WORKER FUNCTION
 # ============================================================================
@@ -948,7 +1094,35 @@ def asr_task_worker(task_data: dict) -> None:
         
         # Set result for blocking endpoint
         if result_container:
-            result_container.set_result(result.to_srt_vtt(filepath=None, word_level=word_level_highlight))
+            output_format = task_data.get('output_format', 'srt')
+            if output_format == 'json':
+                formatted = json.dumps({"text": result.text.strip()})
+            elif output_format == 'text':
+                formatted = result.text.strip()
+            elif output_format == 'vtt':
+                formatted = result.to_srt_vtt(filepath=None, word_level=word_level_highlight, vtt=True)
+            elif output_format == 'verbose_json':
+                segs = []
+                for i, seg in enumerate(result.segments):
+                    s = {
+                        "id": i, "seek": 0,
+                        "start": round(seg.start, 3), "end": round(seg.end, 3),
+                        "text": seg.text, "tokens": [], "temperature": 0.0,
+                        "avg_logprob": 0.0, "compression_ratio": 1.0, "no_speech_prob": 0.0,
+                    }
+                    if seg.words:
+                        s["words"] = [{"word": w.word, "start": round(w.start, 3), "end": round(w.end, 3)} for w in seg.words]
+                    segs.append(s)
+                formatted = json.dumps({
+                    "task": task,
+                    "language": result.language,
+                    "duration": round(result.segments[-1].end, 3) if result.segments else 0.0,
+                    "text": result.text.strip(),
+                    "segments": segs,
+                })
+            else:  # srt (default)
+                formatted = result.to_srt_vtt(filepath=None, word_level=word_level_highlight)
+            result_container.set_result(formatted)
 
     except Exception as e:
         logging.error(f"Error processing ASR (ID: {task_id}): {e}", exc_info=True)
