@@ -135,6 +135,7 @@ path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', './models')
 monitor = convert_to_bool(os.getenv('MONITOR', False))
+skip_startup_scan = convert_to_bool(os.getenv('SKIP_STARTUP_SCAN', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe').lower()
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
@@ -2514,22 +2515,25 @@ class NewFileHandler(FileSystemEventHandler):
 
 def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = LanguageCode.NONE):
     transcribe_folders = transcribe_folders.split("|")
-    logging.info("Starting to search folders to see if we need to create subtitles.")
-    logging.debug("The folders are:")
-    for path in transcribe_folders:
-        logging.debug(path)
-        for root, dirs, files in os.walk(path):
-            if SKIP_MARKER in files:
-                logging.info(f"Skipping (skip marker present): {root}")
-                dirs.clear()
-                continue
-            for file in files:
-                file_path = os.path.join(root, file)
-                gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
-        # if the path specified was actually a single file and not a folder, process it
-        if os.path.isfile(path):
-            if has_audio(path):
-                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
+    if skip_startup_scan:
+        logging.info("SKIP_STARTUP_SCAN is enabled — skipping existing file scan.")
+    else:
+        logging.info("Starting to search folders to see if we need to create subtitles.")
+        logging.debug("The folders are:")
+        for path in transcribe_folders:
+            logging.debug(path)
+            for root, dirs, files in os.walk(path):
+                if SKIP_MARKER in files:
+                    logging.info(f"Skipping (skip marker present): {root}")
+                    dirs.clear()
+                    continue
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
+            # if the path specified was actually a single file and not a folder, process it
+            if os.path.isfile(path):
+                if has_audio(path):
+                    gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
     # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
