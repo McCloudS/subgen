@@ -2471,12 +2471,30 @@ def is_file_stable(file_path, wait_time=2, check_intervals=3):
 
     return False  # File is still changing
 
+SKIP_MARKER = ".subgen_skip"
+
+
+def _is_in_skipped_dir(file_path: str) -> bool:
+    """Return True if any ancestor directory of file_path contains a .subgen_skip marker."""
+    check = os.path.dirname(os.path.abspath(file_path))
+    while True:
+        if os.path.exists(os.path.join(check, SKIP_MARKER)):
+            return True
+        parent = os.path.dirname(check)
+        if parent == check:
+            return False
+        check = parent
+
+
 class NewFileHandler(FileSystemEventHandler):
     """Watchdog handler that queues newly created or modified media files."""
 
     def create_subtitle(self, event):
         if not event.is_directory:
             file_path = event.src_path
+            if _is_in_skipped_dir(file_path):
+                logging.info(f"Skipping (skip marker present): {file_path}")
+                return
             if has_audio(file_path):
                 logging.info(f"File: {path_mapping(file_path)} was added")
                 gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate)
@@ -2501,6 +2519,10 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
     for path in transcribe_folders:
         logging.debug(path)
         for root, dirs, files in os.walk(path):
+            if SKIP_MARKER in files:
+                logging.info(f"Skipping (skip marker present): {root}")
+                dirs.clear()
+                continue
             for file in files:
                 file_path = os.path.join(root, file)
                 gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
