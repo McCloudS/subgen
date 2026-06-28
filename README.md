@@ -243,6 +243,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `PROCESS_MEDIA_ON_PLAY` | `True` | Generate subs for media when it is played (when triggered by webhook). |
 | `TRANSCRIBE_FOLDERS` | `''` | Pipe-separated list (e.g., `/tv&#124;/movies`) to recurse through and queue existing media. |
 | `MONITOR` | `False` | Actively watches `TRANSCRIBE_FOLDERS` in real-time for newly pasted files. |
+| `SKIP_STARTUP_SCAN` | `False` | Skips the startup scan of `TRANSCRIBE_FOLDERS` entirely. Subgen will still watch for new files if `MONITOR` is enabled, but won't iterate existing files on start. Useful if your library is already subtitled and you only want to catch newly added files. |
 | `PLEX_QUEUE_NEXT_EPISODE` | `False` | Auto-queues the *next* Plex episode when Subgen is triggered. |
 | `PLEX_QUEUE_SEASON` | `False` | Auto-queues the *entire remaining season* when Subgen is triggered. |
 | `PLEX_QUEUE_SERIES` | `False` | Auto-queues the *entire remaining series* when Subgen is triggered. |
@@ -250,6 +251,13 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 
 ### ⏭️ Skip Logic & Audio Targeting
 *Prevent Subgen from wasting time on files that don't need subtitles.*
+
+**Directory skip marker:** Place an empty `.subgen_skip` file in any directory to tell Subgen to skip that directory and all of its subdirectories — both during the startup scan and when watching for new files. Useful for completed shows or any section of your library that will never need new subtitles.
+```bash
+touch "/tv/The Simpsons/.subgen_skip"   # skips all seasons
+touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
+```
+
 | Variable | Default | Description |
 |---|---|---|
 | `SKIP_IF_TARGET_SUBTITLES_EXIST` | `True` | Skips if an auto-generated subtitle in your desired language already exists. |
