@@ -1974,16 +1974,21 @@ def should_skip_file(file_path: str, target_language: LanguageCode, audio_langs=
 
     # 4. Skip if a subtitle already exists in the target language.
     if skip_if_target_subtitle_exists:
-        if subtitle_exists_in_language(file_path, target_language):
-            if target_language == LanguageCode.NONE:
-                logging.info(f"Skipping {base_name}: Subtitles already exist and audio language could not be detected from file metadata.")
-            else:
-                lang_name = target_language.to_name()
-                logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
-            return True
+        # When audio language is unknown but SUBTITLE_LANGUAGE_NAME is explicitly set, we know
+        # exactly what file we intend to write — skip the generic "any subtitle → skip" check
+        # and only look for the specifically named output below.
+        named_output_configured = subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name)
+        if not (target_language == LanguageCode.NONE and named_output_configured):
+            if subtitle_exists_in_language(file_path, target_language):
+                if target_language == LanguageCode.NONE:
+                    logging.info(f"Skipping {base_name}: Subtitles already exist and audio language could not be detected from file metadata.")
+                else:
+                    lang_name = target_language.to_name()
+                    logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
+                return True
 
         # Since SUBTITLE_LANGUAGE_NAME overrides the output filename, check if it exists in the folder.
-        if subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name):
+        if named_output_configured:
             external_lang = LanguageCode.from_string(subtitle_language_name)
             if has_external_subtitle_in_language(file_path, external_lang, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles):
                 logging.info(f"Skipping {base_name}: Subtitles already exist in custom name '{subtitle_language_name}'.")
