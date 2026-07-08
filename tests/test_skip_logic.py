@@ -218,3 +218,106 @@ class TestTranslateForceTarget:
             video.touch()
             # Even though we pass FRENCH, translate mode forces ENGLISH target
             assert should_skip_file(str(video), LanguageCode.FRENCH) is True
+
+
+# ---------------------------------------------------------------------------
+# .subgen_skip marker — transcribe_existing() directory pruning
+# ---------------------------------------------------------------------------
+class TestSubgenSkipMarker:
+    def _patch_scan_defaults(self, monkeypatch):
+        monkeypatch.setattr(subgen, "monitor", False)
+        monkeypatch.setattr(subgen, "skip_startup_scan", False)
+        monkeypatch.setattr(subgen, "use_path_mapping", False)
+        monkeypatch.setattr(subgen, "transcribe_or_translate", "transcribe")
+
+    def test_marker_skips_directory_and_subdirs(self, monkeypatch, tmp_path):
+        """A .subgen_skip file causes the directory and all subdirectories to be skipped."""
+        self._patch_scan_defaults(monkeypatch)
+
+        show_dir = tmp_path / "The Simpsons"
+        season1 = show_dir / "Season 1"
+        season1.mkdir(parents=True)
+        (show_dir / subgen.SKIP_MARKER).touch()
+        (season1 / "S01E01.mkv").touch()
+
+        queued = []
+        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
+
+        subgen.transcribe_existing(str(tmp_path))
+
+        assert not any("Simpsons" in p for p in queued), (
+            "Files inside a directory with .subgen_skip must not be queued"
+        )
+
+    def test_marker_only_skips_marked_subtree(self, monkeypatch, tmp_path):
+        """Only the marked subtree is skipped; sibling directories are still scanned."""
+        self._patch_scan_defaults(monkeypatch)
+
+        skipped_dir = tmp_path / "OldShow"
+        active_dir = tmp_path / "NewShow"
+        skipped_dir.mkdir()
+        active_dir.mkdir()
+        (skipped_dir / subgen.SKIP_MARKER).touch()
+        (skipped_dir / "ep.mkv").touch()
+        (active_dir / "ep.mkv").touch()
+
+        queued = []
+        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
+
+        subgen.transcribe_existing(str(tmp_path))
+
+        assert not any("OldShow" in p for p in queued), "Marked directory must be skipped"
+        assert any("NewShow" in p for p in queued), "Unmarked sibling must still be scanned"
+
+    def test_no_marker_scans_normally(self, monkeypatch, tmp_path):
+        """Without a marker file, directories are scanned as normal."""
+        self._patch_scan_defaults(monkeypatch)
+
+        video = tmp_path / "movie.mkv"
+        video.touch()
+
+        queued = []
+        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
+
+        subgen.transcribe_existing(str(tmp_path))
+
+        assert str(video) in queued
+
+
+# ---------------------------------------------------------------------------
+# SKIP_STARTUP_SCAN — transcribe_existing() scan bypass
+# ---------------------------------------------------------------------------
+class TestSkipStartupScan:
+    def _patch_scan_defaults(self, monkeypatch):
+        monkeypatch.setattr(subgen, "monitor", False)
+        monkeypatch.setattr(subgen, "use_path_mapping", False)
+        monkeypatch.setattr(subgen, "transcribe_or_translate", "transcribe")
+
+    def test_skip_startup_scan_queues_nothing(self, monkeypatch, tmp_path):
+        """With SKIP_STARTUP_SCAN=True, no existing files are queued on startup."""
+        self._patch_scan_defaults(monkeypatch)
+        monkeypatch.setattr(subgen, "skip_startup_scan", True)
+
+        (tmp_path / "movie.mkv").touch()
+
+        queued = []
+        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
+
+        subgen.transcribe_existing(str(tmp_path))
+
+        assert queued == [], "SKIP_STARTUP_SCAN=True must not queue any existing files"
+
+    def test_skip_startup_scan_false_scans_normally(self, monkeypatch, tmp_path):
+        """With SKIP_STARTUP_SCAN=False (default), existing files are still queued."""
+        self._patch_scan_defaults(monkeypatch)
+        monkeypatch.setattr(subgen, "skip_startup_scan", False)
+
+        video = tmp_path / "movie.mkv"
+        video.touch()
+
+        queued = []
+        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
+
+        subgen.transcribe_existing(str(tmp_path))
+
+        assert str(video) in queued

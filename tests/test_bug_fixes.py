@@ -5,7 +5,8 @@ Bugs covered:
 1. get_subtitle_languages() has no try/except around av.open() — propagates exception
 2. refresh_jellyfin_metadata() makes a dead extra GET request before the real POST
 3. transcribe_existing() uses `path` after loop — scoping bug when multiple folders
-4. SKIP_ONLY_SUBGEN_SUBTITLES=True still skipped based on embedded subtitle streams (#339)
+4. SUBTITLE_LANGUAGE_NAME set + unknown audio language skipped by generic subtitle check (#337)
+5. SKIP_ONLY_SUBGEN_SUBTITLES=True still skipped based on embedded subtitle streams (#339)
 """
 import sys
 import os
@@ -186,7 +187,95 @@ class TestTranscribeExistingScoping:
 
 
 # ---------------------------------------------------------------------------
-# Bug 4: SKIP_ONLY_SUBGEN_SUBTITLES=True still skipped on embedded streams (#339)
+# Bug 4: SUBTITLE_LANGUAGE_NAME set + unknown audio language incorrectly skips (#337)
+# ---------------------------------------------------------------------------
+class TestSubtitleLanguageNameWithUnknownAudio:
+    """
+    When audio language is unknown (LanguageCode.NONE) and SUBTITLE_LANGUAGE_NAME
+    is set, subtitle_exists_in_language(NONE) was returning True for ANY existing
+    subtitle, skipping before the named-output check could run.
+    """
+
+    def _patch_defaults(self, monkeypatch):
+        monkeypatch.setattr(subgen, "transcribe_or_translate", "transcribe")
+        monkeypatch.setattr(subgen, "lrc_for_audio_files", False)
+        monkeypatch.setattr(subgen, "skip_unknown_language", False)
+        monkeypatch.setattr(subgen, "skip_if_target_subtitle_exists", True)
+        monkeypatch.setattr(subgen, "skip_if_internal_sub_language", LanguageCode.NONE)
+        monkeypatch.setattr(subgen, "skip_if_external_sub_exists", False)
+        monkeypatch.setattr(subgen, "skip_subtitle_languages", [])
+        monkeypatch.setattr(subgen, "limit_to_preferred_audio_languages", False)
+        monkeypatch.setattr(subgen, "preferred_audio_languages", [LanguageCode.ENGLISH])
+        monkeypatch.setattr(subgen, "skip_audio_languages", [])
+        monkeypatch.setattr(subgen, "only_match_subgen_subtitles", False)
+        monkeypatch.setattr(subgen, "skip_if_no_audio_language_but_subtitles_exist", False)
+
+    def test_no_skip_when_named_output_missing_and_audio_unknown(self, monkeypatch, tmp_path):
+        """
+        SUBTITLE_LANGUAGE_NAME=aa + unknown audio language + existing non-aa subtitle
+        must NOT skip. The named output (*.aa.srt) doesn't exist yet.
+        """
+        self._patch_defaults(monkeypatch)
+        monkeypatch.setattr(subgen, "subtitle_language_name", "aa")
+
+        video = tmp_path / "file.mkv"
+        video.touch()
+        (tmp_path / "file.en.cc.srt").touch()
+
+        with (
+            patch.object(subgen, "get_subtitle_languages", return_value=[]),
+            patch.object(subgen, "get_audio_languages", return_value=[]),
+            patch.object(subgen, "has_internal_subtitle_in_language", return_value=False),
+        ):
+            assert should_skip_file(str(video), LanguageCode.NONE) is False, (
+                "Must not skip when SUBTITLE_LANGUAGE_NAME is set but the named output doesn't exist"
+            )
+
+    def test_skip_when_named_output_exists_and_audio_unknown(self, monkeypatch, tmp_path):
+        """
+        SUBTITLE_LANGUAGE_NAME=aa + unknown audio language + existing aa subtitle
+        MUST skip — the named output already exists.
+        """
+        self._patch_defaults(monkeypatch)
+        monkeypatch.setattr(subgen, "subtitle_language_name", "aa")
+
+        video = tmp_path / "file.mkv"
+        video.touch()
+        (tmp_path / "file.aa.srt").touch()
+
+        with (
+            patch.object(subgen, "get_subtitle_languages", return_value=[]),
+            patch.object(subgen, "get_audio_languages", return_value=[]),
+            patch.object(subgen, "has_internal_subtitle_in_language", return_value=False),
+        ):
+            assert should_skip_file(str(video), LanguageCode.NONE) is True, (
+                "Must skip when SUBTITLE_LANGUAGE_NAME is set and the named output already exists"
+            )
+
+    def test_no_subtitle_language_name_unknown_audio_skips_on_any_subtitle(self, monkeypatch, tmp_path):
+        """
+        Without SUBTITLE_LANGUAGE_NAME, the original behaviour is preserved:
+        unknown audio language + any existing subtitle → skip.
+        """
+        self._patch_defaults(monkeypatch)
+        monkeypatch.setattr(subgen, "subtitle_language_name", "")
+
+        video = tmp_path / "file.mkv"
+        video.touch()
+        (tmp_path / "file.en.srt").touch()
+
+        with (
+            patch.object(subgen, "get_subtitle_languages", return_value=[]),
+            patch.object(subgen, "get_audio_languages", return_value=[]),
+            patch.object(subgen, "has_internal_subtitle_in_language", return_value=False),
+        ):
+            assert should_skip_file(str(video), LanguageCode.NONE) is True, (
+                "Without SUBTITLE_LANGUAGE_NAME, unknown audio + any existing subtitle should still skip"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Bug 5: SKIP_ONLY_SUBGEN_SUBTITLES=True still skipped on embedded streams (#339)
 # ---------------------------------------------------------------------------
 class TestSkipOnlySubgenIgnoresEmbedded:
     """

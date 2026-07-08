@@ -1,4 +1,4 @@
-subgen_version = '2026.06.4'
+subgen_version = '2026.07.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -135,6 +135,7 @@ path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
 path_mapping_to = os.getenv('PATH_MAPPING_TO', r'/Volumes/TV')
 model_location = os.getenv('MODEL_PATH', './models')
 monitor = convert_to_bool(os.getenv('MONITOR', False))
+skip_startup_scan = convert_to_bool(os.getenv('SKIP_STARTUP_SCAN', False))
 transcribe_folders = os.getenv('TRANSCRIBE_FOLDERS', '')
 transcribe_or_translate = os.getenv('TRANSCRIBE_OR_TRANSLATE', 'transcribe').lower()
 clear_vram_on_complete = convert_to_bool(os.getenv('CLEAR_VRAM_ON_COMPLETE', True))
@@ -1973,16 +1974,21 @@ def should_skip_file(file_path: str, target_language: LanguageCode, audio_langs=
 
     # 4. Skip if a subtitle already exists in the target language.
     if skip_if_target_subtitle_exists:
-        if subtitle_exists_in_language(file_path, target_language):
-            if target_language == LanguageCode.NONE:
-                logging.info(f"Skipping {base_name}: Subtitles already exist and audio language could not be detected from file metadata.")
-            else:
-                lang_name = target_language.to_name()
-                logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
-            return True
+        # When audio language is unknown but SUBTITLE_LANGUAGE_NAME is explicitly set, we know
+        # exactly what file we intend to write — skip the generic "any subtitle → skip" check
+        # and only look for the specifically named output below.
+        named_output_configured = subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name)
+        if not (target_language == LanguageCode.NONE and named_output_configured):
+            if subtitle_exists_in_language(file_path, target_language):
+                if target_language == LanguageCode.NONE:
+                    logging.info(f"Skipping {base_name}: Subtitles already exist and audio language could not be detected from file metadata.")
+                else:
+                    lang_name = target_language.to_name()
+                    logging.info(f"Skipping {base_name}: Subtitles already exist in {lang_name}.")
+                return True
 
         # Since SUBTITLE_LANGUAGE_NAME overrides the output filename, check if it exists in the folder.
-        if subtitle_language_name and LanguageCode.is_valid_language(subtitle_language_name):
+        if named_output_configured:
             external_lang = LanguageCode.from_string(subtitle_language_name)
             if has_external_subtitle_in_language(file_path, external_lang, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles):
                 logging.info(f"Skipping {base_name}: Subtitles already exist in custom name '{subtitle_language_name}'.")
@@ -2475,12 +2481,30 @@ def is_file_stable(file_path, wait_time=2, check_intervals=3):
 
     return False  # File is still changing
 
+SKIP_MARKER = ".subgen_skip"
+
+
+def _is_in_skipped_dir(file_path: str) -> bool:
+    """Return True if any ancestor directory of file_path contains a .subgen_skip marker."""
+    check = os.path.dirname(os.path.abspath(file_path))
+    while True:
+        if os.path.exists(os.path.join(check, SKIP_MARKER)):
+            return True
+        parent = os.path.dirname(check)
+        if parent == check:
+            return False
+        check = parent
+
+
 class NewFileHandler(FileSystemEventHandler):
     """Watchdog handler that queues newly created or modified media files."""
 
     def create_subtitle(self, event):
         if not event.is_directory:
             file_path = event.src_path
+            if _is_in_skipped_dir(file_path):
+                logging.info(f"Skipping (skip marker present): {file_path}")
+                return
             if has_audio(file_path):
                 logging.info(f"File: {path_mapping(file_path)} was added")
                 gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate)
@@ -2500,18 +2524,25 @@ class NewFileHandler(FileSystemEventHandler):
 
 def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = LanguageCode.NONE):
     transcribe_folders = transcribe_folders.split("|")
-    logging.info("Starting to search folders to see if we need to create subtitles.")
-    logging.debug("The folders are:")
-    for path in transcribe_folders:
-        logging.debug(path)
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
-        # if the path specified was actually a single file and not a folder, process it
-        if os.path.isfile(path):
-            if has_audio(path):
-                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
+    if skip_startup_scan:
+        logging.info("SKIP_STARTUP_SCAN is enabled — skipping existing file scan.")
+    else:
+        logging.info("Starting to search folders to see if we need to create subtitles.")
+        logging.debug("The folders are:")
+        for path in transcribe_folders:
+            logging.debug(path)
+            for root, dirs, files in os.walk(path):
+                if SKIP_MARKER in files:
+                    logging.info(f"Skipping (skip marker present): {root}")
+                    dirs.clear()
+                    continue
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
+            # if the path specified was actually a single file and not a folder, process it
+            if os.path.isfile(path):
+                if has_audio(path):
+                    gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
     # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
