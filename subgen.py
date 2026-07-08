@@ -2070,7 +2070,11 @@ def subtitle_exists_in_language(video_file, target_language: LanguageCode):
     Returns:
         bool: True if a subtitle file with the target language is found, False otherwise.
     """
-    return has_internal_subtitle_in_language(video_file, target_language) or has_external_subtitle_in_language(video_file, target_language, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles)
+    # Embedded tracks can never be subgen-created files, so when only_match_subgen_subtitles
+    # is set, internal subtitle streams should not count as coverage.
+    internal = (not only_match_subgen_subtitles) and has_internal_subtitle_in_language(video_file, target_language)
+    external = has_external_subtitle_in_language(video_file, target_language, recursion=True, only_match_subgen_subtitles=only_match_subgen_subtitles)
+    return internal or external
 
 def has_internal_subtitle_in_language(video_file: str, target_language: LanguageCode) -> bool:
     """
