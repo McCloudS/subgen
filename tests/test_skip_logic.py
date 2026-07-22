@@ -285,32 +285,25 @@ class TestSubgenSkipMarker:
 
 
 # ---------------------------------------------------------------------------
-# SKIP_STARTUP_SCAN — transcribe_existing() scan bypass
+# SKIP_STARTUP_SCAN — lifespan call-site gate (must NOT affect /batch)
 # ---------------------------------------------------------------------------
 class TestSkipStartupScan:
+    """
+    SKIP_STARTUP_SCAN gates the lifespan call site, not transcribe_existing()
+    itself, so /batch (which also calls transcribe_existing) is unaffected.
+    """
+
     def _patch_scan_defaults(self, monkeypatch):
         monkeypatch.setattr(subgen, "monitor", False)
         monkeypatch.setattr(subgen, "use_path_mapping", False)
         monkeypatch.setattr(subgen, "transcribe_or_translate", "transcribe")
 
-    def test_skip_startup_scan_queues_nothing(self, monkeypatch, tmp_path):
-        """With SKIP_STARTUP_SCAN=True, no existing files are queued on startup."""
+    def test_transcribe_existing_still_works_when_skip_enabled(self, monkeypatch, tmp_path):
+        """transcribe_existing() must queue files regardless of skip_startup_scan.
+        The flag is checked at the lifespan call site, not inside this function,
+        so /batch calls are never silenced by it."""
         self._patch_scan_defaults(monkeypatch)
         monkeypatch.setattr(subgen, "skip_startup_scan", True)
-
-        (tmp_path / "movie.mkv").touch()
-
-        queued = []
-        monkeypatch.setattr(subgen, "gen_subtitles_queue", lambda p, t, fl: queued.append(p))
-
-        subgen.transcribe_existing(str(tmp_path))
-
-        assert queued == [], "SKIP_STARTUP_SCAN=True must not queue any existing files"
-
-    def test_skip_startup_scan_false_scans_normally(self, monkeypatch, tmp_path):
-        """With SKIP_STARTUP_SCAN=False (default), existing files are still queued."""
-        self._patch_scan_defaults(monkeypatch)
-        monkeypatch.setattr(subgen, "skip_startup_scan", False)
 
         video = tmp_path / "movie.mkv"
         video.touch()
@@ -320,4 +313,60 @@ class TestSkipStartupScan:
 
         subgen.transcribe_existing(str(tmp_path))
 
-        assert str(video) in queued
+        assert str(video) in queued, (
+            "transcribe_existing() must not be affected by skip_startup_scan — "
+            "the flag belongs at the lifespan call site so /batch still works"
+        )
+
+    def test_lifespan_skips_thread_when_skip_enabled(self, monkeypatch, tmp_path):
+        """With SKIP_STARTUP_SCAN=True, lifespan must not spawn the scan thread."""
+        monkeypatch.setattr(subgen, "transcribe_folders", str(tmp_path))
+        monkeypatch.setattr(subgen, "skip_startup_scan", True)
+
+        spawned = []
+        monkeypatch.setattr(subgen, "transcribe_existing", lambda *a, **k: spawned.append(a))
+
+        import threading as _threading
+        original_thread = _threading.Thread
+
+        threads_started = []
+
+        def fake_thread(*args, **kwargs):
+            t = original_thread(*args, **kwargs)
+            threads_started.append(kwargs.get("target") or args[0])
+            return t
+
+        with patch("subgen.threading.Thread", side_effect=fake_thread):
+            import asyncio
+            async def run():
+                async with subgen.lifespan(subgen.app):
+                    pass
+            asyncio.run(run())
+
+        assert subgen.transcribe_existing not in [fn for fn in threads_started], (
+            "lifespan must not start the scan thread when SKIP_STARTUP_SCAN=True"
+        )
+
+    def test_lifespan_starts_thread_when_skip_disabled(self, monkeypatch, tmp_path):
+        """With SKIP_STARTUP_SCAN=False, lifespan must spawn the scan thread."""
+        monkeypatch.setattr(subgen, "transcribe_folders", str(tmp_path))
+        monkeypatch.setattr(subgen, "skip_startup_scan", False)
+
+        threads_started = []
+
+        def fake_thread(*args, **kwargs):
+            threads_started.append(kwargs.get("target"))
+            m = MagicMock()
+            m.start = MagicMock()
+            return m
+
+        with patch("subgen.threading.Thread", side_effect=fake_thread):
+            import asyncio
+            async def run():
+                async with subgen.lifespan(subgen.app):
+                    pass
+            asyncio.run(run())
+
+        assert subgen.transcribe_existing in threads_started, (
+            "lifespan must start the scan thread when SKIP_STARTUP_SCAN=False"
+        )
