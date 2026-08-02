@@ -108,7 +108,7 @@ jobs:
           context: .
           file: ${{ env.dockerfile }}
           build-args: ${{ env.build_args }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache

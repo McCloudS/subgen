@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.whispercpp.txt /
-RUN python3 -m pip install --no-cache-dir -U -r /requirements.whispercpp.txt \
+RUN python3 -m pip install --no-cache-dir -U --break-system-packages -r /requirements.whispercpp.txt \
     && apt-get purge -y --auto-remove python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
