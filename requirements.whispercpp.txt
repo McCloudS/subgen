@@ -1,0 +1,8 @@
+numpy
+fastapi
+requests
+uvicorn
+python-multipart
+ffmpeg-python
+watchdog
+av

@@ -1,4 +1,4 @@
-subgen_version = '2026.07.3'
+subgen_version = '2026.08.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -147,6 +147,9 @@ lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
+transcribe_backend = os.getenv('TRANSCRIBE_BACKEND', 'faster-whisper').lower()
+whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
+whisper_cli_path = os.getenv('WHISPER_CLI_PATH', 'whisper-cli')
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
@@ -1186,36 +1189,38 @@ def asr_task_worker(task_data: dict) -> None:
         
         start_model()
 
-        # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS
-        fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
-
-        # Prepare audio: encoded bytes → BytesIO (in-memory); raw PCM → numpy float32
-        if encode:
-            audio = io.BytesIO(file_content)
-        else:
-            audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+        display_name = os.path.basename(video_file) if video_file else task_id
 
         # Detect audio start_time offset from source file (if accessible)
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
 
-        # Perform transcription; consume generator with per-segment progress logging
-        fw_segments_gen, info = model.transcribe(
-            audio,
-            task=task,
-            language=language or None,
-            word_timestamps=True,
-            vad_filter=vad_filter,
-            condition_on_previous_text=False,
-            **fw_kwargs,
-        )
-        display_name = os.path.basename(video_file) if video_file else task_id
-        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
+        if transcribe_backend == 'whispercpp':
+            result = _transcribe_whispercpp(file_content, encode, task, language or '', display_name)
+        else:
+            # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS
+            fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
 
-        words = extract_words(fw_segments)
-        result = TranscriptionResult(
-            segments=split_segments(words),
-            language=info.language,
-        )
+            # Prepare audio: encoded bytes → BytesIO (in-memory); raw PCM → numpy float32
+            if encode:
+                audio = io.BytesIO(file_content)
+            else:
+                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+
+            fw_segments_gen, info = model.transcribe(
+                audio,
+                task=task,
+                language=language or None,
+                word_timestamps=True,
+                vad_filter=vad_filter,
+                condition_on_previous_text=False,
+                **fw_kwargs,
+            )
+            fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
+            words = extract_words(fw_segments)
+            result = TranscriptionResult(
+                segments=split_segments(words),
+                language=info.language,
+            )
 
         # Apply audio start_time offset to compensate for container timing
         if audio_offset > 0:
@@ -1568,8 +1573,66 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         logging.error(f"Error: {str(e)}")
         return None
 
+def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language: str, display_name: str) -> "TranscriptionResult":
+    """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
+    import tempfile, shutil
+
+    cli = shutil.which(whisper_cli_path) or whisper_cli_path
+    if not whisper_cpp_model:
+        raise RuntimeError("WHISPER_CPP_MODEL must be set to the path of a GGUF model file")
+
+    tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_')
+    audio_path = os.path.join(tmp_dir, 'audio')
+    output_prefix = os.path.join(tmp_dir, 'out')
+    json_path = output_prefix + '.json'
+
+    try:
+        with open(audio_path, 'wb') as f:
+            f.write(audio_bytes)
+
+        cmd = [
+            cli, '-m', whisper_cpp_model,
+            '-f', audio_path,
+            '-oj',           # JSON output
+            '-of', output_prefix,
+            '--no-prints',
+        ]
+        if language:
+            cmd += ['-l', language]
+        if task == 'translate':
+            cmd += ['--translate']
+
+        logging.info(f"whisper.cpp: transcribing {display_name}")
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        if proc.returncode != 0:
+            raise RuntimeError(f"whisper-cli exited {proc.returncode}: {proc.stderr[:500]}")
+
+        with open(json_path, encoding='utf-8') as f:
+            data = json.load(f)
+
+        detected_language = data.get('result', {}).get('language', language or '')
+        segments = []
+        for seg in data.get('transcription', []):
+            offsets = seg.get('offsets', {})
+            text = seg.get('text', '').strip()
+            if text:
+                segments.append({
+                    'start': offsets.get('from', 0) / 1000.0,
+                    'end':   offsets.get('to', 0) / 1000.0,
+                    'text':  text,
+                })
+
+        logging.info(f"whisper.cpp: {len(segments)} segments for {display_name}")
+        return TranscriptionResult(segments=segments, language=detected_language)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def start_model():
     global model
+    if transcribe_backend == 'whispercpp':
+        return
     with model_load_lock:
         if model is None:
             logging.debug("Model was purged, need to re-create")
@@ -1709,33 +1772,38 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         file_name, file_extension = os.path.splitext(file_path)
         is_audio_file = is_audio_file_extension(file_extension)
 
-        data = file_path
-        # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language, audio_tracks=audio_tracks)
-        if extracted_audio_file:
-            # handle_multiple_audio_tracks returns WAV bytes; wrap in BytesIO for faster-whisper
-            data = io.BytesIO(extracted_audio_file)
-        
-        # Build faster-whisper kwargs; strip any stable-ts-specific keys
-        fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
-
-        fw_segments_gen, info = model.transcribe(
-            data,
-            language=force_language.to_iso_639_1() or None,
-            task=transcription_type,
-            word_timestamps=True,
-            vad_filter=vad_filter,
-            condition_on_previous_text=False,
-            **fw_kwargs,
-        )
         display_name = os.path.basename(file_path)
-        fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
 
-        words = extract_words(fw_segments)
-        result = TranscriptionResult(
-            segments=split_segments(words),
-            language=info.language,
-        )
+        if transcribe_backend == 'whispercpp':
+            audio_bytes = extracted_audio_file if extracted_audio_file else open(file_path, 'rb').read()
+            result = _transcribe_whispercpp(
+                audio_bytes, bool(extracted_audio_file or True),
+                transcription_type, force_language.to_iso_639_1() or '', display_name,
+            )
+        else:
+            data = file_path
+            if extracted_audio_file:
+                # handle_multiple_audio_tracks returns WAV bytes; wrap in BytesIO for faster-whisper
+                data = io.BytesIO(extracted_audio_file)
+
+            fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
+
+            fw_segments_gen, info = model.transcribe(
+                data,
+                language=force_language.to_iso_639_1() or None,
+                task=transcription_type,
+                word_timestamps=True,
+                vad_filter=vad_filter,
+                condition_on_previous_text=False,
+                **fw_kwargs,
+            )
+            fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
+            words = extract_words(fw_segments)
+            result = TranscriptionResult(
+                segments=split_segments(words),
+                language=info.language,
+            )
 
         appendLine(result)
 
