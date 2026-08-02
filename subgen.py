@@ -1,4 +1,4 @@
-subgen_version = '2026.08.1'
+subgen_version = '2026.08.2'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1776,7 +1776,11 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         display_name = os.path.basename(file_path)
 
         if transcribe_backend == 'whispercpp':
-            audio_bytes = extracted_audio_file if extracted_audio_file else open(file_path, 'rb').read()
+            if extracted_audio_file:
+                audio_bytes = extracted_audio_file
+            else:
+                with open(file_path, 'rb') as _fh:
+                    audio_bytes = _fh.read()
             result = _transcribe_whispercpp(
                 audio_bytes, bool(extracted_audio_file or True),
                 transcription_type, force_language.to_iso_639_1() or '', display_name,
