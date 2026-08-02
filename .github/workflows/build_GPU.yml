@@ -22,13 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # All three jobs use keep-state: true + a fixed builder name so the BuildKit
-  # container persists between runs on the self-hosted Unraid runner. BuildKit
-  # checks its local OCI store before pulling from the registry, so the large
-  # torch/CUDA/ROCm cache layers are only downloaded once (cold start) rather
-  # than re-fetched on every build.
-
-  # ── GPU (CUDA) ─────────────────────────────────────────────────────────────
+  # ── GPU ────────────────────────────────────────────────────────────────────
+  # main:  faster-whisper + CUDA  →  mccloud/subgen:latest
+  # dev:   whisper.cpp CUDA       →  mccloud/subgen:dev
   gpu:
     runs-on: [self-hosted]
     steps:
@@ -39,12 +35,16 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:latest\nmccloud/subgen:%s' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main-cuda" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-buildx-action@v3
@@ -59,13 +59,16 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:buildcache
           cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
 
   # ── CPU (multi-arch) ───────────────────────────────────────────────────────
+  # main:  faster-whisper CPU     →  mccloud/subgen:cpu
+  # dev:   whisper.cpp CPU        →  mccloud/subgen:dev-cpu
   cpu:
     runs-on: [self-hosted]
     steps:
@@ -76,12 +79,16 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:cpu\nmccloud/subgen:%s-cpu' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.cpu" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-qemu-action@v3
@@ -99,21 +106,21 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.cpu
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
           cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max
 
-  # ── AMD (ROCm) — runs after GPU+CPU so its large upload doesn't contend ───
-  # NOTE: The AMD build compiles CTranslate2 from source (CT2_GIT_REF=master).
-  # Any new commit on CTranslate2 master invalidates the build cache and forces
-  # a full ~10 GB re-push. Pin CT2_GIT_REF to a specific release tag in
-  # Dockerfile.AMD to make layers stable and uploads instant like GPU/CPU.
+  # ── AMD (ROCm) ─────────────────────────────────────────────────────────────
+  # main:  faster-whisper ROCm    →  mccloud/subgen:amd
+  # dev:   whisper.cpp HIP        →  mccloud/subgen:dev-amd
+  # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
   amd:
     runs-on: [self-hosted]
-    needs: [gpu, cpu]
+    needs: ${{ github.ref_name == 'main' && fromJSON('["gpu","cpu"]') || fromJSON('[]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,12 +129,16 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:amd\nmccloud/subgen:%s-amd' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.AMD" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-amd" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main-hip" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-buildx-action@v3
@@ -142,7 +153,8 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.AMD
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
           platforms: linux/amd64
           push: true
           tags: ${{ env.docker_tags }}
@@ -150,6 +162,8 @@ jobs:
           cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
 
   # ── whisper.cpp (Vulkan) ───────────────────────────────────────────────────
+  # main:  mccloud/subgen:whispercpp
+  # dev:   mccloud/subgen:dev-whispercpp
   whispercpp:
     runs-on: [self-hosted]
     steps:
@@ -181,6 +195,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.whispercpp
+          build-args: BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main-vulkan
           platforms: linux/amd64
           push: true
           tags: ${{ env.docker_tags }}

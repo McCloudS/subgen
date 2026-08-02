@@ -1,4 +1,5 @@
-FROM ghcr.io/ggerganov/whisper.cpp:main-vulkan
+ARG BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main-vulkan
+FROM ${BASE_IMAGE}
 
 # Python + subgen runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
