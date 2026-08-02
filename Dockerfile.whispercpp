@@ -1,38 +1,10 @@
-# ---- stage 1: build whisper.cpp with Vulkan ----
-FROM ubuntu:22.04 AS builder
+FROM ghcr.io/ggerganov/whisper.cpp:main-vulkan
 
+# Python + subgen runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git \
-    libvulkan-dev glslc spirv-tools \
-    && rm -rf /var/lib/apt/lists/*
-
-ARG WHISPER_CPP_VERSION=v1.7.4
-RUN git clone --depth=1 --branch ${WHISPER_CPP_VERSION} \
-    https://github.com/ggerganov/whisper.cpp /whisper.cpp
-
-WORKDIR /whisper.cpp
-RUN cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_VULKAN=ON \
-    -DWHISPER_BUILD_TESTS=OFF \
-    -DWHISPER_CLI=ON \
-    && cmake --build build --config Release -j$(nproc) \
-    && cmake --install build --prefix /install
-
-# ---- stage 2: runtime ----
-FROM ubuntu:22.04
-
-# Vulkan runtime + Python + ffmpeg
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libvulkan1 mesa-vulkan-drivers \
     python3 python3-pip \
     ffmpeg curl gosu tzdata \
     && rm -rf /var/lib/apt/lists/*
-
-# whisper.cpp binaries and libraries from builder
-COPY --from=builder /install/bin/whisper-cli /usr/local/bin/whisper-cli
-COPY --from=builder /install/lib/ /usr/local/lib/
-RUN ldconfig
 
 COPY requirements.whispercpp.txt /
 RUN python3 -m pip install --no-cache-dir -U -r /requirements.whispercpp.txt \
@@ -47,7 +19,6 @@ RUN mkdir -p /cache/models && chmod 777 /cache
 ENV XDG_CACHE_HOME=/cache \
     PYTHONUNBUFFERED=1 \
     TRANSCRIBE_BACKEND=whispercpp \
-    WHISPER_CLI_PATH=/usr/local/bin/whisper-cli \
     WHISPER_CPP_MODEL=/cache/models/ggml-model.bin
 
 COPY entrypoint.sh /entrypoint.sh
