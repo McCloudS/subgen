@@ -120,7 +120,7 @@ jobs:
   # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
   amd:
     runs-on: [self-hosted]
-    needs: ${{ github.ref_name == 'main' && fromJSON('["gpu","cpu"]') || fromJSON('[]') }}
+    needs: [gpu, cpu]
     steps:
       - uses: actions/checkout@v4
 
