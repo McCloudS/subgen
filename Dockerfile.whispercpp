@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ghcr.io/ggerganov/whisper.cpp:main-vulkan
+ARG BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main
 FROM ${BASE_IMAGE}
 
 # Python + subgen runtime deps
