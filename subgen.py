@@ -1,4 +1,4 @@
-subgen_version = '2026.08.2'
+subgen_version = '2026.08.3'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1575,7 +1575,8 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
 
 def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language: str, display_name: str) -> "TranscriptionResult":
     """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
-    import tempfile, shutil
+    import shutil
+    import tempfile
 
     cli = shutil.which(whisper_cli_path) or whisper_cli_path
     if not whisper_cpp_model:
