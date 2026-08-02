@@ -8,8 +8,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     ffmpeg curl gosu tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.whispercpp.txt /
-RUN python3 -m pip install --no-cache-dir -U --break-system-packages -r /requirements.whispercpp.txt \
+RUN pip install --no-cache-dir -U -r /requirements.whispercpp.txt \
     && apt-get purge -y --auto-remove python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
