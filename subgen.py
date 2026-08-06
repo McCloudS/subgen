@@ -1,4 +1,4 @@
-subgen_version = '2026.08.4'
+subgen_version = '2026.08.5'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -67,6 +67,7 @@ from threading import Event, Lock, Timer
 from typing import Union
 
 import av
+
 try:
     import faster_whisper
 except ImportError:
