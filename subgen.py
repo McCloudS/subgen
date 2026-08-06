@@ -1,4 +1,4 @@
-subgen_version = '2026.08.7'
+subgen_version = '2026.08.8'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1580,8 +1580,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
     import tempfile
 
     cli = shutil.which(whisper_cli_path) or whisper_cli_path
-    if not whisper_cpp_model:
-        raise RuntimeError("WHISPER_CPP_MODEL must be set to the path of a GGUF model file")
+    model_path = _ensure_whispercpp_model()
 
     tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_')
     audio_path = os.path.join(tmp_dir, 'audio')
@@ -1593,7 +1592,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
             f.write(audio_bytes)
 
         cmd = [
-            cli, '-m', whisper_cpp_model,
+            cli, '-m', model_path,
             '-f', audio_path,
             '-oj',           # JSON output
             '-of', output_prefix,
@@ -1631,9 +1630,38 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def _ensure_whispercpp_model() -> str:
+    """Return the local path to the whisper.cpp GGUF model, downloading from HuggingFace if missing."""
+    global whisper_cpp_model
+    if not whisper_cpp_model:
+        raise RuntimeError("WHISPER_CPP_MODEL must be set to the path of a GGUF model file")
+    if os.path.isfile(whisper_cpp_model):
+        return whisper_cpp_model
+
+    filename = os.path.basename(whisper_cpp_model)
+    dest_dir = os.path.dirname(os.path.abspath(whisper_cpp_model)) or model_location
+    os.makedirs(dest_dir, exist_ok=True)
+
+    logging.info(f"whisper.cpp model not found at {whisper_cpp_model}; downloading {filename} from ggerganov/whisper.cpp on HuggingFace...")
+    try:
+        from huggingface_hub import hf_hub_download
+        downloaded = hf_hub_download(
+            repo_id="ggerganov/whisper.cpp",
+            filename=filename,
+            local_dir=dest_dir,
+        )
+        whisper_cpp_model = downloaded
+        logging.info(f"whisper.cpp model downloaded to {whisper_cpp_model}")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to download whisper.cpp model '{filename}': {exc}") from exc
+
+    return whisper_cpp_model
+
+
 def start_model():
     global model
     if transcribe_backend == 'whispercpp':
+        _ensure_whispercpp_model()
         return
     with model_load_lock:
         if model is None:
