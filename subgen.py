@@ -1,4 +1,4 @@
-subgen_version = '2026.08.6'
+subgen_version = '2026.08.7'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -70,7 +70,6 @@ import av
 import ffmpeg
 import numpy as np
 import requests
-import torch
 from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from watchdog.events import FileSystemEventHandler
@@ -1687,8 +1686,9 @@ def perform_model_cleanup():
                 except Exception as e:
                     logging.error(f"Error unloading model: {e}")
             
-            if transcribe_device.lower() == 'cuda' and torch.cuda.is_available():
+            if transcribe_device.lower() == 'cuda':
                 try:
+                    import torch
                     torch.cuda.empty_cache()
                     logging.debug("CUDA cache cleared.")
                 except Exception as e: 
