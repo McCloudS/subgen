@@ -1,4 +1,4 @@
-subgen_version = '2026.08.3'
+subgen_version = '2026.08.4'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -67,7 +67,10 @@ from threading import Event, Lock, Timer
 from typing import Union
 
 import av
-import faster_whisper
+try:
+    import faster_whisper
+except ImportError:
+    faster_whisper = None
 import ffmpeg
 import numpy as np
 import requests
@@ -687,7 +690,8 @@ def webui():
 
 @app.get("/status")
 def status():
-    return {"version": f"Subgen {subgen_version}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
+    fw_ver = faster_whisper.__version__ if faster_whisper else "n/a"
+    return {"version": f"Subgen {subgen_version}, faster-whisper {fw_ver} ({docker_status})"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
@@ -1637,6 +1641,8 @@ def start_model():
     with model_load_lock:
         if model is None:
             logging.debug("Model was purged, need to re-create")
+            if faster_whisper is None:
+                raise RuntimeError("faster-whisper is not installed; set TRANSCRIBE_BACKEND=whispercpp or install faster-whisper")
             model = faster_whisper.WhisperModel(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
 
 def schedule_model_cleanup():
