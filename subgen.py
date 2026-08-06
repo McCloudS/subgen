@@ -1,4 +1,4 @@
-subgen_version = '2026.08.15'
+subgen_version = '2026.08.16'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -552,7 +552,9 @@ class TranscriptionResult:
     segments: list = field(default_factory=list)  # list of {"start", "end", "text"}
     language: str = ""
 
-_SENTENCE_END = re.compile(r'[.!?][\'")\]]*$')
+_SENTENCE_END     = re.compile(r'[.!?][\'")\]]*$')
+_ABBREV           = re.compile(r'^(?:Mr|Mrs|Ms|Dr|Prof|St|Ave|vs|etc|Jr|Sr|Lt|Sgt|Cpl|Pfc|Pvt|Cpt|Col|Gen|Adm|Rev|Hon|Gov|Sen|Rep|Pres|Mt|Ft|Dept|Assoc|Corp|Inc|Ltd|Co|Bros|Blvd|Rd|Ln|Pkwy|Sq|Bldg|Apt|Ste|No|Vol|Fig|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$', re.IGNORECASE)
+_INITIAL          = re.compile(r'^[A-Z]\.$')
 _SOFT_BREAK   = re.compile(r'[,;:]$')
 _CONJUNCTIONS = frozenset({
     'and', 'but', 'or', 'so', 'yet', 'for', 'nor',
@@ -634,7 +636,10 @@ def split_segments(words: list) -> list:
             flush()
         current.append(word)
         text_so_far = " ".join(w["word"] for w in current)
-        if _SENTENCE_END.search(word["word"]) and len(text_so_far) >= max_line_length // 2:
+        if (_SENTENCE_END.search(word["word"])
+                and not _ABBREV.match(word["word"])
+                and not _INITIAL.match(word["word"])
+                and len(text_so_far) >= max_line_length // 2):
             flush()
 
     flush()
