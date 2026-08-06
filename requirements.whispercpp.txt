@@ -6,3 +6,4 @@ python-multipart
 ffmpeg-python
 watchdog
 av
+huggingface_hub

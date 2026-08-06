@@ -1,4 +1,4 @@
-subgen_version = '2026.08.8'
+subgen_version = '2026.08.9'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -147,6 +147,7 @@ gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
 transcribe_backend = os.getenv('TRANSCRIBE_BACKEND', 'faster-whisper').lower()
 whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
+whisper_cpp_repo = os.getenv('WHISPER_CPP_REPO', '')
 whisper_cli_path = os.getenv('WHISPER_CLI_PATH', 'whisper-cli')
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
@@ -1630,6 +1631,13 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+_WHISPERCPP_REPO_BY_FILENAME = {
+    "ggml-large-v3-turbo-q5_0.bin": "distil-whisper/distil-large-v3-ggml",
+    "ggml-large-v3-turbo-q8_0.bin": "distil-whisper/distil-large-v3-ggml",
+}
+_WHISPERCPP_DEFAULT_REPO = "ggerganov/whisper.cpp"
+
+
 def _ensure_whispercpp_model() -> str:
     """Return the local path to the whisper.cpp GGUF model, downloading from HuggingFace if missing."""
     global whisper_cpp_model
@@ -1642,18 +1650,19 @@ def _ensure_whispercpp_model() -> str:
     dest_dir = os.path.dirname(os.path.abspath(whisper_cpp_model)) or model_location
     os.makedirs(dest_dir, exist_ok=True)
 
-    logging.info(f"whisper.cpp model not found at {whisper_cpp_model}; downloading {filename} from ggerganov/whisper.cpp on HuggingFace...")
+    repo_id = whisper_cpp_repo or _WHISPERCPP_REPO_BY_FILENAME.get(filename, _WHISPERCPP_DEFAULT_REPO)
+    logging.info(f"whisper.cpp model not found at {whisper_cpp_model}; downloading {filename} from {repo_id} on HuggingFace...")
     try:
         from huggingface_hub import hf_hub_download
         downloaded = hf_hub_download(
-            repo_id="ggerganov/whisper.cpp",
+            repo_id=repo_id,
             filename=filename,
             local_dir=dest_dir,
         )
         whisper_cpp_model = downloaded
         logging.info(f"whisper.cpp model downloaded to {whisper_cpp_model}")
     except Exception as exc:
-        raise RuntimeError(f"Failed to download whisper.cpp model '{filename}': {exc}") from exc
+        raise RuntimeError(f"Failed to download whisper.cpp model '{filename}' from {repo_id}: {exc}") from exc
 
     return whisper_cpp_model
 
