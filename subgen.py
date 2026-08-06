@@ -1,4 +1,4 @@
-subgen_version = '2026.08.10'
+subgen_version = '2026.08.11'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1575,6 +1575,37 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         logging.error(f"Error: {str(e)}")
         return None
 
+_WCP_SPECIAL_TOKEN = re.compile(r'^\[.*\]$|^<\|.*\|>$')
+_WCP_SPEAKER_DASH  = re.compile(r'^\s*-\s*')
+
+
+def _wcp_tokens_to_words(transcription: list) -> list:
+    """Extract word-level dicts from whisper.cpp full-JSON transcription array."""
+    words = []
+    for seg in transcription:
+        seg_start = seg.get('offsets', {}).get('from', 0) / 1000.0
+        seg_end   = seg.get('offsets', {}).get('to',   0) / 1000.0
+        tokens = seg.get('tokens', [])
+        if tokens:
+            for tok in tokens:
+                text = tok.get('text', '').strip()
+                if not text or _WCP_SPECIAL_TOKEN.match(text):
+                    continue
+                # strip leading speaker dash from first token of a segment
+                text = _WCP_SPEAKER_DASH.sub('', text).strip()
+                if not text:
+                    continue
+                t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
+                t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
+                words.append({'word': text, 'start': t_from, 'end': t_to})
+        else:
+            # No token-level data — treat whole segment as one word unit
+            text = _WCP_SPEAKER_DASH.sub('', seg.get('text', '').strip()).strip()
+            if text:
+                words.append({'word': text, 'start': seg_start, 'end': seg_end})
+    return words
+
+
 def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language: str, display_name: str) -> "TranscriptionResult":
     """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
     import shutil
@@ -1595,7 +1626,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
         cmd = [
             cli, '-m', model_path,
             '-f', audio_path,
-            '-oj',           # JSON output
+            '-ojf',          # full JSON — includes per-token timestamps
             '-of', output_prefix,
             '--no-prints',
         ]
@@ -1613,18 +1644,26 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
             data = json.load(f)
 
         detected_language = data.get('result', {}).get('language', language or '')
-        segments = []
-        for seg in data.get('transcription', []):
-            offsets = seg.get('offsets', {})
-            text = seg.get('text', '').strip()
-            if text:
-                segments.append({
-                    'start': offsets.get('from', 0) / 1000.0,
-                    'end':   offsets.get('to', 0) / 1000.0,
-                    'text':  text,
-                })
+        transcription = data.get('transcription', [])
+        words = _wcp_tokens_to_words(transcription)
 
-        logging.info(f"whisper.cpp: {len(segments)} segments for {display_name}")
+        if words:
+            segments = split_segments(words)
+            logging.info(f"whisper.cpp: {len(transcription)} raw segments → {len(segments)} after Netflix split for {display_name}")
+        else:
+            # Fallback: raw segment text (no word timestamps available)
+            segments = []
+            for seg in transcription:
+                offsets = seg.get('offsets', {})
+                text = _WCP_SPEAKER_DASH.sub('', seg.get('text', '').strip()).strip()
+                if text:
+                    segments.append({
+                        'start': offsets.get('from', 0) / 1000.0,
+                        'end':   offsets.get('to',   0) / 1000.0,
+                        'text':  text,
+                    })
+            logging.info(f"whisper.cpp: {len(segments)} segments (no token data) for {display_name}")
+
         return TranscriptionResult(segments=segments, language=detected_language)
 
     finally:
