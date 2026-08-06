@@ -1,4 +1,4 @@
-subgen_version = '2026.08.17'
+subgen_version = '2026.08.18'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -626,10 +626,15 @@ def split_segments(words: list) -> list:
             segments.append(_format_subtitle(current))
             current.clear()
 
+    _DANGLING = frozenset({'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by',
+                           'and', 'but', 'or', 'so', 'yet', 'for', 'nor'})
     for word in words:
         if current and (word["start"] - current[-1]["end"]) >= gap_split_secs:
             accumulated = " ".join(w["word"] for w in current)
-            if accumulated.count("(") <= accumulated.count(")"):
+            last_word = current[-1]["word"].lower().rstrip(".,!?;:")
+            if (accumulated.count("(") <= accumulated.count(")")
+                    and last_word not in _DANGLING
+                    and len(last_word) > 1):
                 flush()
         candidate = " ".join(w["word"] for w in current) + (" " if current else "") + word["word"]
         if current and len(candidate) > max_chars:
