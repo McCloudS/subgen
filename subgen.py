@@ -1,4 +1,4 @@
-subgen_version = '2026.08.13'
+subgen_version = '2026.08.14'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1614,6 +1614,9 @@ def _wcp_tokens_to_words(transcription: list) -> list:
 
             t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
             t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
+            # cap single-token duration so a sound-effect token spanning 25s
+            # can't produce a cue that exceeds the hard segment limit
+            t_to = min(t_to, t_from + max_segment_secs)
 
             is_new_word = raw[0] == ' '  # leading space = word boundary in GPT-2 tokenizer
             text = stripped
