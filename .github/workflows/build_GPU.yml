@@ -66,9 +66,11 @@ jobs:
           cache-from: type=registry,ref=mccloud/subgen:buildcache
           cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
 
-  # ── CPU (multi-arch) ───────────────────────────────────────────────────────
-  # main:  faster-whisper CPU     →  mccloud/subgen:cpu
-  # dev:   whisper.cpp CPU        →  mccloud/subgen:dev-cpu
+  # ── CPU ────────────────────────────────────────────────────────────────────
+  # main:  faster-whisper CPU (multi-arch)  →  mccloud/subgen:cpu
+  # dev:   whisper.cpp CPU (amd64 only)     →  mccloud/subgen:dev-cpu
+  # Note: ghcr.io/ggml-org/whisper.cpp:main is amd64-only; use dev-whispercpp
+  #       for arm64 (Vulkan, built as multi-arch via split-tag approach).
   cpu:
     runs-on: [self-hosted]
     steps:
@@ -85,10 +87,12 @@ jobs:
             printf 'docker_tags=mccloud/subgen:cpu\nmccloud/subgen:%s-cpu' "$version" >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile.cpu" >> $GITHUB_ENV
             echo "build_args=" >> $GITHUB_ENV
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
             echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main" >> $GITHUB_ENV
+            echo "platforms=linux/amd64" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-qemu-action@v3
@@ -108,7 +112,7 @@ jobs:
           context: .
           file: ${{ env.dockerfile }}
           build-args: ${{ env.build_args }}
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.platforms }}
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
