@@ -1,4 +1,4 @@
-subgen_version = '2026.08.9'
+subgen_version = '2026.08.10'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1735,7 +1735,8 @@ def perform_model_cleanup():
         
         if os.name != 'nt': # don't garbage collect on Windows
             gc.collect()
-            ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(0)
+            if sys.platform == 'linux':  # malloc_trim is glibc-only
+                ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(0)
         
         model_cleanup_timer = None
 
