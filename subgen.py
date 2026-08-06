@@ -1,4 +1,4 @@
-subgen_version = '2026.08.11'
+subgen_version = '2026.08.12'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1580,29 +1580,52 @@ _WCP_SPEAKER_DASH  = re.compile(r'^\s*-\s*')
 
 
 def _wcp_tokens_to_words(transcription: list) -> list:
-    """Extract word-level dicts from whisper.cpp full-JSON transcription array."""
+    """Extract word-level dicts from whisper.cpp full-JSON transcription array.
+
+    whisper.cpp uses BPE tokens: continuation tokens (e.g. 'ingo' in 'B'+'ingo')
+    have no leading space; word-boundary tokens do (' Bingo', ' Mom').
+    We merge continuations into the previous word so split_segments() sees real words.
+    """
     words = []
     for seg in transcription:
         seg_start = seg.get('offsets', {}).get('from', 0) / 1000.0
         seg_end   = seg.get('offsets', {}).get('to',   0) / 1000.0
         tokens = seg.get('tokens', [])
-        if tokens:
-            for tok in tokens:
-                text = tok.get('text', '').strip()
-                if not text or _WCP_SPECIAL_TOKEN.match(text):
-                    continue
-                # strip leading speaker dash from first token of a segment
-                text = _WCP_SPEAKER_DASH.sub('', text).strip()
-                if not text:
-                    continue
-                t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
-                t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
-                words.append({'word': text, 'start': t_from, 'end': t_to})
-        else:
-            # No token-level data — treat whole segment as one word unit
+        if not tokens:
+            # No token-level data — treat whole segment text as one word
             text = _WCP_SPEAKER_DASH.sub('', seg.get('text', '').strip()).strip()
             if text:
                 words.append({'word': text, 'start': seg_start, 'end': seg_end})
+            continue
+
+        for tok in tokens:
+            raw = tok.get('text', '')
+            if not raw:
+                continue
+            stripped = raw.strip()
+            if not stripped or _WCP_SPECIAL_TOKEN.match(stripped):
+                continue
+            # speaker dash token — skip entirely
+            if stripped == '-':
+                continue
+
+            t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
+            t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
+
+            is_new_word = raw[0] == ' '  # leading space = word boundary in GPT-2 tokenizer
+            text = stripped
+            # strip leading speaker dash from first real token
+            text = _WCP_SPEAKER_DASH.sub('', text).strip()
+            if not text:
+                continue
+
+            if is_new_word or not words:
+                words.append({'word': text, 'start': t_from, 'end': t_to})
+            else:
+                # continuation — merge into previous word, extend its end time
+                words[-1]['word'] += text
+                words[-1]['end'] = t_to
+
     return words
 
 
