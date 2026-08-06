@@ -1,4 +1,4 @@
-subgen_version = '2026.08.14'
+subgen_version = '2026.08.15'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -601,7 +601,8 @@ def _find_line_split(words: list) -> int:
 
 def _format_subtitle(words: list) -> dict:
     text  = " ".join(w["word"] for w in words)
-    start, end = words[0]["start"], words[-1]["end"]
+    start = words[0]["start"]
+    end   = min(words[-1]["end"], start + max_segment_secs)
     if len(text) <= max_line_length:
         return {"start": start, "end": end, "text": text}
     idx   = _find_line_split(words)
