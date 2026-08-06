@@ -1,4 +1,4 @@
-subgen_version = '2026.08.16'
+subgen_version = '2026.08.17'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -628,7 +628,9 @@ def split_segments(words: list) -> list:
 
     for word in words:
         if current and (word["start"] - current[-1]["end"]) >= gap_split_secs:
-            flush()
+            accumulated = " ".join(w["word"] for w in current)
+            if accumulated.count("(") <= accumulated.count(")"):
+                flush()
         candidate = " ".join(w["word"] for w in current) + (" " if current else "") + word["word"]
         if current and len(candidate) > max_chars:
             flush()
