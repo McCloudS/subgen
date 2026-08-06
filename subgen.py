@@ -1,4 +1,4 @@
-subgen_version = '2026.08.12'
+subgen_version = '2026.08.13'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -144,6 +144,7 @@ reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', F
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
 max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
+max_segment_secs = float(os.getenv('MAX_SEGMENT_SECS', '5.0'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
 transcribe_backend = os.getenv('TRANSCRIBE_BACKEND', 'faster-whisper').lower()
 whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
@@ -627,6 +628,8 @@ def split_segments(words: list) -> list:
             flush()
         candidate = " ".join(w["word"] for w in current) + (" " if current else "") + word["word"]
         if current and len(candidate) > max_chars:
+            flush()
+        if current and (word["end"] - current[0]["start"]) > max_segment_secs:
             flush()
         current.append(word)
         text_so_far = " ".join(w["word"] for w in current)
