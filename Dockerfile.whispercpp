@@ -24,7 +24,7 @@ RUN mkdir -p /cache/models && chmod 777 /cache
 ENV XDG_CACHE_HOME=/cache \
     PYTHONUNBUFFERED=1 \
     TRANSCRIBE_BACKEND=whispercpp \
-    WHISPER_CPP_MODEL=/cache/models/ggml-model.bin
+    MODEL_PATH=/cache/models
 
 COPY entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

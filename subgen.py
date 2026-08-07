@@ -1,4 +1,4 @@
-subgen_version = '2026.08.19'
+subgen_version = '2026.08.20'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1714,18 +1714,51 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-_WHISPERCPP_REPO_BY_FILENAME = {
-    "ggml-large-v3-turbo-q5_0.bin": "distil-whisper/distil-large-v3-ggml",
-    "ggml-large-v3-turbo-q8_0.bin": "distil-whisper/distil-large-v3-ggml",
-}
 _WHISPERCPP_DEFAULT_REPO = "ggerganov/whisper.cpp"
+
+# Map WHISPER_MODEL friendly names → (gguf_filename, hf_repo).
+# Used to auto-derive WHISPER_CPP_MODEL when it isn't set explicitly.
+_WHISPER_MODEL_TO_GGUF = {
+    "distil-large-v3.5":  ("ggml-model.bin",              "distil-whisper/distil-large-v3.5-ggml"),
+    "distil-large-v3":    ("ggml-distil-large-v3.bin",    "distil-whisper/distil-large-v3-ggml"),
+    "large-v3-turbo":     ("ggml-large-v3-turbo.bin",     _WHISPERCPP_DEFAULT_REPO),
+    "large-v3":           ("ggml-large-v3.bin",            _WHISPERCPP_DEFAULT_REPO),
+    "large-v2":           ("ggml-large-v2.bin",            _WHISPERCPP_DEFAULT_REPO),
+    "large-v1":           ("ggml-large-v1.bin",            _WHISPERCPP_DEFAULT_REPO),
+    "medium":             ("ggml-medium.bin",              _WHISPERCPP_DEFAULT_REPO),
+    "medium.en":          ("ggml-medium.en.bin",           _WHISPERCPP_DEFAULT_REPO),
+    "small":              ("ggml-small.bin",               _WHISPERCPP_DEFAULT_REPO),
+    "small.en":           ("ggml-small.en.bin",            _WHISPERCPP_DEFAULT_REPO),
+    "base":               ("ggml-base.bin",                _WHISPERCPP_DEFAULT_REPO),
+    "base.en":            ("ggml-base.en.bin",             _WHISPERCPP_DEFAULT_REPO),
+    "tiny":               ("ggml-tiny.bin",                _WHISPERCPP_DEFAULT_REPO),
+    "tiny.en":            ("ggml-tiny.en.bin",             _WHISPERCPP_DEFAULT_REPO),
+}
+
+# For explicit WHISPER_CPP_MODEL filenames that don't follow the ggerganov convention.
+_WHISPERCPP_REPO_BY_FILENAME = {
+    "ggml-large-v3-turbo-q5_0.bin": _WHISPERCPP_DEFAULT_REPO,
+    "ggml-large-v3-turbo-q8_0.bin": _WHISPERCPP_DEFAULT_REPO,
+    "ggml-distil-large-v3.bin":     "distil-whisper/distil-large-v3-ggml",
+}
 
 
 def _ensure_whispercpp_model() -> str:
     """Return the local path to the whisper.cpp GGUF model, downloading from HuggingFace if missing."""
     global whisper_cpp_model
+
+    # Auto-derive from WHISPER_MODEL when WHISPER_CPP_MODEL is not explicitly set.
     if not whisper_cpp_model:
-        raise RuntimeError("WHISPER_CPP_MODEL must be set to the path of a GGUF model file")
+        entry = _WHISPER_MODEL_TO_GGUF.get(whisper_model)
+        if not entry:
+            raise RuntimeError(
+                f"WHISPER_CPP_MODEL is not set and WHISPER_MODEL='{whisper_model}' has no "
+                f"known GGUF mapping. Set WHISPER_CPP_MODEL to the path of your .bin file."
+            )
+        derived_filename, derived_repo = entry
+        whisper_cpp_model = os.path.join(model_location, derived_filename)
+        logging.info(f"WHISPER_CPP_MODEL not set; derived '{derived_filename}' from WHISPER_MODEL={whisper_model}")
+
     if os.path.isfile(whisper_cpp_model):
         return whisper_cpp_model
 
@@ -1733,7 +1766,9 @@ def _ensure_whispercpp_model() -> str:
     dest_dir = os.path.dirname(os.path.abspath(whisper_cpp_model)) or model_location
     os.makedirs(dest_dir, exist_ok=True)
 
-    repo_id = whisper_cpp_repo or _WHISPERCPP_REPO_BY_FILENAME.get(filename, _WHISPERCPP_DEFAULT_REPO)
+    # Repo priority: explicit env override > filename map > WHISPER_MODEL map > default
+    derived_repo = _WHISPER_MODEL_TO_GGUF.get(whisper_model, (None, None))[1]
+    repo_id = whisper_cpp_repo or _WHISPERCPP_REPO_BY_FILENAME.get(filename) or derived_repo or _WHISPERCPP_DEFAULT_REPO
     logging.info(f"whisper.cpp model not found at {whisper_cpp_model}; downloading {filename} from {repo_id} on HuggingFace...")
     try:
         from huggingface_hub import hf_hub_download
