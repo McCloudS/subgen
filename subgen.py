@@ -1,4 +1,4 @@
-subgen_version = '2026.08.21'
+subgen_version = '2026.08.22'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -683,7 +683,7 @@ def appendLine(result):
         result.segments.append({
             "start": last["start"] + TIME_OFFSET,
             "end":   last["end"]   + TIME_OFFSET,
-            "text":  f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}",
+            "text":  f"Transcribed by whisperAI with {transcribe_backend} ({whisper_model}) on {date_time_str}",
         })
 
 @app.get("/plex")
@@ -964,7 +964,7 @@ async def asr(
                 return StreamingResponse(
                     iter(task_result.result),
                     media_type="text/plain",
-                    headers={'Source': f'{task.capitalize()}d using stable-ts from Subgen!'}
+                    headers={'Source': f'{task.capitalize()}d using {transcribe_backend} from Subgen!'}
                 )
         else:
             logging.error(f"ASR task {task_id} timed out")
@@ -1213,7 +1213,7 @@ def asr_task_worker(task_data: dict) -> None:
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
 
         if transcribe_backend == 'whispercpp':
-            result = _transcribe_whispercpp(file_content, encode, task, language or '', display_name)
+            result = _transcribe_whispercpp(file_content, task, language or '', display_name)
         else:
             # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS.
             # Merge so caller-supplied values win over the defaults (restores main-branch behaviour
@@ -1372,6 +1372,8 @@ async def detect_language(
             audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
         # Offload the heavy AI inference to a background thread
+        if transcribe_backend == 'whispercpp':
+            raise HTTPException(status_code=501, detail="Language detection is not supported with the whispercpp backend")
         lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
 
         detected = LanguageCode.from_string(lang_code)
@@ -1433,10 +1435,13 @@ def detect_language_from_upload(task_data: dict) -> None:
         else:
             audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
 
+        if transcribe_backend == 'whispercpp':
+            logging.warning("Language detection is not supported with the whispercpp backend; skipping")
+            return
         lang_code, _prob = model.detect_language(audio)
         detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
-        
+
         logging.info(f"Detected language: {detected_language.to_name()} ({language_code}) - ID: {task_id}")
         
         # Set the result for the blocking endpoint
@@ -1519,9 +1524,12 @@ def detect_language_task(path, original_task_data=None):
         )
         
         audio = wav_bytes_to_numpy(audio_segment)
+        if transcribe_backend == 'whispercpp':
+            logging.warning("Language detection is not supported with the whispercpp backend; skipping")
+            return
         lang_code, _prob = model.detect_language(audio)
         detected_language = LanguageCode.from_string(lang_code)
-        
+
         logging.info(f"Detected language: {detected_language.to_name()}")
 
     except Exception as e:
@@ -1650,7 +1658,7 @@ def _wcp_tokens_to_words(transcription: list) -> list:
     return words
 
 
-def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language: str, display_name: str) -> "TranscriptionResult":
+def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display_name: str) -> "TranscriptionResult":
     """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
     import shutil
     import tempfile
@@ -1673,7 +1681,10 @@ def _transcribe_whispercpp(audio_bytes: bytes, encode: bool, task: str, language
             '-ojf',          # full JSON — includes per-token timestamps
             '-of', output_prefix,
             '--no-prints',
+            '-t', str(whisper_threads),
         ]
+        if vad_filter:
+            cmd += ['--vad-thold', '0.5']
         if language:
             cmd += ['-l', language]
         if task == 'translate':
@@ -1872,12 +1883,12 @@ def perform_model_cleanup():
                 except Exception as e:
                     logging.error(f"Error unloading model: {e}")
             
-            if transcribe_device.lower() == 'cuda':
+            if transcribe_backend != 'whispercpp' and transcribe_device.lower() == 'cuda':
                 try:
                     import torch
                     torch.cuda.empty_cache()
                     logging.debug("CUDA cache cleared.")
-                except Exception as e: 
+                except Exception as e:
                     logging.error(f"Error clearing CUDA cache: {e}")
         else:
             logging.debug("Queue not idle or clear_vram disabled; skipping model cleanup")
@@ -1973,8 +1984,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
                 with open(file_path, 'rb') as _fh:
                     audio_bytes = _fh.read()
             result = _transcribe_whispercpp(
-                audio_bytes, bool(extracted_audio_file or True),
-                transcription_type, force_language.to_iso_639_1() or '', display_name,
+                audio_bytes, transcription_type, force_language.to_iso_639_1() or '', display_name,
             )
         else:
             data = file_path
