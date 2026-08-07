@@ -1,4 +1,4 @@
-subgen_version = '2026.08.18'
+subgen_version = '2026.08.19'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1215,8 +1215,18 @@ def asr_task_worker(task_data: dict) -> None:
         if transcribe_backend == 'whispercpp':
             result = _transcribe_whispercpp(file_content, encode, task, language or '', display_name)
         else:
-            # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS
+            # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS.
+            # Merge so caller-supplied values win over the defaults (restores main-branch behaviour
+            # where args.update(kwargs) meant user kwargs overrode defaults rather than colliding).
             fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
+            fw_call = {
+                "task": task,
+                "language": language or None,
+                "word_timestamps": True,
+                "vad_filter": vad_filter,
+                "condition_on_previous_text": False,
+                **fw_kwargs,
+            }
 
             # Prepare audio: encoded bytes → BytesIO (in-memory); raw PCM → numpy float32
             if encode:
@@ -1224,15 +1234,7 @@ def asr_task_worker(task_data: dict) -> None:
             else:
                 audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
 
-            fw_segments_gen, info = model.transcribe(
-                audio,
-                task=task,
-                language=language or None,
-                word_timestamps=True,
-                vad_filter=vad_filter,
-                condition_on_previous_text=False,
-                **fw_kwargs,
-            )
+            fw_segments_gen, info = model.transcribe(audio, **fw_call)
             fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
             words = extract_words(fw_segments)
             result = TranscriptionResult(
@@ -1915,16 +1917,16 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
                 data = io.BytesIO(extracted_audio_file)
 
             fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
-
-            fw_segments_gen, info = model.transcribe(
-                data,
-                language=force_language.to_iso_639_1() or None,
-                task=transcription_type,
-                word_timestamps=True,
-                vad_filter=vad_filter,
-                condition_on_previous_text=False,
+            fw_call = {
+                "language": force_language.to_iso_639_1() or None,
+                "task": transcription_type,
+                "word_timestamps": True,
+                "vad_filter": vad_filter,
+                "condition_on_previous_text": False,
                 **fw_kwargs,
-            )
+            }
+
+            fw_segments_gen, info = model.transcribe(data, **fw_call)
             fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
             words = extract_words(fw_segments)
             result = TranscriptionResult(
