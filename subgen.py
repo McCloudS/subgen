@@ -1,4 +1,4 @@
-subgen_version = '2026.08.20'
+subgen_version = '2026.08.21'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -1718,28 +1718,59 @@ _WHISPERCPP_DEFAULT_REPO = "ggerganov/whisper.cpp"
 
 # Map WHISPER_MODEL friendly names → (gguf_filename, hf_repo).
 # Used to auto-derive WHISPER_CPP_MODEL when it isn't set explicitly.
+_D = _WHISPERCPP_DEFAULT_REPO  # shorthand
+_DISTIL35 = "distil-whisper/distil-large-v3.5-ggml"
+_DISTIL3  = "distil-whisper/distil-large-v3-ggml"
+
 _WHISPER_MODEL_TO_GGUF = {
-    "distil-large-v3.5":  ("ggml-model.bin",              "distil-whisper/distil-large-v3.5-ggml"),
-    "distil-large-v3":    ("ggml-distil-large-v3.bin",    "distil-whisper/distil-large-v3-ggml"),
-    "large-v3-turbo":     ("ggml-large-v3-turbo.bin",     _WHISPERCPP_DEFAULT_REPO),
-    "large-v3":           ("ggml-large-v3.bin",            _WHISPERCPP_DEFAULT_REPO),
-    "large-v2":           ("ggml-large-v2.bin",            _WHISPERCPP_DEFAULT_REPO),
-    "large-v1":           ("ggml-large-v1.bin",            _WHISPERCPP_DEFAULT_REPO),
-    "medium":             ("ggml-medium.bin",              _WHISPERCPP_DEFAULT_REPO),
-    "medium.en":          ("ggml-medium.en.bin",           _WHISPERCPP_DEFAULT_REPO),
-    "small":              ("ggml-small.bin",               _WHISPERCPP_DEFAULT_REPO),
-    "small.en":           ("ggml-small.en.bin",            _WHISPERCPP_DEFAULT_REPO),
-    "base":               ("ggml-base.bin",                _WHISPERCPP_DEFAULT_REPO),
-    "base.en":            ("ggml-base.en.bin",             _WHISPERCPP_DEFAULT_REPO),
-    "tiny":               ("ggml-tiny.bin",                _WHISPERCPP_DEFAULT_REPO),
-    "tiny.en":            ("ggml-tiny.en.bin",             _WHISPERCPP_DEFAULT_REPO),
+    # distil models
+    "distil-large-v3.5":       ("ggml-model.bin",                _DISTIL35),
+    "distil-large-v3":         ("ggml-distil-large-v3.bin",      _DISTIL3),
+    "distil-large-v3.fp32":    ("ggml-distil-large-v3.fp32.bin", _DISTIL3),
+    # large
+    "large-v3-turbo":          ("ggml-large-v3-turbo.bin",       _D),
+    "large-v3-turbo-q5_0":     ("ggml-large-v3-turbo-q5_0.bin", _D),
+    "large-v3-turbo-q8_0":     ("ggml-large-v3-turbo-q8_0.bin", _D),
+    "large-v3":                ("ggml-large-v3.bin",             _D),
+    "large-v3-q5_0":           ("ggml-large-v3-q5_0.bin",       _D),
+    "large-v2":                ("ggml-large-v2.bin",             _D),
+    "large-v2-q5_0":           ("ggml-large-v2-q5_0.bin",       _D),
+    "large-v2-q8_0":           ("ggml-large-v2-q8_0.bin",       _D),
+    "large-v1":                ("ggml-large-v1.bin",             _D),
+    # medium
+    "medium":                  ("ggml-medium.bin",               _D),
+    "medium-q5_0":             ("ggml-medium-q5_0.bin",          _D),
+    "medium-q8_0":             ("ggml-medium-q8_0.bin",          _D),
+    "medium.en":               ("ggml-medium.en.bin",            _D),
+    "medium.en-q5_0":          ("ggml-medium.en-q5_0.bin",       _D),
+    "medium.en-q8_0":          ("ggml-medium.en-q8_0.bin",       _D),
+    # small
+    "small":                   ("ggml-small.bin",                _D),
+    "small-q5_1":              ("ggml-small-q5_1.bin",           _D),
+    "small-q8_0":              ("ggml-small-q8_0.bin",           _D),
+    "small.en":                ("ggml-small.en.bin",             _D),
+    "small.en-q5_1":           ("ggml-small.en-q5_1.bin",        _D),
+    "small.en-q8_0":           ("ggml-small.en-q8_0.bin",        _D),
+    # base
+    "base":                    ("ggml-base.bin",                 _D),
+    "base-q5_1":               ("ggml-base-q5_1.bin",            _D),
+    "base-q8_0":               ("ggml-base-q8_0.bin",            _D),
+    "base.en":                 ("ggml-base.en.bin",              _D),
+    "base.en-q5_1":            ("ggml-base.en-q5_1.bin",         _D),
+    "base.en-q8_0":            ("ggml-base.en-q8_0.bin",         _D),
+    # tiny
+    "tiny":                    ("ggml-tiny.bin",                 _D),
+    "tiny-q5_1":               ("ggml-tiny-q5_1.bin",            _D),
+    "tiny-q8_0":               ("ggml-tiny-q8_0.bin",            _D),
+    "tiny.en":                 ("ggml-tiny.en.bin",              _D),
+    "tiny.en-q5_1":            ("ggml-tiny.en-q5_1.bin",         _D),
+    "tiny.en-q8_0":            ("ggml-tiny.en-q8_0.bin",         _D),
 }
 
-# For explicit WHISPER_CPP_MODEL filenames that don't follow the ggerganov convention.
+# For users who set WHISPER_CPP_MODEL to an explicit filename path.
+# Only needed for filenames that can't be looked up via _WHISPER_MODEL_TO_GGUF.
 _WHISPERCPP_REPO_BY_FILENAME = {
-    "ggml-large-v3-turbo-q5_0.bin": _WHISPERCPP_DEFAULT_REPO,
-    "ggml-large-v3-turbo-q8_0.bin": _WHISPERCPP_DEFAULT_REPO,
-    "ggml-distil-large-v3.bin":     "distil-whisper/distil-large-v3-ggml",
+    f: repo for (f, repo) in _WHISPER_MODEL_TO_GGUF.values()
 }
 
 
