@@ -1,4 +1,4 @@
-subgen_version = '2026.11.1'
+subgen_version = '2026.11.2'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -54,8 +54,10 @@ import logging
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import wave
@@ -76,7 +78,6 @@ from fastapi import (
     File,
     Form,
     Header,
-    HTTPException,
     Query,
     Request,
     UploadFile,
@@ -156,10 +157,35 @@ max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
 max_segment_secs = float(os.getenv('MAX_SEGMENT_SECS', '5.0'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
-transcribe_backend = os.getenv('TRANSCRIBE_BACKEND', 'faster-whisper').lower()
 whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
 whisper_cpp_repo = os.getenv('WHISPER_CPP_REPO', '')
 whisper_cli_path = os.getenv('WHISPER_CLI_PATH', 'whisper-cli')
+# whisper.cpp GPU selection: '' = first GPU (automatic), a number = that GPU (-dev N), 'cpu' = no GPU (-ng).
+# Deliberately separate from TRANSCRIBE_DEVICE, which defaults to 'cpu' for faster-whisper and is set to
+# 'cpu' in many existing compose files; honouring it here would silently disable the GPU.
+whisper_cpp_device = os.getenv('WHISPER_CPP_DEVICE', '').strip().lower()
+# Silero VAD model for whisper.cpp; auto-downloaded to MODEL_PATH when VAD_FILTER is on.
+whisper_cpp_vad_model = os.getenv('WHISPER_CPP_VAD_MODEL', '')
+vad_threshold = float(os.getenv('VAD_THRESHOLD', '0.5'))
+
+
+def resolve_transcribe_backend(requested: str, cli_path: str) -> str:
+    """Map TRANSCRIBE_BACKEND to 'whispercpp' or 'faster-whisper'.
+
+    'auto' (the default) prefers whisper.cpp when the whisper-cli binary is on PATH,
+    which covers every GPU vendor, and falls back to faster-whisper otherwise.
+    """
+    value = (requested or 'auto').strip().lower()
+    if value in ('whispercpp', 'whisper.cpp', 'whisper-cpp', 'whisper_cpp'):
+        return 'whispercpp'
+    if value in ('faster-whisper', 'faster_whisper', 'fasterwhisper'):
+        return 'faster-whisper'
+    if value != 'auto':
+        logging.warning(f"Unknown TRANSCRIBE_BACKEND '{requested}'; using auto-detection")
+    return 'whispercpp' if shutil.which(cli_path) else 'faster-whisper'
+
+
+transcribe_backend = resolve_transcribe_backend(os.getenv('TRANSCRIBE_BACKEND', 'auto'), whisper_cli_path)
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
@@ -1353,12 +1379,6 @@ async def detect_language(
         await audio_file.close()
         return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
     
-    if transcribe_backend == 'whispercpp':
-        # Checked before the try block so the generic error handler below can't swallow it,
-        # and before start_model() so no model is loaded for a request we can't serve.
-        await audio_file.close()
-        raise HTTPException(status_code=501, detail="Language detection is not supported with the whispercpp backend")
-
     task_started = False
     try:
         file_content = await audio_file.read()
@@ -1383,12 +1403,21 @@ async def detect_language(
                 detect_lang_offset,
                 detect_lang_length
             )
-            audio_data = wav_bytes_to_numpy(audio_bytes)
         else:
-            audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
+            audio_bytes = None
 
         # Offload the heavy AI inference to a background thread
-        lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
+        if transcribe_backend == 'whispercpp':
+            if audio_bytes is None:
+                start = detect_lang_offset * 16000 * 2
+                audio_bytes = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+            lang_code = await asyncio.to_thread(detect_language_whispercpp, audio_bytes)
+        else:
+            if audio_bytes is not None:
+                audio_data = wav_bytes_to_numpy(audio_bytes)
+            else:
+                audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
+            lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
 
         detected = LanguageCode.from_string(lang_code)
         
@@ -1438,21 +1467,25 @@ def detect_language_from_upload(task_data: dict) -> None:
         
         start_model()
 
-        # Prepare audio as numpy float32 for detect_language
-        if encode:
-            audio_bytes = extract_audio_segment_from_content(
-                file_content,
-                detect_lang_offset,
-                detect_lang_length
-            )
-            audio = wav_bytes_to_numpy(audio_bytes)
-        else:
-            audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-
         if transcribe_backend == 'whispercpp':
-            logging.warning("Language detection is not supported with the whispercpp backend; skipping")
-            return
-        lang_code, _prob = model.detect_language(audio)
+            if encode:
+                wav = extract_audio_segment_from_content(file_content, detect_lang_offset, detect_lang_length)
+            else:
+                start = detect_lang_offset * 16000 * 2
+                wav = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+            lang_code = detect_language_whispercpp(wav)
+        else:
+            # Prepare audio as numpy float32 for detect_language
+            if encode:
+                audio_bytes = extract_audio_segment_from_content(
+                    file_content,
+                    detect_lang_offset,
+                    detect_lang_length
+                )
+                audio = wav_bytes_to_numpy(audio_bytes)
+            else:
+                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+            lang_code, _prob = model.detect_language(audio)
         detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
 
@@ -1537,11 +1570,11 @@ def detect_language_task(path, original_task_data=None):
             int(detect_language_length)
         )
         
-        audio = wav_bytes_to_numpy(audio_segment)
         if transcribe_backend == 'whispercpp':
-            logging.warning("Language detection is not supported with the whispercpp backend; skipping")
-            return
-        lang_code, _prob = model.detect_language(audio)
+            lang_code = detect_language_whispercpp(audio_segment)
+        else:
+            audio = wav_bytes_to_numpy(audio_segment)
+            lang_code, _prob = model.detect_language(audio)
         detected_language = LanguageCode.from_string(lang_code)
 
         logging.info(f"Detected language: {detected_language.to_name()}")
@@ -1672,12 +1705,112 @@ def _wcp_tokens_to_words(transcription: list) -> list:
     return words
 
 
+_WHISPERCPP_VAD_FILENAME = "ggml-silero-v5.1.2.bin"
+_WHISPERCPP_VAD_REPO = "ggml-org/whisper-vad"
+_WCP_DEVICE_RE = re.compile(r"whisper_backend_init_gpu: (?:using (?P<dev>.+?) backend|(?P<none>no GPU found))")
+_WCP_DEVICE_FAIL_RE = re.compile(r"whisper_backend_init_gpu: failed to initialize")
+_whispercpp_last_device = None
+_whispercpp_device_lock = Lock()
+
+
+def _ensure_whispercpp_vad_model() -> str:
+    """Return a path to the Silero VAD model, downloading it on first use. '' if unavailable."""
+    path = whisper_cpp_vad_model or os.path.join(model_location, _WHISPERCPP_VAD_FILENAME)
+    if os.path.isfile(path):
+        return path
+    try:
+        from huggingface_hub import hf_hub_download
+        logging.info(f"Downloading whisper.cpp VAD model {_WHISPERCPP_VAD_FILENAME} from {_WHISPERCPP_VAD_REPO}...")
+        return hf_hub_download(repo_id=_WHISPERCPP_VAD_REPO, filename=os.path.basename(path),
+                               local_dir=os.path.dirname(os.path.abspath(path)) or model_location)
+    except Exception as e:
+        logging.warning(f"VAD_FILTER is on but the whisper.cpp VAD model is unavailable ({e}); continuing without VAD")
+        return ''
+
+
+def _whispercpp_device_args() -> list:
+    """GPU selection flags. whisper.cpp uses a GPU automatically when one is present."""
+    if whisper_cpp_device == 'cpu':
+        return ['-ng']
+    if whisper_cpp_device.isdigit():
+        return ['-dev', whisper_cpp_device]
+    if whisper_cpp_device:
+        logging.warning(f"Ignoring WHISPER_CPP_DEVICE='{whisper_cpp_device}': use a GPU index like 0 or 1, or 'cpu'")
+    return []
+
+
+def _whispercpp_base_cmd(model_path: str, audio_path: str, output_prefix: str) -> list:
+    cli = shutil.which(whisper_cli_path) or whisper_cli_path
+    return [cli, '-m', model_path, '-f', audio_path, '-of', output_prefix,
+            '-t', str(whisper_threads)] + _whispercpp_device_args()
+
+
+def _log_whispercpp_device(stderr: str) -> None:
+    """whisper.cpp silently falls back to CPU, so surface which device it actually used."""
+    global _whispercpp_last_device
+    match = _WCP_DEVICE_RE.search(stderr or '')
+    if not match:
+        return
+    device = match.group('dev') or 'CPU'
+    if _WCP_DEVICE_FAIL_RE.search(stderr):
+        device = 'CPU'  # "using X backend" is logged before init; init failed so it fell back to CPU
+    with _whispercpp_device_lock:
+        if device == _whispercpp_last_device:
+            return
+        _whispercpp_last_device = device
+    if device != 'CPU':
+        logging.info(f"whisper.cpp is using GPU device: {device}")
+    elif whisper_cpp_device == 'cpu':
+        logging.info("whisper.cpp is running on CPU (WHISPER_CPP_DEVICE=cpu)")
+    else:
+        logging.warning("whisper.cpp found no usable GPU and is running on CPU. "
+                        "Check that the GPU is passed into the container (/dev/dri for Intel/AMD Vulkan, "
+                        "--gpus for NVIDIA) and that you are using the image for your GPU.")
+
+
+def _run_whispercpp(cmd: list, timeout: int) -> subprocess.CompletedProcess:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    _log_whispercpp_device(proc.stderr)
+    if proc.returncode != 0:
+        raise RuntimeError(f"whisper-cli exited {proc.returncode}: {(proc.stderr or '')[-500:]}")
+    return proc
+
+
+def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
+    """Wrap raw mono s16le PCM in a WAV header so whisper-cli can read it."""
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
+
+
+def detect_language_whispercpp(wav_bytes: bytes) -> str:
+    """Detect the spoken language with `whisper-cli -dl`. Returns an ISO 639-1 code; raises on failure."""
+    model_path = _ensure_whispercpp_model()
+    if re.search(r'\.en(?:[.-]|$)', os.path.basename(model_path)):
+        return 'en'  # English-only model (e.g. ggml-base.en.bin) can't detect other languages
+    tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_dl_')
+    try:
+        audio_path = os.path.join(tmp_dir, 'audio.wav')
+        output_prefix = os.path.join(tmp_dir, 'out')
+        with open(audio_path, 'wb') as f:
+            f.write(wav_bytes)
+        cmd = _whispercpp_base_cmd(model_path, audio_path, output_prefix) + ['-dl', '-oj']
+        _run_whispercpp(cmd, timeout=600)
+        with open(output_prefix + '.json', encoding='utf-8') as f:
+            language = json.load(f).get('result', {}).get('language', '')
+        if not language:
+            raise RuntimeError("whisper-cli did not report a language")
+        return language
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display_name: str) -> "TranscriptionResult":
     """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
-    import shutil
-    import tempfile
-
-    cli = shutil.which(whisper_cli_path) or whisper_cli_path
     model_path = _ensure_whispercpp_model()
 
     tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_')
@@ -1689,25 +1822,21 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
         with open(audio_path, 'wb') as f:
             f.write(audio_bytes)
 
-        cmd = [
-            cli, '-m', model_path,
-            '-f', audio_path,
+        cmd = _whispercpp_base_cmd(model_path, audio_path, output_prefix) + [
             '-ojf',          # full JSON — includes per-token timestamps
-            '-of', output_prefix,
-            '--no-prints',
-            '-t', str(whisper_threads),
+            # whisper-cli defaults to English; 'auto' makes it detect the language instead
+            '-l', language or 'auto',
         ]
         if vad_filter:
-            cmd += ['--vad-thold', '0.5']
-        if language:
-            cmd += ['-l', language]
+            vad_model = _ensure_whispercpp_vad_model()
+            if vad_model:
+                cmd += ['--vad', '-vm', vad_model, '-vt', str(vad_threshold)]
         if task == 'translate':
             cmd += ['--translate']
 
         logging.info(f"whisper.cpp: transcribing {display_name}")
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
-        if proc.returncode != 0:
-            raise RuntimeError(f"whisper-cli exited {proc.returncode}: {proc.stderr[:500]}")
+        # Never shorter than the previous fixed 3600s; ASR_TIMEOUT=900 for fast Bazarr failures must not kill long files
+        _run_whispercpp(cmd, timeout=max(asr_timeout, 3600))
 
         with open(json_path, encoding='utf-8') as f:
             data = json.load(f)
@@ -2980,6 +3109,11 @@ if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
     logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
-    logging.info(f"Transcribe device: {transcribe_device}, Model: {whisper_model}")
+    if transcribe_backend == 'whispercpp':
+        cli = shutil.which(whisper_cli_path) or whisper_cli_path
+        reason = "auto: whisper-cli found" if os.getenv('TRANSCRIBE_BACKEND', 'auto').strip().lower() in ('', 'auto') else "TRANSCRIBE_BACKEND"
+        logging.info(f"Backend: whisper.cpp ({reason}, {cli}), GPU: {whisper_cpp_device or 'auto'}, Model: {whisper_cpp_model or whisper_model}")
+    else:
+        logging.info(f"Backend: faster-whisper, Transcribe device: {transcribe_device}, Model: {whisper_model}")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)

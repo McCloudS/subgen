@@ -232,6 +232,18 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. |
 | `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
+### 🖥️ Backend & GPU (whisper.cpp)
+whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graphics (Vulkan), and CPU. It is the default whenever the `whisper-cli` binary is present (the `whispercpp` images).
+| Variable | Default | Description |
+|---|---|---|
+| `TRANSCRIBE_BACKEND` | `auto` | `auto` uses whisper.cpp when `whisper-cli` is installed, otherwise faster-whisper. Force one with `whispercpp` or `faster-whisper`. |
+| `WHISPER_CPP_MODEL` | *(derived)* | Path to a GGML model file. If unset, it is derived from `WHISPER_MODEL` (e.g. `large-v3-turbo` → `ggml-large-v3-turbo.bin`) and downloaded to `MODEL_PATH`. |
+| `WHISPER_CPP_REPO` | *(derived)* | Hugging Face repo to download `WHISPER_CPP_MODEL` from. |
+| `WHISPER_CLI_PATH` | `whisper-cli` | Path to the `whisper-cli` binary. |
+| `WHISPER_CPP_DEVICE` | *(auto)* | whisper.cpp uses a GPU automatically when it can see one. Set a GPU index (`0`, `1`, ...) to pick one, or `cpu` to force CPU. `TRANSCRIBE_DEVICE` only applies to faster-whisper. Check the log for `whisper.cpp is using GPU device: ...`. |
+| `WHISPER_CPP_VAD_MODEL` | *(auto)* | Silero VAD model used when `VAD_FILTER=True`. Downloaded to `MODEL_PATH` on first use. |
+| `VAD_THRESHOLD` | `0.5` | Speech probability threshold for whisper.cpp VAD. |
+
 ### ⚡ Processing Triggers & Queuing
 *(Not relevant for Bazarr users)*
 | Variable | Default | Description |

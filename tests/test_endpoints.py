@@ -247,14 +247,17 @@ class TestAsr:
 
 
 class TestBackendAndParamValidation:
-    def test_detect_language_returns_501_on_whispercpp(self, client, monkeypatch):
-        start_model = MagicMock()
+    def test_detect_language_uses_whispercpp(self, client, monkeypatch):
+        detect = MagicMock(return_value="de")
         monkeypatch.setattr(subgen, "transcribe_backend", "whispercpp")
         monkeypatch.setattr(subgen, "force_detected_language_to", None)
-        monkeypatch.setattr(subgen, "start_model", start_model)
+        monkeypatch.setattr(subgen, "start_model", MagicMock())
+        monkeypatch.setattr(subgen, "detect_language_whispercpp", detect)
+        monkeypatch.setattr(subgen, "extract_audio_segment_from_content", MagicMock(return_value=b"WAV"))
         resp = client.post("/detect-language", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
-        assert resp.status_code == 501
-        start_model.assert_not_called()
+        assert resp.status_code == 200
+        assert resp.json()["language_code"] == "de"
+        detect.assert_called_once_with(b"WAV")
 
     def test_asr_rejects_unknown_task(self, client):
         resp = client.post("/asr?task=bogus", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
