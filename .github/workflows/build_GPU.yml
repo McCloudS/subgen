@@ -24,7 +24,7 @@ concurrency:
 jobs:
   # ── GPU ────────────────────────────────────────────────────────────────────
   # main:  faster-whisper + CUDA  →  mccloud/subgen:latest
-  # dev:   whisper.cpp CUDA       →  mccloud/subgen:dev
+  # dev:   whisper.cpp CUDA 12.8 (Pascal → Blackwell)  →  mccloud/subgen:dev
   gpu:
     runs-on: [self-hosted]
     steps:
@@ -42,9 +42,10 @@ jobs:
             echo "dockerfile=./Dockerfile" >> $GITHUB_ENV
             echo "build_args=" >> $GITHUB_ENV
           else
+            # whisper.cpp built from source on CUDA 12.x: CUDA 13 (upstream's main-cuda) drops Pascal/Volta
             echo "docker_tags=mccloud/subgen:dev" >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
-            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-cuda" >> $GITHUB_ENV
+            { echo "build_args<<EOF"; printf 'GGML_BACKEND=cuda\nBUILD_BASE=nvidia/cuda:12.8.1-devel-ubuntu24.04\nRUNTIME_BASE=nvidia/cuda:12.8.1-runtime-ubuntu24.04\n'; echo "EOF"; } >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-buildx-action@v3
@@ -68,9 +69,7 @@ jobs:
 
   # ── CPU ────────────────────────────────────────────────────────────────────
   # main:  faster-whisper CPU (multi-arch)  →  mccloud/subgen:cpu
-  # dev:   whisper.cpp CPU (amd64 only)     →  mccloud/subgen:dev-cpu
-  # Note: ghcr.io/ggml-org/whisper.cpp:main is amd64-only; use dev-whispercpp
-  #       for arm64 (Vulkan, built as multi-arch via split-tag approach).
+  # dev:   whisper.cpp CPU (multi-arch)     →  mccloud/subgen:dev-cpu
   cpu:
     runs-on: [self-hosted]
     steps:
@@ -91,8 +90,8 @@ jobs:
           else
             echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
-            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main" >> $GITHUB_ENV
-            echo "platforms=linux/amd64" >> $GITHUB_ENV
+            echo "build_args=GGML_BACKEND=cpu" >> $GITHUB_ENV
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-qemu-action@v3
@@ -120,9 +119,10 @@ jobs:
 
   # ── AMD (ROCm) ─────────────────────────────────────────────────────────────
   # main:  faster-whisper ROCm    →  mccloud/subgen:amd
-  # dev:   whisper.cpp HIP        →  mccloud/subgen:dev-amd
+  # dev:   not built here; :dev-amd is a tag on the Vulkan image (whispercpp job)
   # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
   amd:
+    if: github.ref_name == 'main'
     runs-on: [self-hosted]
     needs: [gpu, cpu]
     steps:
@@ -135,15 +135,9 @@ jobs:
 
       - name: Compute tags and build config
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            printf 'docker_tags=mccloud/subgen:amd\nmccloud/subgen:%s-amd' "$version" >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile.AMD" >> $GITHUB_ENV
-            echo "build_args=" >> $GITHUB_ENV
-          else
-            echo "docker_tags=mccloud/subgen:dev-amd" >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
-            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main" >> $GITHUB_ENV
-          fi
+          printf 'docker_tags=mccloud/subgen:amd\nmccloud/subgen:%s-amd' "$version" >> $GITHUB_ENV
+          echo "dockerfile=./Dockerfile.AMD" >> $GITHUB_ENV
+          echo "build_args=" >> $GITHUB_ENV
 
       - uses: docker/setup-buildx-action@v3
         with:
@@ -166,10 +160,10 @@ jobs:
           cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
 
   # ── whisper.cpp (Vulkan, multi-arch) ──────────────────────────────────────
-  # main-vulkan (amd64) and main-vulkan-arm64 have separate tags, so we build
-  # each arch independently then merge into a single multi-arch manifest.
+  # Intel iGPU/Arc, AMD dGPU/APU, NVIDIA, any Vulkan GPU. Each arch is built
+  # separately (arm64 under QEMU) and merged into one multi-arch manifest.
   # main:  mccloud/subgen:whispercpp  (linux/amd64 + linux/arm64)
-  # dev:   mccloud/subgen:dev-whispercpp
+  # dev:   mccloud/subgen:dev-whispercpp, also tagged :dev-amd
   whispercpp:
     runs-on: [self-hosted]
     steps:
@@ -187,7 +181,7 @@ jobs:
             echo "versioned_tag=mccloud/subgen:${version}-whispercpp" >> $GITHUB_ENV
           else
             echo "final_tag=mccloud/subgen:dev-whispercpp" >> $GITHUB_ENV
-            echo "versioned_tag=" >> $GITHUB_ENV
+            echo "versioned_tag=mccloud/subgen:dev-amd" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-qemu-action@v3
@@ -207,7 +201,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.whispercpp
-          build-args: BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-vulkan
+          build-args: GGML_BACKEND=vulkan
           platforms: linux/amd64
           push: true
           tags: ${{ env.final_tag }}-amd64
@@ -219,7 +213,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.whispercpp
-          build-args: BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-vulkan-arm64
+          build-args: GGML_BACKEND=vulkan
           platforms: linux/arm64
           push: true
           tags: ${{ env.final_tag }}-arm64

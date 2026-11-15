@@ -1,31 +1,101 @@
-ARG BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main
-FROM ${BASE_IMAGE}
+# syntax=docker/dockerfile:1.6
+# subgen + whisper.cpp, built from a pinned whisper.cpp release for one GPU backend.
+#
+#   GGML_BACKEND=vulkan (default)  Intel iGPU/Arc, AMD (dGPU + APU), NVIDIA, any Vulkan GPU
+#   GGML_BACKEND=cuda              NVIDIA, CUDA 12.x so Pascal/Volta (GTX 10xx, Tesla P4/P40) still work
+#   GGML_BACKEND=cpu               no GPU
+#
+#   docker build -f Dockerfile.whispercpp --build-arg GGML_BACKEND=cuda -t subgen:cuda .
+#
+# BUILD_BASE / RUNTIME_BASE must match the backend (the CI workflow sets them):
+#   cpu, vulkan: ubuntu:24.04 / ubuntu:24.04
+#   cuda:        nvidia/cuda:12.8.1-devel-ubuntu24.04 / nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
-# Python + subgen runtime deps
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv \
-    ffmpeg curl gosu tzdata \
-    && rm -rf /var/lib/apt/lists/*
+ARG BUILD_BASE=ubuntu:24.04
+ARG RUNTIME_BASE=ubuntu:24.04
+
+# ── Stage 1: build whisper-cli ───────────────────────────────────────────────
+FROM ${BUILD_BASE} AS build
+
+ARG GGML_BACKEND=vulkan
+ARG WHISPER_CPP_REF=v1.9.5
+# Pascal (61), Volta (70), Turing (75), Ampere (80/86), Ada (89), Hopper (90), Blackwell (120).
+# CUDA 13 cannot target 61/70, which is why this image stays on CUDA 12.x.
+ARG CUDA_ARCHITECTURES="61;70;75;80;86;89;90;120"
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends build-essential ca-certificates cmake && \
+    if [ "$GGML_BACKEND" = "vulkan" ]; then \
+        apt-get install -y --no-install-recommends glslc libvulkan-dev spirv-headers; \
+    fi
+
+ADD --keep-git-dir=false https://github.com/ggml-org/whisper.cpp.git#${WHISPER_CPP_REF} /src
+
+WORKDIR /src
+RUN set -eux; \
+    case "$GGML_BACKEND" in \
+      cpu)    flags="" ;; \
+      vulkan) flags="-DGGML_VULKAN=ON" ;; \
+      cuda)   flags="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" ; \
+              # No driver in the build container: link against the CUDA stub libcuda.
+              export LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" ;; \
+      *)      echo "unknown GGML_BACKEND=$GGML_BACKEND" >&2; exit 1 ;; \
+    esac; \
+    # GGML_NATIVE=OFF + CPU_ALL_VARIANTS: portable binary that picks AVX2/AVX512/etc. at runtime
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
+          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON $flags; \
+    cmake --build build -j"$(nproc)" --target whisper-cli; \
+    # With GGML_BACKEND_DL the CPU/GPU backends are .so files loaded from the executable's directory
+    mkdir -p /out; \
+    cp build/bin/whisper-cli /out/; \
+    find build -name '*.so*' -exec cp -a {} /out/ \;
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM ${RUNTIME_BASE}
+
+ARG GGML_BACKEND=vulkan
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-venv ffmpeg curl gosu tzdata ca-certificates && \
+    if [ "$GGML_BACKEND" = "vulkan" ]; then \
+        # Mesa provides the Intel (ANV), AMD (RADV) and NVIDIA (NVK) Vulkan drivers; vulkan-tools gives vulkaninfo for support
+        apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers libegl1 vulkan-tools; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/ /opt/whisper/
+RUN echo /opt/whisper > /etc/ld.so.conf.d/whisper.conf && ldconfig && \
+    ln -s /opt/whisper/whisper-cli /usr/local/bin/whisper-cli && \
+    whisper-cli --help >/dev/null 2>&1
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-
 COPY requirements.whispercpp.txt /
-RUN pip install --no-cache-dir -U -r /requirements.whispercpp.txt \
-    && apt-get purge -y --auto-remove python3-pip \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -U -r /requirements.whispercpp.txt
 
 WORKDIR /subgen
 COPY launcher.py subgen.py language_code.py /subgen/
 
 RUN mkdir -p /cache/models && chmod 777 /cache
 
+# NVIDIA: the Vulkan image also needs the graphics capability so the toolkit mounts the Vulkan ICD
 ENV XDG_CACHE_HOME=/cache \
+    HF_HOME=/cache/huggingface \
     PYTHONUNBUFFERED=1 \
     TRANSCRIBE_BACKEND=whispercpp \
-    MODEL_PATH=/cache/models
+    MODEL_PATH=/cache/models \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics \
+    GGML_BACKEND=${GGML_BACKEND}
 
 COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "launcher.py"]
