@@ -268,3 +268,9 @@ class TestBackendAndParamValidation:
         params = {p["name"]: p for p in client.get("/openapi.json").json()["paths"]["/asr"]["post"]["parameters"]}
         assert params["task"]["schema"]["enum"] == ["transcribe", "translate"]
         assert params["output"]["schema"]["enum"] == ["txt", "vtt", "srt", "tsv", "json"]
+
+    @pytest.mark.parametrize("task", ["transcribe", "translate"])
+    @pytest.mark.parametrize("output", ["txt", "vtt", "srt", "tsv", "json"])
+    def test_asr_accepts_all_valid_values(self, client, task, output):
+        resp = client.post(f"/asr?task={task}&output={output}", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
+        assert resp.status_code != 422
