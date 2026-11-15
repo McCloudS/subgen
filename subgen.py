@@ -1,4 +1,4 @@
-subgen_version = '2026.08.22'
+subgen_version = '2026.11.1'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -64,13 +64,23 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Event, Lock, Timer
-from typing import Union
+from typing import Literal, Union
 
 import av
 import ffmpeg
 import numpy as np
 import requests
-from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
+from fastapi import (
+    Body,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
@@ -871,13 +881,13 @@ def batch(
 
 @app.post("/asr")
 async def asr(
-    task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
+    task: Literal["transcribe", "translate"] = Query(default="transcribe"),
     language: Union[str, None] = Query(default=None),
     video_file: Union[str, None] = Query(default=None),
     initial_prompt: Union[str, None] = Query(default=None),
     audio_file: UploadFile = File(...),
     encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),
-    output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
+    output: Literal["txt", "vtt", "srt", "tsv", "json"] = Query(default="srt"),
     word_timestamps: bool = Query(default=False, description="Word-level timestamps"),
 ):
     """
@@ -1343,6 +1353,12 @@ async def detect_language(
         await audio_file.close()
         return {"detected_language": force_detected_language_to.to_name(), "language_code": force_detected_language_to.to_iso_639_1()}
     
+    if transcribe_backend == 'whispercpp':
+        # Checked before the try block so the generic error handler below can't swallow it,
+        # and before start_model() so no model is loaded for a request we can't serve.
+        await audio_file.close()
+        raise HTTPException(status_code=501, detail="Language detection is not supported with the whispercpp backend")
+
     task_started = False
     try:
         file_content = await audio_file.read()
@@ -1372,8 +1388,6 @@ async def detect_language(
             audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
 
         # Offload the heavy AI inference to a background thread
-        if transcribe_backend == 'whispercpp':
-            raise HTTPException(status_code=501, detail="Language detection is not supported with the whispercpp backend")
         lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
 
         detected = LanguageCode.from_string(lang_code)

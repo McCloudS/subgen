@@ -244,3 +244,27 @@ class TestAsr:
         assert resp.status_code == 200
         body = resp.json()
         assert body.get("status") == "error"
+
+
+class TestBackendAndParamValidation:
+    def test_detect_language_returns_501_on_whispercpp(self, client, monkeypatch):
+        start_model = MagicMock()
+        monkeypatch.setattr(subgen, "transcribe_backend", "whispercpp")
+        monkeypatch.setattr(subgen, "force_detected_language_to", None)
+        monkeypatch.setattr(subgen, "start_model", start_model)
+        resp = client.post("/detect-language", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
+        assert resp.status_code == 501
+        start_model.assert_not_called()
+
+    def test_asr_rejects_unknown_task(self, client):
+        resp = client.post("/asr?task=bogus", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
+        assert resp.status_code == 422
+
+    def test_asr_rejects_unknown_output(self, client):
+        resp = client.post("/asr?output=docx", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
+        assert resp.status_code == 422
+
+    def test_asr_openapi_keeps_enums(self, client):
+        params = {p["name"]: p for p in client.get("/openapi.json").json()["paths"]["/asr"]["post"]["parameters"]}
+        assert params["task"]["schema"]["enum"] == ["transcribe", "translate"]
+        assert params["output"]["schema"]["enum"] == ["txt", "vtt", "srt", "tsv", "json"]
