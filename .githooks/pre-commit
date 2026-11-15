@@ -24,6 +24,6 @@ else
   new_version="$year_now.$month_now.1"
 fi
 
-sed -i '' "s/subgen_version = '$current'/subgen_version = '$new_version'/" subgen.py
+sed -i.bak "s/subgen_version = '$current'/subgen_version = '$new_version'/" subgen.py && rm -f subgen.py.bak
 git add subgen.py
 echo "pre-commit: bumped subgen_version $current → $new_version"
