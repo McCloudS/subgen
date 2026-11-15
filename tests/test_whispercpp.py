@@ -142,6 +142,12 @@ class TestDeviceLogging:
             subgen._log_whispercpp_device("whisper_backend_init_gpu: no GPU found\n")
         assert any("no usable GPU" in r.getMessage() for r in caplog.records)
 
+    def test_cpu_image_does_not_warn(self, wcp, monkeypatch, caplog):
+        monkeypatch.setenv("GGML_BACKEND", "cpu")
+        with caplog.at_level(logging.WARNING):
+            subgen._log_whispercpp_device("whisper_backend_init_gpu: no GPU found\n")
+        assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
     def test_failed_gpu_init_reported_as_cpu(self, wcp, caplog):
         stderr = ("whisper_backend_init_gpu: using Vulkan0 backend\n"
                   "whisper_backend_init_gpu: failed to initialize Vulkan0 backend\n")

@@ -1762,6 +1762,8 @@ def _log_whispercpp_device(stderr: str) -> None:
         logging.info(f"whisper.cpp is using GPU device: {device}")
     elif whisper_cpp_device == 'cpu':
         logging.info("whisper.cpp is running on CPU (WHISPER_CPP_DEVICE=cpu)")
+    elif os.getenv('GGML_BACKEND', '').lower() == 'cpu':
+        logging.info("whisper.cpp is running on CPU (CPU-only image)")
     else:
         logging.warning("whisper.cpp found no usable GPU and is running on CPU. "
                         "Check that the GPU is passed into the container (/dev/dri for Intel/AMD Vulkan, "
