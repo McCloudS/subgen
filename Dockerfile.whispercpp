@@ -19,6 +19,7 @@ FROM ${BUILD_BASE} AS build
 
 ARG GGML_BACKEND=vulkan
 ARG WHISPER_CPP_REF=v1.9.5
+ARG TARGETARCH
 # Pascal (61), Volta (70), Turing (75), Ampere (80/86), Ada (89), Hopper (90), Blackwell (120).
 # CUDA 13 cannot target 61/70, which is why this image stays on CUDA 12.x.
 ARG CUDA_ARCHITECTURES="61;70;75;80;86;89;90;120"
@@ -44,9 +45,16 @@ RUN set -eux; \
               export LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" ;; \
       *)      echo "unknown GGML_BACKEND=$GGML_BACKEND" >&2; exit 1 ;; \
     esac; \
-    # GGML_NATIVE=OFF + CPU_ALL_VARIANTS: portable binary that picks AVX2/AVX512/etc. at runtime
+    # x86-64: CPU_ALL_VARIANTS builds AVX2/AVX512/etc. variants and picks one at runtime.
+    # arm64: its variant list includes ARMv9.2+SME, which Ubuntu 24.04's GCC 13 can't compile,
+    # so build a single portable armv8.2-a CPU backend instead.
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cpu_flags="-DGGML_CPU_ALL_VARIANTS=OFF -DGGML_CPU_ARM_ARCH=armv8.2-a"; \
+    else \
+        cpu_flags="-DGGML_CPU_ALL_VARIANTS=ON"; \
+    fi; \
     cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
-          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON $flags; \
+          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON $cpu_flags $flags; \
     cmake --build build -j"$(nproc)" --target whisper-cli; \
     # With GGML_BACKEND_DL the CPU/GPU backends are .so files loaded from the executable's directory
     mkdir -p /out; \
@@ -57,7 +65,13 @@ RUN set -eux; \
 FROM ${RUNTIME_BASE}
 
 ARG GGML_BACKEND=vulkan
+# launcher.py downloads subgen.py from this branch when UPDATE=True (dev images must not pull main's)
+ARG SUBGEN_BRANCH=main
 ENV DEBIAN_FRONTEND=noninteractive
+
+# Ubuntu 24.04 images ship a 'ubuntu' user with uid 1000. entrypoint.sh would then skip creating its
+# user, and PUID=1000 would run without the render group (no /dev/dri access) and ignore PGID.
+RUN userdel -r ubuntu 2>/dev/null || true
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -93,7 +107,8 @@ ENV XDG_CACHE_HOME=/cache \
     TRANSCRIBE_BACKEND=whispercpp \
     MODEL_PATH=/cache/models \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics \
-    GGML_BACKEND=${GGML_BACKEND}
+    GGML_BACKEND=${GGML_BACKEND} \
+    BRANCH=${SUBGEN_BRANCH}
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

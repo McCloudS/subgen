@@ -51,7 +51,9 @@ if [ -e "/dev/dri/renderD128" ]; then
   GID=`stat -c "%g" /dev/dri/renderD128`
   groupadd -g $GID render2
   GROUP=`getent group $GID | cut -d: -f1`
-  usermod -aG $GROUP subgen
+  # The PUID user may already exist under another name, so add that user rather than assuming 'subgen'
+  USERNAME=`getent passwd "$PUID" | cut -d: -f1`
+  usermod -aG $GROUP "$USERNAME"
 fi
 
 echo "Dropping root privileges and starting application..."

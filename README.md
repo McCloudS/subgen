@@ -153,7 +153,10 @@ The easiest way to run Subgen is via Docker. We maintain an image on Docker Hub 
 * `mccloud/subgen:latest` (Supports both CPU and GPU/CUDA)
 * `mccloud/subgen:cpu` (Smaller image, CPU only)
 * `mccloud/subgen:amd` (ROCm/AMD GPU)
-* `mccloud/subgen:dev` (Latest development build — may be unstable)
+* Development builds (whisper.cpp engine, may be unstable):
+  * `mccloud/subgen:dev`: NVIDIA (CUDA 12.8, GTX 10xx/Tesla P4 and newer). Run with `--gpus all`.
+  * `mccloud/subgen:dev-whispercpp` (also `:dev-amd`): Intel iGPU/Arc and AMD GPUs/APUs via Vulkan. Pass `/dev/dri` into the container.
+  * `mccloud/subgen:dev-cpu`: CPU only (amd64 and arm64).
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
