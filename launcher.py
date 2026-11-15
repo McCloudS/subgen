@@ -10,14 +10,10 @@ def convert_to_bool(in_bool):
 
 def install_packages_from_requirements(requirements_file):
     try:
-        subprocess.run(['pip3', 'install', '-r', requirements_file, '--upgrade'], check=True)
-        print("Packages installed successfully using pip3.")
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', requirements_file, '--upgrade'], check=True)
+        print("Packages installed successfully.")
     except subprocess.CalledProcessError:
-        try:
-            subprocess.run(['pip', 'install', '-r', requirements_file, '--upgrade'], check=True)
-            print("Packages installed successfully using pip.")
-        except subprocess.CalledProcessError:
-            print("Failed to install packages using both pip3 and pip.")
+        print("Failed to install packages.")
 
 def download_from_github(url, output_file):
     try:
@@ -73,13 +69,6 @@ def load_env_variables(env_filename='subgen.env'):
         print(f"{env_filename} file not found. Consider running with --setup-bazarr or creating it manually.")
 
 def main():
-    if 'python3' in sys.executable:
-        python_cmd = 'python3'
-    elif 'python' in sys.executable:
-        python_cmd = 'python'
-    else:
-        print("Script started with an unknown command")
-        sys.exit(1)
     if sys.version_info[0] < 3:
         print(f"This script requires Python 3 or higher, you are running {sys.version}")
         sys.exit(1)
@@ -169,7 +158,7 @@ def main():
         #print(f"APPEND environment variable for subgen.py: {os.getenv('APPEND')}")
         print(f'Launching {subgen_script_to_run}')
         try:
-            subprocess.run([python_cmd, '-u', subgen_script_to_run], check=True)
+            subprocess.run([sys.executable, '-u', subgen_script_to_run], check=True)
         except FileNotFoundError:
             print(f"Error: Could not find {subgen_script_to_run}. Make sure it was downloaded correctly.")
         except subprocess.CalledProcessError as e:

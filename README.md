@@ -240,6 +240,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `PROCESS_MEDIA_ON_PLAY` | `True` | Generate subs for media when it is played (when triggered by webhook). |
 | `TRANSCRIBE_FOLDERS` | `''` | Pipe-separated list (e.g., `/tv&#124;/movies`) to recurse through and queue existing media. |
 | `MONITOR` | `False` | Actively watches `TRANSCRIBE_FOLDERS` in real-time for newly pasted files. |
+| `SKIP_STARTUP_SCAN` | `False` | Skips the startup scan of `TRANSCRIBE_FOLDERS` entirely. Subgen will still watch for new files if `MONITOR` is enabled, but won't iterate existing files on start. Useful if your library is already subtitled and you only want to catch newly added files. |
 | `PLEX_QUEUE_NEXT_EPISODE` | `False` | Auto-queues the *next* Plex episode when Subgen is triggered. |
 | `PLEX_QUEUE_SEASON` | `False` | Auto-queues the *entire remaining season* when Subgen is triggered. |
 | `PLEX_QUEUE_SERIES` | `False` | Auto-queues the *entire remaining series* when Subgen is triggered. |
@@ -247,6 +248,13 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 
 ### ⏭️ Skip Logic & Audio Targeting
 *Prevent Subgen from wasting time on files that don't need subtitles.*
+
+**Directory skip marker:** Place an empty `.subgen_skip` file in any directory to tell Subgen to skip that directory and all of its subdirectories — both during the startup scan and when watching for new files. Useful for completed shows or any section of your library that will never need new subtitles.
+```bash
+touch "/tv/The Simpsons/.subgen_skip"   # skips all seasons
+touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
+```
+
 | Variable | Default | Description |
 |---|---|---|
 | `SKIP_IF_TARGET_SUBTITLES_EXIST` | `True` | Skips if an auto-generated subtitle in your desired language already exists. |
@@ -264,6 +272,8 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `SKIP_ONLY_SUBGEN_SUBTITLES` | `False` | Skips generation only if the file has "subgen" somewhere in the existing subtitle filename. |
 | `SKIP_IF_NO_LANGUAGE_BUT_SUBTITLES_EXIST`| `False` | Skips generation if file doesn't have an audio stream marked with a language, but subtitles exist. |
 | `IGNORE_FORCED_SUBTITLES` | `True` | When `True`, forced embedded subtitle tracks are excluded from all skip-coverage checks. A file whose only matching subtitle tracks are forced will be treated as having no coverage and transcribed normally. Set to `False` to count forced tracks as full coverage (old behaviour). |
+
+> **Not sure why a file is being skipped?** Use the [Skip Logic Calculator](https://htmlpreview.github.io/?https://github.com/McCloudS/subgen/blob/main/docs/skip-logic-calculator.html) — configure your settings, describe what subtitle files and streams exist, and it shows exactly what triggered the skip.
 
 ### 📝 Subtitle Formatting & Preferences
 | Variable | Default | Description |
@@ -304,6 +314,38 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 
 ## 🌎 Supported Audio Languages (via OpenAI)
 Afrikaans, Arabic, Armenian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catalan, Chinese, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, Galician, German, Greek, Hebrew, Hindi, Hungarian, Icelandic, Indonesian, Italian, Japanese, Kannada, Kazakh, Korean, Latvian, Lithuanian, Macedonian, Malay, Marathi, Maori, Nepali, Norwegian, Persian, Polish, Portuguese, Romanian, Russian, Serbian, Slovak, Slovenian, Spanish, Swahili, Swedish, Tagalog, Tamil, Thai, Turkish, Ukrainian, Urdu, Vietnamese, and Welsh.
+
+---
+
+## 🔗 OpenAI-Compatible API Endpoints
+
+Subgen exposes two endpoints that match the [OpenAI Whisper API](https://platform.openai.com/docs/api-reference/audio), so it can be used as a drop-in backend for any client that targets that API (Open WebUI, Obsidian plugins, etc.).
+
+| Endpoint | Description |
+|---|---|
+| `POST /v1/audio/transcriptions` | Transcribe audio to text in the source language |
+| `POST /v1/audio/translations` | Transcribe and translate audio to English |
+
+**Supported parameters:**
+
+| Parameter | Description |
+|---|---|
+| `file` | Audio file (any format ffmpeg can decode) |
+| `language` | Source language ISO-639-1 code (transcriptions only; auto-detected if omitted) |
+| `prompt` | Optional context passed to Whisper |
+| `response_format` | `json` (default), `text`, `srt`, `vtt`, `verbose_json` |
+| `model` | Accepted but ignored — subgen uses its configured model |
+| `temperature` | Accepted but ignored |
+
+**Example:**
+```bash
+curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "response_format=json"
+# {"text": "..."}
+```
+
+`verbose_json` returns segments with start/end timestamps and word-level timestamps.
 
 ---
 

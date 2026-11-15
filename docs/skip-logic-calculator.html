@@ -1,0 +1,522 @@
+<title>Subgen Skip Logic — Subtitle Checks</title>
+<style>
+:root {
+  --bg:#f2f4f9; --surface:#fff; --surface-2:#eef0f6; --border:#dce0ed;
+  --text:#1c1f2e; --muted:#6b7299; --accent:#4a7ef5; --accent-bg:#e6eeff;
+  --skip:#d93636; --skip-bg:#fff0f0; --pass:#18a350; --pass-bg:#edfff4;
+  --mono:'Menlo','Monaco','Consolas',monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --r:7px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#111420; --surface:#191d2e; --surface-2:#1f2335; --border:#2b3050;
+  --text:#cdd3f0; --muted:#5f6b96; --accent:#5b8ef7; --accent-bg:#172040;
+  --skip:#f07070; --skip-bg:#2a1010; --pass:#3fd876; --pass-bg:#0d2a18;
+}}
+:root[data-theme="light"]{--bg:#f2f4f9;--surface:#fff;--surface-2:#eef0f6;--border:#dce0ed;--text:#1c1f2e;--muted:#6b7299;--accent:#4a7ef5;--accent-bg:#e6eeff;--skip:#d93636;--skip-bg:#fff0f0;--pass:#18a350;--pass-bg:#edfff4}
+:root[data-theme="dark"]{--bg:#111420;--surface:#191d2e;--surface-2:#1f2335;--border:#2b3050;--text:#cdd3f0;--muted:#5f6b96;--accent:#5b8ef7;--accent-bg:#172040;--skip:#f07070;--skip-bg:#2a1010;--pass:#3fd876;--pass-bg:#0d2a18}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:20}
+.hdr-title{font-size:14px;font-weight:600;letter-spacing:-.01em;flex:1}
+.hdr-sub{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400}
+.theme-btn{background:none;border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:5px;cursor:pointer;font-size:11px;font-family:var(--sans)}
+.theme-btn:hover{color:var(--text)}
+
+.body{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 47px)}
+@media(max-width:680px){.body{grid-template-columns:1fr}}
+
+.pane{background:var(--surface);overflow-y:auto}
+.pane+.pane{border-left:1px solid var(--border)}
+.pane-head{padding:11px 16px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+
+.sgroup{padding:14px 16px;border-bottom:1px solid var(--border)}
+.slabel{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.srow{display:flex;align-items:center;gap:8px;padding:4px 0}
+.srow+.srow{border-top:1px solid var(--border)}
+.srow-info{flex:1;min-width:0}
+.env-name{font-family:var(--mono);font-size:11px;color:var(--text);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.env-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-top:1px}
+
+.tog{position:relative;width:34px;height:19px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0;position:absolute}
+.tog-track{position:absolute;inset:0;background:var(--border);border-radius:20px;cursor:pointer;transition:background .13s}
+.tog-track::after{content:'';position:absolute;left:3px;top:3px;width:13px;height:13px;background:#fff;border-radius:50%;transition:transform .13s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.tog input:checked+.tog-track{background:var(--accent)}
+.tog input:checked+.tog-track::after{transform:translateX(15px)}
+
+.sel,.inp{background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11.5px;padding:4px 7px;border-radius:5px;cursor:pointer}
+.inp{cursor:text;width:80px}
+.inp:focus{outline:2px solid var(--accent);outline-offset:1px}
+.sel{max-width:130px}
+
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{font-family:var(--mono);font-size:10.5px;padding:2px 8px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted);cursor:pointer;user-select:none;transition:all .1s}
+.chip.on{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+
+.fs-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.fs-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+.target-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;background:var(--accent-bg);color:var(--accent);padding:3px 10px;border-radius:12px;margin-top:6px}
+.target-pill .label{color:var(--muted);font-size:10px}
+
+.file-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.file-entry{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px}
+.file-name{font-family:var(--mono);font-size:11.5px;color:var(--text)}
+.file-meta{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+.file-meta-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.remove-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;opacity:.6}
+.remove-btn:hover{opacity:1;color:var(--skip)}
+.add-btn{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--accent);background:none;border:1px dashed var(--accent);border-radius:5px;padding:5px 12px;cursor:pointer;font-family:var(--sans)}
+.add-btn:hover{background:var(--accent-bg)}
+
+.stream-list{display:flex;flex-wrap:wrap;gap:4px}
+.stream-chip{font-family:var(--mono);font-size:11px;padding:3px 10px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+.stream-chip .rm{cursor:pointer;opacity:.5;font-size:13px;line-height:1}
+.stream-chip .rm:hover{opacity:1}
+
+.out-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px}
+.out-name{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+
+.trace-wrap{grid-column:1/-1;border-top:2px solid var(--border);background:var(--bg);padding:18px 20px 24px}
+.trace-inner{max-width:860px;margin:0 auto}
+
+.verdict{display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:8px;margin-bottom:14px;border:1px solid}
+.verdict.skip{background:var(--skip-bg);border-color:var(--skip);color:var(--skip)}
+.verdict.pass{background:var(--pass-bg);border-color:var(--pass);color:var(--pass)}
+.v-icon{font-size:22px;flex-shrink:0}
+.v-label{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.v-why{font-size:12px;margin-top:2px;opacity:.8}
+
+.checks{display:flex;flex-direction:column;gap:3px}
+.crow{display:flex;gap:9px;padding:7px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--border);font-size:13px;align-items:flex-start}
+.crow.hit{background:var(--skip-bg);border-color:var(--skip)}
+.crow.ok{opacity:.55}
+.crow.na{opacity:.28}
+.c-icon{width:16px;text-align:center;flex-shrink:0;margin-top:1px;font-size:13px}
+.c-body{flex:1}
+.c-msg{font-size:11.5px;color:var(--muted);margin-top:2px}
+.c-msg.skip-c{color:var(--skip)}
+.c-msg.pass-c{color:var(--pass)}
+
+.add-form{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-top:6px;display:none;flex-direction:column;gap:8px}
+.add-form.open{display:flex}
+.add-form-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.add-form label{font-size:11px;color:var(--muted)}
+.add-form .act{display:flex;gap:6px;margin-top:2px}
+.save-btn{background:var(--accent);color:#fff;border:none;border-radius:5px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.save-btn:hover{opacity:.9}
+.cancel-btn{background:var(--surface-2);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+.note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+.stream-add-row{display:flex;gap:6px;align-items:center;margin-top:6px}
+</style>
+
+<header>
+  <div class="hdr-title">
+    Subgen — Subtitle Skip Checker
+    <span class="hdr-sub">Why is this file being skipped?</span>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()">Toggle theme</button>
+</header>
+
+<div class="body">
+
+<!-- ── SETTINGS ── -->
+<div class="pane">
+  <div class="pane-head">Settings</div>
+
+  <div class="sgroup">
+    <div class="slabel">Audio / Target language</div>
+    <div class="srow">
+      <div class="srow-info">
+        <span class="env-name">Detected audio language</span>
+        <span class="env-desc">From file metadata — drives what language subgen targets</span>
+      </div>
+      <select class="sel" id="audioLang" onchange="go()">
+        <option value="none">Unknown (not detected)</option>
+        <option value="english" selected>English</option>
+        <option value="french">French</option>
+        <option value="spanish">Spanish</option>
+        <option value="german">German</option>
+        <option value="japanese">Japanese</option>
+      </select>
+    </div>
+    <div class="srow">
+      <div class="srow-info">
+        <span class="env-name">SUBTITLE_LANGUAGE_NAME</span>
+        <span class="env-desc">Override the output filename's language tag (e.g. <code style="font-family:var(--mono)">aa</code> → <em>Movie.aa.srt</em>). Also changes what subgen looks for when checking if a subtitle already exists.</span>
+      </div>
+      <input class="inp" id="subLangName" type="text" placeholder="(none)" maxlength="12" oninput="go()">
+    </div>
+  </div>
+
+  <div class="sgroup">
+    <div class="slabel">Skip if subtitle already exists</div>
+    <div class="srow">
+      <div class="srow-info">
+        <span class="env-name">SKIP_IF_TARGET_SUBTITLES_EXIST</span>
+        <span class="env-desc">Skip the file if a subtitle already exists for it</span>
+      </div>
+      <label class="tog"><input type="checkbox" id="skipTarget" checked onchange="go()"><span class="tog-track"></span></label>
+    </div>
+    <div class="srow">
+      <div class="srow-info">
+        <span class="env-name">SKIP_ONLY_SUBGEN_SUBTITLES</span>
+        <span class="env-desc">Only count an existing subtitle as a reason to skip if <em>"subgen"</em> appears in its filename. Has no effect on embedded/internal streams — those are never subgen-created.</span>
+      </div>
+      <label class="tog"><input type="checkbox" id="onlySubgen" onchange="go()"><span class="tog-track"></span></label>
+    </div>
+  </div>
+
+  <div class="sgroup">
+    <div class="slabel">Skip based on embedded subtitle language</div>
+    <div class="srow">
+      <div class="srow-info">
+        <span class="env-name">SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE</span>
+        <span class="env-desc">Skip if the file has an embedded subtitle stream in this specific language</span>
+      </div>
+      <select class="sel" id="skipInternalLang" onchange="go()">
+        <option value="none">(disabled)</option>
+        <option value="english">english</option>
+        <option value="french">french</option>
+        <option value="spanish">spanish</option>
+        <option value="german">german</option>
+        <option value="japanese">japanese</option>
+      </select>
+    </div>
+    <div class="srow" style="flex-direction:column;align-items:flex-start">
+      <span class="env-name" style="margin-bottom:4px">SKIP_SUBTITLE_LANGUAGES</span>
+      <span class="env-desc" style="margin-bottom:6px">Skip if any embedded subtitle stream's language is in this list</span>
+      <div class="chips" id="skipSubLangs">
+        <span class="chip" data-l="english"  onclick="toggleChip(this)">english</span>
+        <span class="chip" data-l="french"   onclick="toggleChip(this)">french</span>
+        <span class="chip" data-l="spanish"  onclick="toggleChip(this)">spanish</span>
+        <span class="chip" data-l="german"   onclick="toggleChip(this)">german</span>
+        <span class="chip" data-l="japanese" onclick="toggleChip(this)">japanese</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── FILE STATE ── -->
+<div class="pane" style="border-left:1px solid var(--border)">
+  <div class="pane-head">File State — what exists on disk / in the file</div>
+
+  <div class="fs-section">
+    <div class="fs-label">Effective target language</div>
+    <div id="targetPill" class="target-pill"><span class="label">target →</span> <strong>english</strong></div>
+    <p class="note" id="targetNote" style="margin-top:8px"></p>
+  </div>
+
+  <div class="fs-section">
+    <div class="fs-label">Embedded subtitle streams inside the file</div>
+    <div class="stream-list" id="streamList"></div>
+    <div class="stream-add-row">
+      <select class="sel" id="newStreamLang">
+        <option value="english">english</option>
+        <option value="french">french</option>
+        <option value="spanish">spanish</option>
+        <option value="german">german</option>
+        <option value="japanese">japanese</option>
+        <option value="none">unknown</option>
+      </select>
+      <button class="add-btn" onclick="addStream()">+ Add stream</button>
+    </div>
+    <p class="note">Embedded streams are never "subgen-created" — SKIP_ONLY_SUBGEN_SUBTITLES does not prevent them from triggering a skip via SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE or SKIP_SUBTITLE_LANGUAGES.</p>
+  </div>
+
+  <div class="fs-section">
+    <div class="fs-label">External subtitle files in the same folder</div>
+    <div class="file-list" id="fileList"></div>
+    <button class="add-btn" onclick="openAddFile()">+ Add file</button>
+    <div class="add-form" id="addForm">
+      <div class="add-form-row">
+        <label>Language tag:</label>
+        <select class="sel" id="newFileLang" onchange="updatePreview()">
+          <option value="english">english (.en)</option>
+          <option value="french">french (.fr)</option>
+          <option value="spanish">spanish (.es)</option>
+          <option value="german">german (.de)</option>
+          <option value="japanese">japanese (.ja)</option>
+          <option value="none">no/unknown</option>
+        </select>
+      </div>
+      <div class="add-form-row">
+        <label>"subgen" in filename:</label>
+        <label class="tog"><input type="checkbox" id="newFileSubgen" onchange="updatePreview()"><span class="tog-track"></span></label>
+        <span style="font-size:11px;color:var(--muted)" id="newFileNamePreview">e.g. Movie.en.srt</span>
+      </div>
+      <div class="add-form-row">
+        <label>Matches SUBTITLE_LANGUAGE_NAME tag:</label>
+        <label class="tog"><input type="checkbox" id="newFileCustomName" onchange="updatePreview()"><span class="tog-track"></span></label>
+      </div>
+      <div class="add-form act">
+        <button class="save-btn" onclick="saveFile()">Add</button>
+        <button class="cancel-btn" onclick="closeAddFile()">Cancel</button>
+      </div>
+    </div>
+    <p class="note">With SKIP_ONLY_SUBGEN_SUBTITLES enabled, external files without "subgen" in their name are ignored when deciding whether to skip.</p>
+  </div>
+
+  <div class="fs-section">
+    <div class="fs-label">Expected output file</div>
+    <div class="out-row">
+      <span class="out-name" id="expectedName">Movie.eng.srt</span>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)">
+        already exists
+        <label class="tog"><input type="checkbox" id="expectedExists" onchange="go()"><span class="tog-track"></span></label>
+      </label>
+    </div>
+    <p class="note">The exact file subgen would create. If it already exists, subgen skips regardless of SKIP_ONLY_SUBGEN_SUBTITLES.</p>
+  </div>
+</div>
+
+<!-- ── TRACE ── -->
+<div class="trace-wrap">
+  <div class="trace-inner">
+    <div id="verdict" class="verdict pass">
+      <span class="v-icon">✓</span>
+      <div>
+        <div class="v-label" id="vLabel">PROCEED — subtitle will be generated</div>
+        <div class="v-why" id="vWhy">No skip condition matched.</div>
+      </div>
+    </div>
+    <div class="checks" id="checks"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+function toggleTheme(){
+  const r=document.documentElement,c=r.getAttribute('data-theme');
+  const dark=c==='dark'||(!c&&window.matchMedia('(prefers-color-scheme:dark)').matches);
+  r.setAttribute('data-theme',dark?'light':'dark');
+}
+
+function toggleChip(el){el.classList.toggle('on');go()}
+function chipsOn(id){return[...document.querySelectorAll(`#${id} .chip.on`)].map(c=>c.dataset.l)}
+function v(id){return document.getElementById(id).value}
+function c(id){return document.getElementById(id).checked}
+
+let streams=[];
+let extFiles=[];
+
+function addStream(){
+  streams.push({lang:v('newStreamLang')});
+  renderStreams();go();
+}
+function removeStream(i){streams.splice(i,1);renderStreams();go()}
+function renderStreams(){
+  const el=document.getElementById('streamList');
+  el.innerHTML=streams.length
+    ?streams.map((s,i)=>`<span class="stream-chip">${s.lang}<span class="rm" onclick="removeStream(${i})">×</span></span>`).join('')
+    :'<span style="font-size:12px;color:var(--muted);font-style:italic">No embedded subtitle streams</span>';
+}
+
+function openAddFile(){document.getElementById('addForm').classList.add('open');updatePreview()}
+function closeAddFile(){document.getElementById('addForm').classList.remove('open')}
+function updatePreview(){
+  const tags={english:'en',french:'fr',spanish:'es',german:'de',japanese:'ja',none:''};
+  const tag=tags[v('newFileLang')]||'';
+  const sub=c('newFileSubgen');
+  const custom=c('newFileCustomName');
+  const customTag=v('subLangName').trim()||null;
+  const parts=['Movie'];
+  if(tag)parts.push(tag);
+  if(custom&&customTag)parts.push(customTag);
+  if(sub)parts.push('subgen');
+  document.getElementById('newFileNamePreview').textContent=parts.join('.')+'.srt';
+}
+function saveFile(){
+  extFiles.push({lang:v('newFileLang'),subgen:c('newFileSubgen'),customName:c('newFileCustomName')});
+  renderFiles();closeAddFile();go();
+}
+function removeFile(i){extFiles.splice(i,1);renderFiles();go()}
+function renderFiles(){
+  const tags={english:'en',french:'fr',spanish:'es',german:'de',japanese:'ja',none:''};
+  const customTag=v('subLangName').trim()||null;
+  const el=document.getElementById('fileList');
+  if(!extFiles.length){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">No external subtitle files</div>';return}
+  el.innerHTML=extFiles.map((f,i)=>{
+    const tag=tags[f.lang]||'';
+    const parts=['Movie'];
+    if(tag)parts.push(tag);
+    if(f.customName&&customTag)parts.push(customTag);
+    if(f.subgen)parts.push('subgen');
+    const name=parts.join('.')+'.srt';
+    const badges=[];
+    if(f.subgen)badges.push(`<span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:8px;font-family:var(--mono)">subgen</span>`);
+    if(f.customName&&customTag)badges.push(`<span style="font-size:10px;background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:1px 6px;border-radius:8px;font-family:var(--mono)">custom name</span>`);
+    return`<div class="file-entry"><div>
+      <div class="file-name">📄 ${name}</div>
+      <div class="file-meta"><span class="file-meta-item">lang: <strong style="font-family:var(--mono)">${f.lang}</strong></span>${badges.join('')}</div>
+    </div><button class="remove-btn" onclick="removeFile(${i})">×</button></div>`;
+  }).join('');
+}
+
+function go(){
+  updatePreview();
+  renderExpectedName();
+
+  const audioLang=v('audioLang');
+  const customTag=v('subLangName').trim().toLowerCase()||null;
+  const skipTarget=c('skipTarget');
+  const onlySubgen=c('onlySubgen');
+  const skipInternalLang=v('skipInternalLang');
+  const skipSubLangs=chipsOn('skipSubLangs');
+  const targetLang=audioLang;
+
+  document.getElementById('targetPill').innerHTML=`<span class="label">target →</span> <strong>${targetLang}</strong>`;
+  document.getElementById('targetNote').textContent=targetLang==='none'
+    ?'Audio language unknown. Any existing subtitle will match the "unknown language" path.'
+    :'';
+
+  const checks=[];
+  let skipReason=null;
+
+  function externalMatch(lang,onlySub,customNameMode=false){
+    return extFiles.some(f=>{
+      const langOk=lang==='none'?true:f.lang===lang;
+      return langOk&&(!onlySub||f.subgen)&&(!customNameMode||f.customName);
+    });
+  }
+  function internalMatch(lang){
+    return lang==='none'?streams.length>0:streams.some(s=>s.lang===lang);
+  }
+
+  if(skipTarget){
+    // Internal subtitle in target language
+    const intHit=!onlySubgen&&internalMatch(targetLang);
+    // External subtitle in target language
+    const extHit=externalMatch(targetLang,onlySubgen);
+
+    if(intHit||extHit){
+      const how=intHit
+        ?'an embedded subtitle stream'
+        :`an external file${onlySubgen?' (subgen-named)':''}`;
+      checks.push({label:'Subtitle already exists in target language',state:'hit',
+        msg:targetLang==='none'
+          ?`Found ${how} — audio language is unknown so any subtitle triggers a skip.`
+          :`Found ${how} in <strong>${targetLang}</strong>.`});
+      skipReason=`A ${targetLang} subtitle already exists.`;
+    } else {
+      checks.push({label:'Subtitle already exists in target language',state:'ok',
+        msg:onlySubgen
+          ?`No subgen-named subtitle found in target language (${targetLang}). Embedded streams also checked but SKIP_ONLY_SUBGEN_SUBTITLES has no effect there.`
+          :`No subtitle found in target language (${targetLang}).`});
+    }
+
+    // External subtitle matching SUBTITLE_LANGUAGE_NAME
+    if(!skipReason){
+      if(customTag){
+        const customHit=externalMatch(null,onlySubgen,true);
+        if(customHit){
+          checks.push({label:`External subtitle with custom name "${customTag}" exists`,state:'hit',
+            msg:`Found an external file tagged as matching SUBTITLE_LANGUAGE_NAME="${customTag}"${onlySubgen?' and subgen-named':''}.`});
+          skipReason=`External subtitle with custom name "${customTag}" already exists.`;
+        } else {
+          checks.push({label:`External subtitle with custom name "${customTag}" exists`,state:'ok',
+            msg:`No${onlySubgen?' subgen-named':''} external file matching SUBTITLE_LANGUAGE_NAME="${customTag}" found.`});
+        }
+      } else {
+        checks.push({label:'External subtitle with custom name exists',state:'na',
+          msg:'SUBTITLE_LANGUAGE_NAME not set — skipped.'});
+      }
+    }
+
+    // Expected output already on disk
+    if(!skipReason){
+      if(c('expectedExists')){
+        checks.push({label:'Expected output file already on disk',state:'hit',
+          msg:'The exact file subgen would generate already exists. Always triggers a skip regardless of SKIP_ONLY_SUBGEN_SUBTITLES.'});
+        skipReason='Expected output file already exists on disk.';
+      } else {
+        checks.push({label:'Expected output file already on disk',state:'ok',
+          msg:'Expected output not found.'});
+      }
+    }
+  } else {
+    checks.push({label:'Skip-if-subtitle-exists (all sub-checks)',state:'na',
+      msg:'SKIP_IF_TARGET_SUBTITLES_EXIST=false — entire block skipped.'});
+  }
+
+  // SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE
+  if(!skipReason){
+    if(skipInternalLang!=='none'){
+      if(internalMatch(skipInternalLang)){
+        checks.push({label:`Embedded subtitle in ${skipInternalLang} (SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE)`,state:'hit',
+          msg:`Found an embedded ${skipInternalLang} subtitle stream.`});
+        skipReason=`Embedded subtitle in ${skipInternalLang} triggers skip.`;
+      } else {
+        checks.push({label:`Embedded subtitle in ${skipInternalLang} (SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE)`,state:'ok',
+          msg:`No embedded ${skipInternalLang} subtitle stream found.`});
+      }
+    } else {
+      checks.push({label:'Embedded subtitle language match (SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE)',state:'na',
+        msg:'SKIP_IF_INTERNAL_SUBTITLE_LANGUAGE not configured.'});
+    }
+  }
+
+  // SKIP_SUBTITLE_LANGUAGES
+  if(!skipReason){
+    if(skipSubLangs.length){
+      const matched=streams.find(s=>skipSubLangs.includes(s.lang));
+      if(matched){
+        checks.push({label:'Embedded subtitle language in skip list (SKIP_SUBTITLE_LANGUAGES)',state:'hit',
+          msg:`Found embedded <strong>${matched.lang}</strong> subtitle stream — in SKIP_SUBTITLE_LANGUAGES list.`});
+        skipReason=`Embedded subtitle language (${matched.lang}) is in the skip list.`;
+      } else {
+        checks.push({label:'Embedded subtitle language in skip list (SKIP_SUBTITLE_LANGUAGES)',state:'ok',
+          msg:`No embedded subtitle matches the SKIP_SUBTITLE_LANGUAGES list [${skipSubLangs.join(', ')}].`});
+      }
+    } else {
+      checks.push({label:'Embedded subtitle language in skip list (SKIP_SUBTITLE_LANGUAGES)',state:'na',
+        msg:'SKIP_SUBTITLE_LANGUAGES is empty.'});
+    }
+  }
+
+  // Render verdict
+  const vEl=document.getElementById('verdict');
+  if(skipReason){
+    vEl.className='verdict skip';
+    vEl.querySelector('.v-icon').textContent='✗';
+    document.getElementById('vLabel').textContent='SKIP — subtitle will not be generated';
+    document.getElementById('vWhy').textContent=skipReason;
+  } else {
+    vEl.className='verdict pass';
+    vEl.querySelector('.v-icon').textContent='✓';
+    document.getElementById('vLabel').textContent='PROCEED — subtitle will be generated';
+    document.getElementById('vWhy').textContent='No skip condition matched.';
+  }
+
+  document.getElementById('checks').innerHTML=checks.map(ch=>{
+    const cls=ch.state==='hit'?'hit':ch.state==='ok'?'ok':'na';
+    const icon=ch.state==='hit'?'✗':ch.state==='ok'?'✓':'·';
+    const msgCls=ch.state==='hit'?'skip-c':ch.state==='ok'?'pass-c':'';
+    return`<div class="crow ${cls}">
+      <span class="c-icon">${icon}</span>
+      <div class="c-body">
+        <div>${ch.label}</div>
+        <div class="c-msg ${msgCls}">${ch.msg}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderExpectedName(){
+  const customTag=v('subLangName').trim()||null;
+  const tags={english:'eng',french:'fre',spanish:'spa',german:'deu',japanese:'jpn',none:''};
+  const tag=customTag||tags[v('audioLang')]||'';
+  const parts=['Movie'];
+  if(tag)parts.push(tag);
+  document.getElementById('expectedName').textContent=parts.join('.')+'.srt';
+}
+
+renderStreams();
+renderFiles();
+go();
+</script>

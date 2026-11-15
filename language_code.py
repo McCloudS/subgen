@@ -182,7 +182,7 @@ class LanguageCode(Enum):
         return self.name_en
     
     def __bool__(self):
-        return True if self.iso_639_1 is not None else False
+        return self.iso_639_1 is not None
     
     def __eq__(self, other):
         """

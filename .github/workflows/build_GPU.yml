@@ -2,16 +2,18 @@ name: Build Docker images
 
 on:
   push:
-    branches: ["main", "dev"]
+    branches: ["main", "dev", "refactor/drop-stable-ts"]
     paths:
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
       - 'requirements.txt'
+      - 'requirements.whispercpp.txt'
       - 'entrypoint.sh'
       - 'Dockerfile'
       - 'Dockerfile.cpu'
       - 'Dockerfile.AMD'
+      - 'Dockerfile.whispercpp'
       - '.github/workflows/build_GPU.yml'
   workflow_dispatch:
 
@@ -20,7 +22,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── GPU (CUDA) ─────────────────────────────────────────────────────────────
+  # ── GPU ────────────────────────────────────────────────────────────────────
+  # main:  faster-whisper + CUDA  →  mccloud/subgen:latest
+  # dev:   whisper.cpp CUDA       →  mccloud/subgen:dev
   gpu:
     runs-on: [self-hosted]
     steps:
@@ -31,15 +35,22 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:latest\nmccloud/subgen:%s' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-cuda" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-buildx-action@v3
+        with:
+          name: subgen-gpu-builder
+          keep-state: true
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -48,13 +59,18 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:buildcache
           cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
 
-  # ── CPU (multi-arch) ───────────────────────────────────────────────────────
+  # ── CPU ────────────────────────────────────────────────────────────────────
+  # main:  faster-whisper CPU (multi-arch)  →  mccloud/subgen:cpu
+  # dev:   whisper.cpp CPU (amd64 only)     →  mccloud/subgen:dev-cpu
+  # Note: ghcr.io/ggml-org/whisper.cpp:main is amd64-only; use dev-whispercpp
+  #       for arm64 (Vulkan, built as multi-arch via split-tag approach).
   cpu:
     runs-on: [self-hosted]
     steps:
@@ -65,18 +81,27 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:cpu\nmccloud/subgen:%s-cpu' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.cpu" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main" >> $GITHUB_ENV
+            echo "platforms=linux/amd64" >> $GITHUB_ENV
           fi
 
       - uses: docker/setup-qemu-action@v3
         with:
           image: tonistiigi/binfmt:qemu-v7.0.0
       - uses: docker/setup-buildx-action@v3
+        with:
+          name: subgen-cpu-builder
+          keep-state: true
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -85,18 +110,18 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.cpu
-          platforms: linux/amd64,linux/arm64
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
+          platforms: ${{ env.platforms }}
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
           cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max
 
-  # ── AMD (ROCm) — runs after GPU+CPU so its large upload doesn't contend ───
-  # NOTE: The AMD build compiles CTranslate2 from source (CT2_GIT_REF=master).
-  # Any new commit on CTranslate2 master invalidates the build cache and forces
-  # a full ~10 GB re-push. Pin CT2_GIT_REF to a specific release tag in
-  # Dockerfile.AMD to make layers stable and uploads instant like GPU/CPU.
+  # ── AMD (ROCm) ─────────────────────────────────────────────────────────────
+  # main:  faster-whisper ROCm    →  mccloud/subgen:amd
+  # dev:   whisper.cpp HIP        →  mccloud/subgen:dev-amd
+  # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
   amd:
     runs-on: [self-hosted]
     needs: [gpu, cpu]
@@ -108,18 +133,18 @@ jobs:
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
 
-      - name: Compute tags
+      - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             printf 'docker_tags=mccloud/subgen:amd\nmccloud/subgen:%s-amd' "$version" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.AMD" >> $GITHUB_ENV
+            echo "build_args=" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-amd" >> $GITHUB_ENV
+            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+            echo "build_args=BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main" >> $GITHUB_ENV
           fi
 
-      # keep-state: true + a fixed name prevents the BuildKit container from being
-      # destroyed between runs. BuildKit checks its local OCI store for layer digests
-      # before hitting the registry, so the 12 GB amd-buildcache download is skipped
-      # on every run after the first. Registry cache is kept as a cold-start fallback.
       - uses: docker/setup-buildx-action@v3
         with:
           name: subgen-amd-builder
@@ -132,9 +157,82 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.AMD
+          file: ${{ env.dockerfile }}
+          build-args: ${{ env.build_args }}
           platforms: linux/amd64
           push: true
           tags: ${{ env.docker_tags }}
           cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
           cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
+
+  # ── whisper.cpp (Vulkan, multi-arch) ──────────────────────────────────────
+  # main-vulkan (amd64) and main-vulkan-arm64 have separate tags, so we build
+  # each arch independently then merge into a single multi-arch manifest.
+  # main:  mccloud/subgen:whispercpp  (linux/amd64 + linux/arm64)
+  # dev:   mccloud/subgen:dev-whispercpp
+  whispercpp:
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        run: |
+          version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Compute tags
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "final_tag=mccloud/subgen:whispercpp" >> $GITHUB_ENV
+            echo "versioned_tag=mccloud/subgen:${version}-whispercpp" >> $GITHUB_ENV
+          else
+            echo "final_tag=mccloud/subgen:dev-whispercpp" >> $GITHUB_ENV
+            echo "versioned_tag=" >> $GITHUB_ENV
+          fi
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          image: tonistiigi/binfmt:qemu-v7.0.0
+      - uses: docker/setup-buildx-action@v3
+        with:
+          name: subgen-whispercpp-builder
+          keep-state: true
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build amd64 (Vulkan)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.whispercpp
+          build-args: BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-vulkan
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.final_tag }}-amd64
+          cache-from: type=registry,ref=mccloud/subgen:whispercpp-buildcache-amd64
+          cache-to: type=registry,ref=mccloud/subgen:whispercpp-buildcache-amd64,mode=max
+
+      - name: Build arm64 (Vulkan)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.whispercpp
+          build-args: BASE_IMAGE=ghcr.io/ggml-org/whisper.cpp:main-vulkan-arm64
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.final_tag }}-arm64
+          cache-from: type=registry,ref=mccloud/subgen:whispercpp-buildcache-arm64
+          cache-to: type=registry,ref=mccloud/subgen:whispercpp-buildcache-arm64,mode=max
+
+      - name: Merge into multi-arch manifest
+        run: |
+          docker buildx imagetools create -t ${{ env.final_tag }} \
+            ${{ env.final_tag }}-amd64 \
+            ${{ env.final_tag }}-arm64
+          if [ -n "${{ env.versioned_tag }}" ]; then
+            docker buildx imagetools create -t ${{ env.versioned_tag }} \
+              ${{ env.final_tag }}-amd64 \
+              ${{ env.final_tag }}-arm64
+          fi

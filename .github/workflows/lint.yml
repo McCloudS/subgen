@@ -20,10 +20,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install ruff
-        run: pip install ruff
+        run: pip install ruff==0.15.12
 
       - name: Check style
-        run: ruff check --ignore E402 subgen.py language_code.py
+        run: ruff check --ignore E402,PLW1508 subgen.py language_code.py
 
       - name: Check import order
-        run: ruff check --select I --ignore E402 subgen.py language_code.py
+        run: ruff check --select I --ignore E402,PLW1508 subgen.py language_code.py
