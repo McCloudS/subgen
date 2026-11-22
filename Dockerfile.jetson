@@ -1,0 +1,70 @@
+# subgen for NVIDIA Jetson (arm64 / aarch64) with CUDA-accelerated transcription.
+#
+# Why a separate Dockerfile: upstream Dockerfile is based on nvidia/cuda (amd64
+# only for the tags subgen uses) and pip installs ctranslate2, whose PyPI
+# aarch64 wheels are CPU-only builds. This image instead:
+#   * starts from plain ubuntu:24.04 (matches Jetson L4T r38/r39 host glibc),
+#   * gets CUDA userspace (cuBLAS/cuDNN/cudart 12.9) from NVIDIA's own pip
+#     wheels (manylinux aarch64), and
+#   * installs the native CUDA build of ctranslate2 published by
+#     pypi.jetson-ai-lab.io (jp6/cu129 index) instead of the CPU wheel.
+# The driver itself (libcuda.so.1) is mounted into the container by
+# nvidia-container-toolkit from the HOST (L4T r38+/JetPack 6+), so no
+# cuda-compat libs are baked in — that combination breaks on Orin/Thor.
+#
+# Build ON the Jetson (or any arm64 box):  docker build -f Dockerfile.jetson -t subgen:jetson-cuda .
+# Run with the GPU:                        docker run --runtime nvidia ... (see docker-compose.jetson.yml)
+
+# Builder: grab the CUDA-enabled libctranslate2.so.4 shared library. The
+# native ctranslate2 wheels at pypi.jetson-ai-lab.io ship only the Python
+# bindings and expect the shared library to be present system-wide; any
+# jetson-ai-lab based image with the matching version carries it. Pinned to
+# the version that matches the bindings wheel installed below (4.5.0).
+FROM dustynv/speaches:r36.4.0-cu128-24.04 AS ct2lib
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Apt packages — own layer so pip changes don't re-run apt
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg python3 python3-venv python3-pip curl gosu tzdata ca-certificates libgomp1
+
+COPY --from=ct2lib /usr/local/lib/libctranslate2.so.4.5.0 /usr/local/lib/
+COPY --from=ct2lib /usr/local/lib/libctranslate2.so.4 /usr/local/lib/
+RUN ldconfig
+
+# CUDA-accelerated CTranslate2 + cu12 runtime libs + torch (CPU build on
+# aarch64 is fine — subgen only uses torch for optional clear_vram bookkeeping).
+# jetson-ai-lab index mirrors PyPI and carries the native linux_aarch64 CUDA
+# ctranslate2 wheels, so it can serve the whole requirements set.
+COPY requirements.jetson.txt /
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install -U pip && \
+    /opt/venv/bin/pip install --no-deps \
+        "https://pypi.jetson-ai-lab.io/jp6/cu129/+f/c2f/8c3c38cb6d1f2/ctranslate2-4.5.0-cp312-cp312-linux_aarch64.whl" && \
+    /opt/venv/bin/pip install -r /requirements.jetson.txt && \
+    apt-get purge -y --auto-remove python3-pip && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH=/opt/venv/bin:$PATH \
+    LD_LIBRARY_PATH=/opt/venv/lib/python3.12/site-packages/nvidia/cublas/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cudnn/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc/lib
+
+WORKDIR /subgen
+
+# App files last — changes here don't bust the layers above
+COPY launcher.py subgen.py language_code.py /subgen/
+
+RUN mkdir -p /cache && chmod 777 /cache
+
+ENV XDG_CACHE_HOME=/cache \
+    HF_HOME=/cache/huggingface \
+    MPLCONFIGDIR=/cache/matplotlib \
+    PYTHONUNBUFFERED=1
+
+COPY entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "launcher.py"]
