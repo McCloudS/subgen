@@ -101,6 +101,14 @@ class TestTranscribeCommand:
         assert cmd[cmd.index("-l") + 1] == "de"
         assert "--translate" in cmd
 
+    def test_no_previous_text_context(self, wcp, monkeypatch):
+        """-mc 0 (like condition_on_previous_text=False) prevents repetition loops."""
+        run = _fake_run_writing({"result": {"language": "en"}, "transcription": []})
+        monkeypatch.setattr(subgen.subprocess, "run", run)
+        subgen._transcribe_whispercpp(b"RIFF", "transcribe", "en", "x.mkv")
+        cmd = run.calls[0]
+        assert cmd[cmd.index("-mc") + 1] == "0"
+
     def test_vad_uses_real_flags(self, wcp, monkeypatch):
         vad = wcp / "ggml-silero-v5.1.2.bin"
         vad.write_bytes(b"x")
