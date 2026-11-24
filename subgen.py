@@ -619,6 +619,55 @@ def segments_to_srt(segments: list, filepath: str = None) -> str:
             f.write(content)
     return content
 
+def format_transcription(result, fmt: str, task: str = "transcribe") -> str:
+    """Render a TranscriptionResult in an /asr or OpenAI output format.
+
+    /asr (whisper-asr-webservice compatible): srt, vtt, txt, tsv, json.
+    OpenAI: json ({"text"} only), text, srt, vtt, verbose_json.
+    """
+    segments = result.segments
+    full_text = " ".join(seg["text"].replace("\n", " ") for seg in segments)
+    if fmt == "vtt":
+        cues = ["WEBVTT\n"]
+        for seg in segments:
+            start = seconds_to_srt_timestamp(seg["start"]).replace(",", ".")
+            end = seconds_to_srt_timestamp(seg["end"]).replace(",", ".")
+            cues.append(f"{start} --> {end}\n{seg['text']}\n")
+        return "\n".join(cues)
+    if fmt in ("txt", "text"):
+        return "\n".join(seg["text"].replace("\n", " ") for seg in segments) + "\n" if fmt == "txt" else full_text
+    if fmt == "tsv":
+        rows = ["start\tend\ttext"]
+        rows += [f"{round(seg['start'] * 1000)}\t{round(seg['end'] * 1000)}\t{seg['text'].replace(chr(10), ' ').replace(chr(9), ' ')}"
+                 for seg in segments]
+        return "\n".join(rows) + "\n"
+    if fmt == "asr_json":
+        return json.dumps({
+            "text": full_text,
+            "language": result.language,
+            "segments": [{"id": i, "start": round(seg["start"], 3), "end": round(seg["end"], 3), "text": seg["text"]}
+                         for i, seg in enumerate(segments)],
+        })
+    if fmt == "json":
+        return json.dumps({"text": full_text})
+    if fmt == "verbose_json":
+        return json.dumps({
+            "task": task,
+            "language": result.language,
+            "duration": round(segments[-1]["end"], 3) if segments else 0.0,
+            "text": full_text,
+            "segments": [{"id": i, "seek": 0, "start": round(seg["start"], 3), "end": round(seg["end"], 3),
+                          "text": seg["text"], "tokens": [], "temperature": 0.0, "avg_logprob": 0.0,
+                          "compression_ratio": 1.0, "no_speech_prob": 0.0}
+                         for i, seg in enumerate(segments)],
+        })
+    return segments_to_srt(segments)
+
+
+_ASR_MEDIA_TYPES = {"json": "application/json", "vtt": "text/vtt", "srt": "text/plain", "txt": "text/plain",
+                    "tsv": "text/tab-separated-values"}
+
+
 def _find_line_split(words: list) -> int:
     texts = [w["word"] for w in words]
     n = len(texts)
@@ -1034,6 +1083,13 @@ async def asr(
     task_id = None
     
     try:
+        # Unknown values are tolerated (as on main) so existing clients keep working.
+        if task not in ("transcribe", "translate"):
+            logging.warning(f"ASR: unknown task '{task}', transcribing")
+            task = "transcribe"
+        if output not in _ASR_MEDIA_TYPES:
+            logging.warning(f"ASR: unknown output '{output}', returning srt")
+            output = "srt"
         logging.info(
             f"ASR {task.capitalize()} received for file '{video_file}'" 
             if video_file 
@@ -1103,11 +1159,11 @@ async def asr(
                     "task_id": task_id,
                     "message": f"ASR processing failed: {task_result.error}"
                 }
-            else: 
+            else:
                 logging.info(f"ASR task {task_id} completed")
                 return StreamingResponse(
-                    iter(task_result.result),
-                    media_type="text/plain",
+                    iter([format_transcription(task_result.result, "asr_json" if output == "json" else output, task)]),
+                    media_type=_ASR_MEDIA_TYPES[output],
                     headers={'Source': f'{task.capitalize()}d using {transcribe_backend} from Subgen!'}
                 )
         else:
@@ -1117,8 +1173,8 @@ async def asr(
                 "task_id": task_id,
                 "message": f"ASR processing timed out after {asr_timeout} seconds"
             }
-            
-    except Exception as e: 
+
+    except Exception as e:
         logging.error(f"Error in ASR endpoint: {e}", exc_info=True)
         return {"status": "error", "message": f"Error: {str(e)}"}
     finally:
@@ -1179,7 +1235,6 @@ async def openai_transcriptions(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -1193,7 +1248,7 @@ async def openai_transcriptions(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "transcribe")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -1245,7 +1300,6 @@ async def openai_translations(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -1259,7 +1313,7 @@ async def openai_translations(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "translate")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -1393,41 +1447,9 @@ def asr_task_worker(task_data: dict) -> None:
 
         appendLine(result)
 
-        # Set result for blocking endpoint
+        # Hand the transcription to the waiting request(s); each formats it as it asked.
         if result_container:
-            output_format = task_data.get('output_format', 'srt')
-            full_text = " ".join(seg["text"].replace("\n", " ") for seg in result.segments)
-            if output_format == 'json':
-                formatted = json.dumps({"text": full_text})
-            elif output_format == 'text':
-                formatted = full_text
-            elif output_format == 'vtt':
-                vtt_lines = ["WEBVTT\n"]
-                for i, seg in enumerate(result.segments, start=1):
-                    start_ts = seconds_to_srt_timestamp(seg["start"]).replace(",", ".")
-                    end_ts   = seconds_to_srt_timestamp(seg["end"]).replace(",", ".")
-                    vtt_lines.append(f"{i}\n{start_ts} --> {end_ts}\n{seg['text']}\n")
-                formatted = "\n".join(vtt_lines)
-            elif output_format == 'verbose_json':
-                segs = [
-                    {
-                        "id": i, "seek": 0,
-                        "start": round(seg["start"], 3), "end": round(seg["end"], 3),
-                        "text": seg["text"], "tokens": [], "temperature": 0.0,
-                        "avg_logprob": 0.0, "compression_ratio": 1.0, "no_speech_prob": 0.0,
-                    }
-                    for i, seg in enumerate(result.segments)
-                ]
-                formatted = json.dumps({
-                    "task": task,
-                    "language": result.language,
-                    "duration": round(result.segments[-1]["end"], 3) if result.segments else 0.0,
-                    "text": full_text,
-                    "segments": segs,
-                })
-            else:  # srt (default)
-                formatted = segments_to_srt(result.segments)
-            result_container.set_result(formatted)
+            result_container.set_result(result)
 
     except Exception as e:
         logging.error(f"Error processing ASR (ID: {task_id}): {e}", exc_info=True)
@@ -2334,7 +2356,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         # Provide the generated subtitle result to any waiting ASR endpoint requests
         with task_results_lock:
             if file_path in task_results:
-                task_results[file_path].set_result(segments_to_srt(result.segments))
+                task_results[file_path].set_result(result)
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
