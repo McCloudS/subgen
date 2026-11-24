@@ -168,7 +168,7 @@ The images above are amd64, and pip's `ctranslate2` aarch64 wheels are CPU-only,
 > `docker build -f Dockerfile.jetson -t subgen:jetson-cuda .`
 > `docker compose -f docker-compose.jetson.yml up -d`
 
-Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself (arm64). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
+Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself or any other arm64 machine (no GPU needed to build). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
 
 ### 2. Standalone (Without Docker)
 1. Install Python 3.9–3.11 and `ffmpeg`.

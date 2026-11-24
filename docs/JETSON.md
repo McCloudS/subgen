@@ -45,10 +45,10 @@ Three things make Jetson CUDA containers different from x86:
 
 | Piece | Source | Notes |
 |---|---|---|
-| base image | `ubuntu:24.04` | matches L4T r38/r39 host glibc (noble); no CUDA baked in |
+| base image | `ubuntu:24.04`, pinned by digest (`UBUNTU_IMAGE` build arg) | matches L4T r38/r39 host glibc (noble); no CUDA baked in |
 | `libcuda.so.1` (driver) | HOST, via nvidia-container-toolkit | never bake cuda-compat libs into the image |
-| `ctranslate2` Python bindings | pinned wheel URL from `pypi.jetson-ai-lab.io/jp6/cu129` (`ctranslate2-4.5.0-cp312-cp312-linux_aarch64.whl`) | native Jetson build |
-| `libctranslate2.so.4.5.0` | `COPY --from=dustynv/speaches:r36.4.0-cu128-24.04` (builder stage) | CUDA-enabled CT2 library (NEEDED: `libcublas.so.12`, `libcudnn.so.9`); version must match the bindings wheel |
+| `ctranslate2` Python bindings | wheel URL from `pypi.jetson-ai-lab.io/jp6/cu129` (`ctranslate2-4.5.0-cp312-cp312-linux_aarch64.whl`), `CT2_WHEEL_URL` build arg | native Jetson build; URL carries a `#sha256=` fragment, so pip refuses a changed file |
+| `libctranslate2.so.4.5.0` | one ~38 MB layer of `dustynv/speaches:r36.4.0-cu128-24.04`, downloaded by blob digest in the `ct2lib` stage (`CT2_LIB_LAYER`, `CT2_LIB_SHA256` build args) | CUDA-enabled CT2 library (NEEDED: `libcublas.so.12`, `libcudnn.so.9`); version must match the bindings wheel. Fetching one layer avoids pulling the ~7 GB image; both the layer and the extracted `.so` are sha256-checked |
 | cuBLAS / cuDNN / cudart / nvrtc 12.9 | `pip` wheels `nvidia-cublas-cu12==12.9.3.13`, `nvidia-cudnn-cu12==9.28.1.4`, `nvidia-cuda-runtime-cu12==12.9.79` | NVIDIA publishes official manylinux aarch64 wheels; put on `LD_LIBRARY_PATH` (site-packages `nvidia/*/lib`) |
 | torch / torchaudio | `torch==2.9.1`, `torchaudio==2.9.1` (PyPI aarch64 = CPU builds) | subgen only uses `torch.cuda.is_available()`/`empty_cache()`; CPU torch is harmless |
 | faster-whisper / stable-ts | `faster-whisper==1.2.1`, `stable-ts-whisperless==2.19.1` | same app stack as upstream requirements.txt |
@@ -67,6 +67,12 @@ subgen needs.
 ## Version-matching rules
 
 * bindings wheel version == libctranslate2.so version (both 4.5.0 here).
+* Every external input is pinned by hash. When bumping one, update the
+  matching build arg and its hash together: `UBUNTU_IMAGE` (index digest),
+  `CT2_WHEEL_URL` (`#sha256=` fragment; the jetson-ai-lab simple index lists
+  it next to each file), and `CT2_LIB_LAYER` / `CT2_LIB_FILE` /
+  `CT2_LIB_SHA256` (layer blob digest from the source image manifest, plus
+  the hash of the extracted `.so`).
 * If you change CT2 to 4.6.0 (bindings exist at jp6/cu129), you also need a
   4.6.0 `libctranslate2.so.4`; either from a matching jetson-ai-lab image or
   by building CT2 from source (CUDA 12 nvcc required — CT2 does not build with
@@ -89,6 +95,16 @@ subgen needs.
   CT2's own allocator cache is what matters.
 * Optional: `CT2_CUDA_ALLOCATOR=cub` variants are generally not needed on
   Jetson.
+
+## CI
+
+`.github/workflows/build_JETSON.yml` builds this image on GitHub's hosted
+`ubuntu-24.04-arm` runner for PRs and pushes to `main` that touch it, then runs
+an import smoke test (CT2 bindings + `libctranslate2` + pip CUDA libs all
+resolve). No GPU is needed to build. CI cannot exercise CUDA itself, so
+changes to the CUDA stack still need a check on a real Jetson (below).
+A manual run of the workflow with "push" ticked publishes
+`mccloud/subgen:jetson`.
 
 ## Verifying CUDA inside the container
 
@@ -114,6 +130,6 @@ Jetson Orin (nvgpu), L4T r39.2.1 (JetPack 7.2), driver 595.78, docker + nvidia-c
   libcuda version inside must equal the host L4T driver version. Rebuild or
   remove any image that ships cuda-compat.
 * `ImportError: libctranslate2.so.4`: bindings installed without the system
-  library — use Dockerfile.jetson (the builder stage provides it).
+  library. Use Dockerfile.jetson (the `ct2lib` stage provides it).
 * `libcublas.so.12: cannot open shared object file`: LD_LIBRARY_PATH must
   include the pip `nvidia/*/lib` dirs (already set in the image).
