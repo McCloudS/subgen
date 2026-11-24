@@ -2159,6 +2159,14 @@ def has_external_subtitle_in_language(video_file: str, target_language: Language
             # Extract parts after video filename
             subtitle_parts = subtitle_name[len(video_name):].lstrip(".").split(".")
 
+            # Forced subtitles only cover a small portion of dialogue, so (as with
+            # embedded forced tracks) they don't count as full coverage. Check the
+            # parts list rather than the raw name so both "Movie.en.forced.srt" and
+            # "Movie.forced.en.srt" match, and a title containing "forced" doesn't.
+            if ignore_forced_subtitles and any(part.lower() == "forced" for part in subtitle_parts):
+                logging.debug(f"Skipping forced subtitle file {file_name} for {video_file}")
+                continue
+
             # Check for "subgen"
             has_subgen = "subgen" in subtitle_parts
 
