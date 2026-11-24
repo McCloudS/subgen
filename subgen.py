@@ -1567,7 +1567,7 @@ async def detect_language(
                 audio_data = wav_bytes_to_numpy(audio_bytes)
             else:
                 audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
-            lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
+            lang_code = _fw_language(await asyncio.to_thread(model.detect_language, audio_data))
 
         detected = LanguageCode.from_string(lang_code)
         
@@ -1635,7 +1635,7 @@ def detect_language_from_upload(task_data: dict) -> None:
                 audio = wav_bytes_to_numpy(audio_bytes)
             else:
                 audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-            lang_code, _prob = model.detect_language(audio)
+            lang_code = _fw_language(model.detect_language(audio))
         detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
 
@@ -1724,7 +1724,7 @@ def detect_language_task(path, original_task_data=None):
             lang_code = detect_language_whispercpp(audio_segment)
         else:
             audio = wav_bytes_to_numpy(audio_segment)
-            lang_code, _prob = model.detect_language(audio)
+            lang_code = _fw_language(model.detect_language(audio))
         detected_language = LanguageCode.from_string(lang_code)
 
         logging.info(f"Detected language: {detected_language.to_name()}")
@@ -2204,6 +2204,14 @@ def start_model():
             _preload_cuda_libraries()
             import faster_whisper
             model = faster_whisper.WhisperModel(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+
+def _fw_language(detected) -> str:
+    """Language code from faster-whisper's detect_language().
+
+    It returns (language, probability) in older releases and
+    (language, probability, all_language_probs) in 1.2+, so take the first item."""
+    return detected[0]
+
 
 def _preload_cuda_libraries() -> None:
     """Load torch's bundled CUDA libraries before faster-whisper uses the GPU.

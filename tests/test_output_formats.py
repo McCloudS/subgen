@@ -122,3 +122,18 @@ class TestWorkerHandsBackResult:
                                 "encode": True, "result_container": box})
         assert box.error is None
         assert isinstance(box.result, subgen.TranscriptionResult)
+
+
+class TestFasterWhisperDetectLanguage:
+    def test_detect_language_with_three_value_return(self, client, monkeypatch):
+        from unittest.mock import MagicMock
+        fake_model = MagicMock()
+        fake_model.detect_language.return_value = ("de", 0.97, [("de", 0.97), ("en", 0.02)])
+        monkeypatch.setattr(subgen, "transcribe_backend", "faster-whisper")
+        monkeypatch.setattr(subgen, "force_detected_language_to", None)
+        monkeypatch.setattr(subgen, "start_model", lambda: None)
+        monkeypatch.setattr(subgen, "model", fake_model)
+        monkeypatch.setattr(subgen, "extract_audio_segment_from_content", lambda *a: b"RIFFxxxxWAVE")
+        monkeypatch.setattr(subgen, "wav_bytes_to_numpy", lambda b: [0.0])
+        resp = client.post("/detect-language", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
+        assert resp.json()["language_code"] == "de", resp.json()

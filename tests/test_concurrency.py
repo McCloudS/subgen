@@ -52,3 +52,9 @@ def test_faster_whisper_on_gpu_preloads_torch_cuda_libraries(monkeypatch):
         monkeypatch.setattr(subgen, "transcribe_device", device)
         subgen._preload_cuda_libraries()
         assert imported == expected
+
+
+def test_faster_whisper_language_detection_handles_both_return_shapes():
+    # faster-whisper 1.2 returns (lang, prob, all_probs); older releases return (lang, prob).
+    assert subgen._fw_language(("de", 0.9, [("de", 0.9)])) == "de"
+    assert subgen._fw_language(("fr", 0.8)) == "fr"
