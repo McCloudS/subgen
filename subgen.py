@@ -629,63 +629,171 @@ def _find_line_split(words: list) -> int:
         if len(line1) > max_line_length or len(line2) > max_line_length:
             continue
         balance      = abs(len(line1) - len(line2))
-        punct_bonus  = -8 if _SENTENCE_END.search(texts[i - 1]) else \
-                       -4 if _SOFT_BREAK.search(texts[i - 1]) else 0
+        punct_bonus  = -20 if _SENTENCE_END.search(texts[i - 1]) else \
+                       -10 if _SOFT_BREAK.search(texts[i - 1]) else 0
         conj_penalty =  6 if texts[i].lower().rstrip(".,!?;:") in _CONJUNCTIONS else 0
         score = balance + punct_bonus + conj_penalty
         if score < best_score:
             best_score, best_idx = score, i
     return best_idx
 
+def _join(words: list) -> str:
+    return " ".join(w["word"] for w in words)
+
+def _fits_two_lines(words: list) -> bool:
+    """True if the words fit in at most two lines of max_line_length.
+
+    Fills the first line greedily; that leaves the shortest possible second line,
+    so if this fails no split works."""
+    if len(_join(words)) <= max_line_length:
+        return True
+    length, i = -1, 0
+    while i < len(words) and length + 1 + len(words[i]["word"]) <= max_line_length:
+        length += 1 + len(words[i]["word"])
+        i += 1
+    return i > 0 and len(_join(words[i:])) <= max_line_length
+
 def _format_subtitle(words: list) -> dict:
-    text  = " ".join(w["word"] for w in words)
+    text  = _join(words)
     start = words[0]["start"]
     end   = min(words[-1]["end"], start + max_segment_secs)
-    if len(text) <= max_line_length:
+    if len(text) <= max_line_length or len(words) < 2:
         return {"start": start, "end": end, "text": text}
     idx   = _find_line_split(words)
-    line1 = " ".join(w["word"] for w in words[:idx])
-    line2 = " ".join(w["word"] for w in words[idx:])
-    if len(line1) > max_line_length or len(line2) > max_line_length:
-        return {"start": start, "end": end, "text": text}
+    line1 = _join(words[:idx])
+    line2 = _join(words[idx:])
     return {"start": start, "end": end, "text": f"{line1}\n{line2}"}
 
+_DANGLING = frozenset({'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by',
+                       'and', 'but', 'or', 'so', 'yet', 'for', 'nor'})
+_MERGE_GAP_SECS = 1.0   # never pack text across a pause longer than this into one cue
+_MIN_CUE_SECS   = 1.0   # extend shorter cues (into the following silence) when possible
+_MAX_CPS        = 20.0  # extend cues read faster than this, if the next cue allows
+
+def _is_sentence_end(word: str) -> bool:
+    return bool(_SENTENCE_END.search(word)) and not _ABBREV.match(word) and not _INITIAL.match(word)
+
+def _bare(word: str) -> str:
+    return word.lower().rstrip(".,!?;:")
+
+def _split_units(words: list) -> list:
+    """Split words into units at sentence ends and at pauses (gap_split_secs).
+
+    A pause doesn't split inside parentheses or right after a dangling word
+    ("the", "to", single letters)."""
+    units, cur = [], []
+    for w in words:
+        if cur and (w["start"] - cur[-1]["end"]) >= gap_split_secs:
+            text, last = _join(cur), _bare(cur[-1]["word"])
+            if text.count("(") <= text.count(")") and last not in _DANGLING and len(last) > 1:
+                units.append(cur)
+                cur = []
+        cur.append(w)
+        if _is_sentence_end(w["word"]):
+            units.append(cur)
+            cur = []
+    if cur:
+        units.append(cur)
+    return units
+
+def _fits_cue(words: list) -> bool:
+    return _fits_two_lines(words) and (words[-1]["end"] - words[0]["start"]) <= max_segment_secs
+
+def _split_long_unit(unit: list) -> list:
+    """Cut a unit that doesn't fit one cue into pieces that do.
+
+    Scores every way of cutting the whole unit and keeps the cheapest: few pieces,
+    cuts after a comma/semicolon (or before a conjunction), no piece ending on a
+    dangling word ("the", "to", ...) and no tiny leftover pieces."""
+    n = len(unit)
+    if _fits_cue(unit):
+        return [unit]
+
+    def cut_cost(i: int, j: int) -> float:
+        piece = unit[i:j]
+        cost = 10.0                                   # every extra cue costs something
+        last_word = piece[-1]["word"]
+        if (len(_join(piece)) < max_line_length // 3 and not _SOFT_BREAK.search(last_word)
+                and not _is_sentence_end(last_word)):
+            cost += 12                                # stray fragment (not a natural phrase like "Oh, Nina,")
+        if j < n:                                     # quality of the cut after this piece
+            last = piece[-1]["word"]
+            if _SOFT_BREAK.search(last):
+                pass
+            elif _bare(unit[j]["word"]) in _CONJUNCTIONS:
+                cost += 3
+            else:
+                cost += 8
+            if _bare(last) in _DANGLING:
+                cost += 15
+        return cost
+
+    best = [0.0] + [float("inf")] * n   # best[j] = cheapest way to cut unit[:j]
+    back = [0] * (n + 1)
+    for j in range(1, n + 1):
+        for i in range(j - 1, -1, -1):
+            if not _fits_cue(unit[i:j]):
+                if j - i > 1:
+                    break                 # longer pieces ending at j won't fit either
+            c = best[i] + cut_cost(i, j)
+            if c < best[j]:
+                best[j], back[j] = c, i
+    pieces, j = [], n
+    while j > 0:
+        pieces.append(unit[back[j]:j])
+        j = back[j]
+    return pieces[::-1]
+
+def _sentence_count(words: list) -> int:
+    return sum(1 for w in words if _is_sentence_end(w["word"]))
+
+def _can_merge(cur: list, piece: list) -> bool:
+    """Whether piece can join the cue being built (cur) without breaking the rules."""
+    if not _fits_cue(cur + piece):
+        return False
+    if _sentence_count(cur + piece) > 2:
+        return False  # one or two sentences per cue, like professional subtitles
+    ends_sentence = _is_sentence_end(cur[-1]["word"])
+    if ends_sentence and not _is_sentence_end(piece[-1]["word"]):
+        return False  # don't start a sentence at the end of a cue and finish it in the next one
+    gap = piece[0]["start"] - cur[-1]["end"]
+    fragment = not ends_sentence and not _SOFT_BREAK.search(cur[-1]["word"])
+    limit = _MERGE_GAP_SECS * (2 if fragment and len(_join(cur)) < max_line_length // 2 else 1)
+    return gap <= limit
+
+def _extend_short_cues(segments: list) -> None:
+    """Keep very short or fast cues on screen longer, without overlapping the next cue."""
+    for i, seg in enumerate(segments):
+        chars = len(seg["text"].replace("\n", ""))
+        target = max(_MIN_CUE_SECS, chars / _MAX_CPS)
+        limit = segments[i + 1]["start"] if i + 1 < len(segments) else seg["start"] + target
+        new_end = min(seg["start"] + target, limit, seg["start"] + max_segment_secs)
+        if new_end > seg["end"]:
+            seg["end"] = new_end
+
 def split_segments(words: list) -> list:
-    """Convert flat word list → subtitle segment dicts (Netflix-style guidelines)."""
+    """Convert flat word list → subtitle segment dicts (Netflix-style guidelines).
+
+    1. Split into units at sentence ends and pauses.
+    2. Cut units too long for one cue (two lines of max_line_length, max_segment_secs).
+    3. Pack consecutive pieces into cues while they fit, so short sentences share a
+       two-line cue and stray fragments join their sentence.
+    4. Extend cues that would flash by too quickly."""
     if not words:
         return []
-    segments, current = [], []
-    max_chars = max_line_length * 2
-
-    def flush():
-        if current:
-            segments.append(_format_subtitle(current))
-            current.clear()
-
-    _DANGLING = frozenset({'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by',
-                           'and', 'but', 'or', 'so', 'yet', 'for', 'nor'})
-    for word in words:
-        if current and (word["start"] - current[-1]["end"]) >= gap_split_secs:
-            accumulated = " ".join(w["word"] for w in current)
-            last_word = current[-1]["word"].lower().rstrip(".,!?;:")
-            if (accumulated.count("(") <= accumulated.count(")")
-                    and last_word not in _DANGLING
-                    and len(last_word) > 1):
-                flush()
-        candidate = " ".join(w["word"] for w in current) + (" " if current else "") + word["word"]
-        if current and len(candidate) > max_chars:
-            flush()
-        if current and (word["end"] - current[0]["start"]) > max_segment_secs:
-            flush()
-        current.append(word)
-        text_so_far = " ".join(w["word"] for w in current)
-        if (_SENTENCE_END.search(word["word"])
-                and not _ABBREV.match(word["word"])
-                and not _INITIAL.match(word["word"])
-                and len(text_so_far) >= max_line_length // 2):
-            flush()
-
-    flush()
+    cues, cur = [], []
+    for unit in _split_units(words):
+        for piece in _split_long_unit(unit):
+            if cur and _can_merge(cur, piece):
+                cur = cur + piece
+            else:
+                if cur:
+                    cues.append(cur)
+                cur = list(piece)
+    if cur:
+        cues.append(cur)
+    segments = [_format_subtitle(c) for c in cues]
+    _extend_short_cues(segments)
     return segments
 
 def extract_words(fw_segments: list) -> list:
@@ -1672,6 +1780,7 @@ def _wcp_tokens_to_words(transcription: list) -> list:
                 words.append({'word': text, 'start': seg_start, 'end': seg_end})
             continue
 
+        force_new = True  # the first real token of a segment always starts a word
         for tok in tokens:
             raw = tok.get('text', '')
             if not raw:
@@ -1679,9 +1788,7 @@ def _wcp_tokens_to_words(transcription: list) -> list:
             stripped = raw.strip()
             if not stripped or _WCP_SPECIAL_TOKEN.match(stripped):
                 continue
-            # speaker dash token — skip entirely
-            if stripped == '-':
-                continue
+            has_space = raw[0] == ' '  # leading space = word boundary in GPT-2 tokenizer
 
             t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
             t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
@@ -1689,18 +1796,27 @@ def _wcp_tokens_to_words(transcription: list) -> list:
             # can't produce a cue that exceeds the hard segment limit
             t_to = min(t_to, t_from + max_segment_secs)
 
-            is_new_word = raw[0] == ' '  # leading space = word boundary in GPT-2 tokenizer
-            text = stripped
-            # strip leading speaker dash from first real token
-            text = _WCP_SPEAKER_DASH.sub('', text).strip()
-            if not text:
+            if set(stripped) == {'-'}:
+                if (has_space or force_new) or not words:
+                    # speaker-change dash (" -" or at segment start): drop it, and make
+                    # sure the next token starts a new word instead of gluing onto the last
+                    force_new = True
+                else:
+                    # attached to the previous word: a hyphen ("C" "-" "note") or an
+                    # interruption ("I'm--"); keep it so the next token continues the word
+                    words[-1]['word'] += stripped
+                    words[-1]['end'] = t_to
                 continue
 
-            if is_new_word or not words:
-                words.append({'word': text, 'start': t_from, 'end': t_to})
+            if has_space or force_new or not words:
+                # new word: strip a speaker dash glued to its front (" -Ew")
+                text = _WCP_SPEAKER_DASH.sub('', stripped).strip()
+                if text:
+                    words.append({'word': text, 'start': t_from, 'end': t_to})
+                    force_new = False
             else:
-                # continuation — merge into previous word, extend its end time
-                words[-1]['word'] += text
+                # continuation token: keep it verbatim (it may start with a hyphen, "-note")
+                words[-1]['word'] += stripped
                 words[-1]['end'] = t_to
 
     return words
