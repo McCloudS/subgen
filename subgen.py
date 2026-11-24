@@ -1922,18 +1922,32 @@ def _audio_for_whispercpp(content: bytes, encode: bool) -> bytes:
     if (head[:4] == b'RIFF' and head[8:12] == b'WAVE') or head[:4] in (b'fLaC', b'OggS') \
             or head[:3] == b'ID3' or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
         return content
+    # Through a temp file, not stdin: MP4/MOV often keep their index at the end and can't be
+    # decoded from a pipe.
+    with tempfile.NamedTemporaryFile(prefix='subgen_upload_') as tmp:
+        tmp.write(content)
+        tmp.flush()
+        out = _media_file_to_wav(tmp.name)
+    return out or content
+
+
+def _media_file_to_wav(path: str) -> Union[bytes, None]:
+    """16 kHz mono WAV of a media file's default audio track, via ffmpeg. None on failure.
+
+    whisper-cli can't read video containers (MKV, MP4, ...), and reading a whole movie into
+    memory to hand it over would cost gigabytes; this keeps only the audio (~32 KB/s)."""
     try:
         out, _ = (
             ffmpeg
-            .input('pipe:0')
+            .input(path)
             .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)
-            .run(input=content, capture_stdout=True, capture_stderr=True)
+            .run(capture_stdout=True, capture_stderr=True)
         )
-        if out:
-            return out
+        return out or None
     except ffmpeg.Error as e:
-        logging.warning(f"ffmpeg could not convert the upload for whisper.cpp: {e.stderr.decode(errors='ignore')[-300:]}")
-    return content
+        logging.warning(f"ffmpeg could not extract audio from {os.path.basename(path)}: "
+                        f"{(e.stderr or b'').decode(errors='ignore')[-300:]}")
+        return None
 
 
 def detect_language_whispercpp(wav_bytes: bytes) -> str:
@@ -2270,11 +2284,10 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         display_name = os.path.basename(file_path)
 
         if transcribe_backend == 'whispercpp':
-            if extracted_audio_file:
-                audio_bytes = extracted_audio_file
-            else:
-                with open(file_path, 'rb') as _fh:
-                    audio_bytes = _fh.read()
+            # A chosen track arrives as WAV bytes; otherwise extract the default audio track.
+            audio_bytes = extracted_audio_file or _media_file_to_wav(file_path)
+            if not audio_bytes:
+                raise RuntimeError(f"could not extract audio from {display_name}")
             result = _transcribe_whispercpp(
                 audio_bytes, transcription_type, force_language.to_iso_639_1() or '', display_name,
             )
