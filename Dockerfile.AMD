@@ -4,7 +4,9 @@
 # ============================================================
 FROM rocm/dev-ubuntu-22.04:7.2 AS builder
 
-ARG CT2_GIT_REF=master
+# Pinned to a release tag: CT2 master/v4.9.x need CMake >= 3.24 (this image
+# uses 3.22). Bumping past 4.8.x also needs the cmake pin below raised.
+ARG CT2_GIT_REF=v4.8.5
 ARG HIP_ARCHITECTURES="gfx1010;gfx1011;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102;gfx1150;gfx1151;gfx1200;gfx1201"
 ARG CXX_FLAGS="-msse4.1 -O3 -Wno-deprecated-literal-operator"
 ARG HIP_FLAGS="-O3 -Wno-deprecated-literal-operator"
@@ -109,7 +111,7 @@ RUN python3 -m pip install --no-cache-dir -U --pre \
 RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install -U \
         numpy fastapi requests uvicorn python-multipart ffmpeg-python \
-        watchdog tqdm more-itertools transformers tokenizers huggingface-hub av scipy \
+        watchdog tqdm more-itertools transformers tokenizers huggingface-hub "av<19" scipy \
         onnxruntime \
     && python3 -m pip install -U --no-deps faster-whisper stable-ts-whisperless
 
