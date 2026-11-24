@@ -3,6 +3,9 @@ stable-ts-whisperless
 fastapi
 requests
 faster-whisper
+# av<19: PyAV 19 removed av.open(metadata_errors=...), which faster-whisper 1.2.1
+# still passes (SYSTRAN/faster-whisper#1589). Drop once faster-whisper ships a fix.
+av<19
 uvicorn
 python-multipart
 ffmpeg-python

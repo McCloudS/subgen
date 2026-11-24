@@ -716,13 +716,13 @@ def batch(
 
 @app.post("/asr")
 async def asr(
-    task: Union[str, None] = Query(default="transcribe", enum=["transcribe", "translate"]),
+    task: Union[str, None] = Query(default="transcribe", json_schema_extra={"enum": ["transcribe", "translate"]}),
     language: Union[str, None] = Query(default=None),
     video_file: Union[str, None] = Query(default=None),
     initial_prompt: Union[str, None] = Query(default=None),
     audio_file: UploadFile = File(...),
     encode: bool = Query(default=True, description="Encode audio first through ffmpeg"),
-    output: Union[str, None] = Query(default="srt", enum=["txt", "vtt", "srt", "tsv", "json"]),
+    output: Union[str, None] = Query(default="srt", json_schema_extra={"enum": ["txt", "vtt", "srt", "tsv", "json"]}),
     word_timestamps: bool = Query(default=False, description="Word-level timestamps"),
 ):
     """
