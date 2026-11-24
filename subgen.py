@@ -2201,8 +2201,25 @@ def start_model():
     with model_load_lock:
         if model is None:
             logging.debug("Model was purged, need to re-create")
+            _preload_cuda_libraries()
             import faster_whisper
             model = faster_whisper.WhisperModel(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+
+def _preload_cuda_libraries() -> None:
+    """Load torch's bundled CUDA libraries before faster-whisper uses the GPU.
+
+    CTranslate2 dlopens libcublas.so.12 at the first CUDA call. In images where cuBLAS
+    only ships inside torch's pip wheels it isn't on the loader path, and faster-whisper
+    fails with "Library libcublas.so.12 is not found or cannot be loaded". main imported
+    torch at startup, which loaded them as a side effect; do the same, only when needed.
+    """
+    if transcribe_device.lower() not in ('cuda', 'gpu'):
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pass
+
 
 def schedule_model_cleanup():
     """Schedule model cleanup with a delay to allow concurrent requests.

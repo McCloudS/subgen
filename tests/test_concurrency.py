@@ -33,3 +33,22 @@ def test_whispercpp_command_uses_thread_count(monkeypatch):
     monkeypatch.setattr(subgen, "whispercpp_threads", lambda: 11)
     cmd = subgen._whispercpp_base_cmd("/m.bin", "/a.wav", "/tmp/o")
     assert cmd[cmd.index("-t") + 1] == "11"
+
+
+def test_faster_whisper_on_gpu_preloads_torch_cuda_libraries(monkeypatch):
+    # Without this, faster-whisper on CUDA fails with "libcublas.so.12 is not found" in images
+    # where cuBLAS only ships inside torch's wheels (seen with dev code in mccloud/subgen:latest).
+    imported = []
+    real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __builtins__.__import__
+
+    def fake_import(name, *a, **k):
+        if name == "torch":
+            imported.append(name)
+            return object()
+        return real_import(name, *a, **k)
+    monkeypatch.setattr("builtins.__import__", fake_import)
+    for device, expected in (("cuda", ["torch"]), ("cpu", [])):
+        imported.clear()
+        monkeypatch.setattr(subgen, "transcribe_device", device)
+        subgen._preload_cuda_libraries()
+        assert imported == expected
