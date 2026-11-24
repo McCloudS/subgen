@@ -1,4 +1,4 @@
-subgen_version = '2026.11.1'
+subgen_version = '2026.11.2'
 
 """
 ENVIRONMENT VARIABLES DOCUMENTATION
@@ -708,7 +708,7 @@ def batch(
         directory: str = Query(...),
         forceLanguage: Union[str, None] = Query(default=None)
 ):
-    transcribe_existing(directory, LanguageCode.from_string(forceLanguage))
+    return transcribe_existing(directory, LanguageCode.from_string(forceLanguage))
 
 # ============================================================================
 # REFACTORED /ASR ENDPOINT WITH HASH-BASED DEDUPLICATION AND BLOCKING
@@ -1891,17 +1891,17 @@ def find_default_audio_track_language(audio_tracks):
             return track['language']
     return None
     
-def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **task_kwargs) -> None:
+def gen_subtitles_queue(file_path: str, transcription_type: str, force_language: LanguageCode = LanguageCode.NONE, **task_kwargs) -> bool:
     global task_queue
 
     # Check if this file is already in the queue or being processed
     if task_queue.is_active(file_path):
         logging.debug(f"Ignored: {os.path.basename(file_path)} is already queued or processing.")
-        return
+        return False
 
     if not has_audio(file_path):
         logging.debug(f"{file_path} doesn't have any audio to transcribe!")
-        return
+        return False
 
     # Probe audio tracks once and pass to both helpers to avoid triple ffprobe
     audio_tracks = get_audio_tracks(file_path)
@@ -1910,14 +1910,14 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     force_language = choose_transcribe_language(file_path, force_language, audio_tracks=audio_tracks)
 
     if should_skip_file(file_path, force_language, audio_langs=audio_langs):
-        return
+        return False
 
     # Detect audio language via Whisper if no language is known and detection is enabled
     if not force_language and should_whisper_detect_audio_language:
         detect_task = {'path': file_path, 'type': "detect_language"}
         detect_task.update(task_kwargs)
         task_queue.put(detect_task)
-        return
+        return True
 
     task = {
         'path': file_path,
@@ -1928,6 +1928,7 @@ def gen_subtitles_queue(file_path: str, transcription_type: str, force_language:
     task.update(task_kwargs)
 
     task_queue.put(task)
+    return True
 
 def should_skip_file(file_path: str, target_language: LanguageCode, audio_langs=None) -> bool:
     """
@@ -2540,20 +2541,44 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
     transcribe_folders = transcribe_folders.split("|")
     logging.info("Starting to search folders to see if we need to create subtitles.")
     logging.debug("The folders are:")
+    summary = {"folders": [], "files_found": 0, "queued": 0, "errors": 0}
+
+    def _walk_error(err):
+        # os.walk swallows errors by default, which made unreadable or missing folders
+        # look like empty ones. Surface them: the common cause is the container user
+        # (PUID/PGID) lacking permission even though `docker exec ... ls` (root) works.
+        summary["errors"] += 1
+        logging.warning(f"Cannot read {err.filename}: {err.strerror}. Check that PUID/PGID can read this folder.")
+
     for path in transcribe_folders:
         logging.debug(path)
-        for root, dirs, files in os.walk(path):
+        found_before, queued_before = summary["files_found"], summary["queued"]
+        if not os.path.exists(path):
+            summary["errors"] += 1
+            logging.warning(f"{path} does not exist inside the container. Check your volume mapping and the path you passed.")
+            summary["folders"].append({"path": path, "files_found": 0, "queued": 0, "exists": False})
+            continue
+        for root, dirs, files in os.walk(path, onerror=_walk_error):
             if SKIP_MARKER in files:
                 logging.info(f"Skipping (skip marker present): {root}")
                 dirs.clear()
                 continue
             for file in files:
+                summary["files_found"] += 1
                 file_path = os.path.join(root, file)
-                gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage)
+                if gen_subtitles_queue(path_mapping(file_path), transcribe_or_translate, forceLanguage):
+                    summary["queued"] += 1
         # if the path specified was actually a single file and not a folder, process it
         if os.path.isfile(path):
+            summary["files_found"] += 1
             if has_audio(path):
-                gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage)
+                if gen_subtitles_queue(path_mapping(path), transcribe_or_translate, forceLanguage):
+                    summary["queued"] += 1
+        found = summary["files_found"] - found_before
+        queued = summary["queued"] - queued_before
+        summary["folders"].append({"path": path, "files_found": found, "queued": queued, "exists": True})
+        logging.info(f"Finished scanning {path}: {found} files found, {queued} queued for subtitles "
+                     f"(the rest had no audio, aren't media files, were already queued, or matched a skip rule).")
     # Set up the observer to watch for new files
     if monitor:
         observer = Observer()
@@ -2563,6 +2588,7 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
                 observer.schedule(handler, path, recursive=True)
         observer.start()
         logging.info("Finished searching and queueing files for transcription. Now watching for new files.")
+    return summary
 
 
 if __name__ == "__main__":
