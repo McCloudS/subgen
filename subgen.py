@@ -126,7 +126,9 @@ jellyfinserver = get_env_with_fallback('JELLYFIN_SERVER', 'JELLYFINSERVER', 'htt
 
 # Whisper Configuration
 whisper_model = os.getenv('WHISPER_MODEL', 'medium')
-whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
+_whisper_threads_env = os.getenv('WHISPER_THREADS', '').strip()
+# faster-whisper keeps its historical default of 4; whisper.cpp sizes itself (see whispercpp_threads()).
+whisper_threads = int(_whisper_threads_env) if _whisper_threads_env.isdigit() else 4
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
 transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
 
@@ -176,13 +178,30 @@ def resolve_transcribe_backend(requested: str, cli_path: str) -> str:
     which covers every GPU vendor, and falls back to faster-whisper otherwise.
     """
     value = (requested or 'auto').strip().lower()
+    has_cli = bool(shutil.which(cli_path))
     if value in ('whispercpp', 'whisper.cpp', 'whisper-cpp', 'whisper_cpp'):
         return 'whispercpp'
     if value in ('faster-whisper', 'faster_whisper', 'fasterwhisper'):
-        return 'faster-whisper'
+        if _module_available('faster_whisper') or not has_cli:
+            return 'faster-whisper'
+        # The whisper.cpp images don't include faster-whisper. Without this, the server
+        # would start and then fail every request with "No module named 'faster_whisper'".
+        logging.warning("TRANSCRIBE_BACKEND=faster-whisper, but faster-whisper isn't installed in this "
+                        "image; using whisper.cpp instead.")
+        return 'whispercpp'
     if value != 'auto':
         logging.warning(f"Unknown TRANSCRIBE_BACKEND '{requested}'; using auto-detection")
-    return 'whispercpp' if shutil.which(cli_path) else 'faster-whisper'
+    return 'whispercpp' if has_cli else 'faster-whisper'
+
+
+def _module_available(name: str) -> bool:
+    if name in sys.modules:
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 transcribe_backend = resolve_transcribe_backend(os.getenv('TRANSCRIBE_BACKEND', 'auto'), whisper_cli_path)
@@ -619,6 +638,55 @@ def segments_to_srt(segments: list, filepath: str = None) -> str:
             f.write(content)
     return content
 
+def format_transcription(result, fmt: str, task: str = "transcribe") -> str:
+    """Render a TranscriptionResult in an /asr or OpenAI output format.
+
+    /asr (whisper-asr-webservice compatible): srt, vtt, txt, tsv, json.
+    OpenAI: json ({"text"} only), text, srt, vtt, verbose_json.
+    """
+    segments = result.segments
+    full_text = " ".join(seg["text"].replace("\n", " ") for seg in segments)
+    if fmt == "vtt":
+        cues = ["WEBVTT\n"]
+        for seg in segments:
+            start = seconds_to_srt_timestamp(seg["start"]).replace(",", ".")
+            end = seconds_to_srt_timestamp(seg["end"]).replace(",", ".")
+            cues.append(f"{start} --> {end}\n{seg['text']}\n")
+        return "\n".join(cues)
+    if fmt in ("txt", "text"):
+        return "\n".join(seg["text"].replace("\n", " ") for seg in segments) + "\n" if fmt == "txt" else full_text
+    if fmt == "tsv":
+        rows = ["start\tend\ttext"]
+        rows += [f"{round(seg['start'] * 1000)}\t{round(seg['end'] * 1000)}\t{seg['text'].replace(chr(10), ' ').replace(chr(9), ' ')}"
+                 for seg in segments]
+        return "\n".join(rows) + "\n"
+    if fmt == "asr_json":
+        return json.dumps({
+            "text": full_text,
+            "language": result.language,
+            "segments": [{"id": i, "start": round(seg["start"], 3), "end": round(seg["end"], 3), "text": seg["text"]}
+                         for i, seg in enumerate(segments)],
+        })
+    if fmt == "json":
+        return json.dumps({"text": full_text})
+    if fmt == "verbose_json":
+        return json.dumps({
+            "task": task,
+            "language": result.language,
+            "duration": round(segments[-1]["end"], 3) if segments else 0.0,
+            "text": full_text,
+            "segments": [{"id": i, "seek": 0, "start": round(seg["start"], 3), "end": round(seg["end"], 3),
+                          "text": seg["text"], "tokens": [], "temperature": 0.0, "avg_logprob": 0.0,
+                          "compression_ratio": 1.0, "no_speech_prob": 0.0}
+                         for i, seg in enumerate(segments)],
+        })
+    return segments_to_srt(segments)
+
+
+_ASR_MEDIA_TYPES = {"json": "application/json", "vtt": "text/vtt", "srt": "text/plain", "txt": "text/plain",
+                    "tsv": "text/tab-separated-values"}
+
+
 def _find_line_split(words: list) -> int:
     texts = [w["word"] for w in words]
     n = len(texts)
@@ -1034,6 +1102,13 @@ async def asr(
     task_id = None
     
     try:
+        # Unknown values are tolerated (as on main) so existing clients keep working.
+        if task not in ("transcribe", "translate"):
+            logging.warning(f"ASR: unknown task '{task}', transcribing")
+            task = "transcribe"
+        if output not in _ASR_MEDIA_TYPES:
+            logging.warning(f"ASR: unknown output '{output}', returning srt")
+            output = "srt"
         logging.info(
             f"ASR {task.capitalize()} received for file '{video_file}'" 
             if video_file 
@@ -1103,11 +1178,11 @@ async def asr(
                     "task_id": task_id,
                     "message": f"ASR processing failed: {task_result.error}"
                 }
-            else: 
+            else:
                 logging.info(f"ASR task {task_id} completed")
                 return StreamingResponse(
-                    iter(task_result.result),
-                    media_type="text/plain",
+                    iter([format_transcription(task_result.result, "asr_json" if output == "json" else output, task)]),
+                    media_type=_ASR_MEDIA_TYPES[output],
                     headers={'Source': f'{task.capitalize()}d using {transcribe_backend} from Subgen!'}
                 )
         else:
@@ -1117,8 +1192,8 @@ async def asr(
                 "task_id": task_id,
                 "message": f"ASR processing timed out after {asr_timeout} seconds"
             }
-            
-    except Exception as e: 
+
+    except Exception as e:
         logging.error(f"Error in ASR endpoint: {e}", exc_info=True)
         return {"status": "error", "message": f"Error: {str(e)}"}
     finally:
@@ -1179,7 +1254,6 @@ async def openai_transcriptions(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -1193,7 +1267,7 @@ async def openai_transcriptions(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "transcribe")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -1245,7 +1319,6 @@ async def openai_translations(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -1259,7 +1332,7 @@ async def openai_translations(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "translate")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -1393,41 +1466,9 @@ def asr_task_worker(task_data: dict) -> None:
 
         appendLine(result)
 
-        # Set result for blocking endpoint
+        # Hand the transcription to the waiting request(s); each formats it as it asked.
         if result_container:
-            output_format = task_data.get('output_format', 'srt')
-            full_text = " ".join(seg["text"].replace("\n", " ") for seg in result.segments)
-            if output_format == 'json':
-                formatted = json.dumps({"text": full_text})
-            elif output_format == 'text':
-                formatted = full_text
-            elif output_format == 'vtt':
-                vtt_lines = ["WEBVTT\n"]
-                for i, seg in enumerate(result.segments, start=1):
-                    start_ts = seconds_to_srt_timestamp(seg["start"]).replace(",", ".")
-                    end_ts   = seconds_to_srt_timestamp(seg["end"]).replace(",", ".")
-                    vtt_lines.append(f"{i}\n{start_ts} --> {end_ts}\n{seg['text']}\n")
-                formatted = "\n".join(vtt_lines)
-            elif output_format == 'verbose_json':
-                segs = [
-                    {
-                        "id": i, "seek": 0,
-                        "start": round(seg["start"], 3), "end": round(seg["end"], 3),
-                        "text": seg["text"], "tokens": [], "temperature": 0.0,
-                        "avg_logprob": 0.0, "compression_ratio": 1.0, "no_speech_prob": 0.0,
-                    }
-                    for i, seg in enumerate(result.segments)
-                ]
-                formatted = json.dumps({
-                    "task": task,
-                    "language": result.language,
-                    "duration": round(result.segments[-1]["end"], 3) if result.segments else 0.0,
-                    "text": full_text,
-                    "segments": segs,
-                })
-            else:  # srt (default)
-                formatted = segments_to_srt(result.segments)
-            result_container.set_result(formatted)
+            result_container.set_result(result)
 
     except Exception as e:
         logging.error(f"Error processing ASR (ID: {task_id}): {e}", exc_info=True)
@@ -1526,7 +1567,7 @@ async def detect_language(
                 audio_data = wav_bytes_to_numpy(audio_bytes)
             else:
                 audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
-            lang_code, _prob = await asyncio.to_thread(model.detect_language, audio_data)
+            lang_code = _fw_language(await asyncio.to_thread(model.detect_language, audio_data))
 
         detected = LanguageCode.from_string(lang_code)
         
@@ -1594,7 +1635,7 @@ def detect_language_from_upload(task_data: dict) -> None:
                 audio = wav_bytes_to_numpy(audio_bytes)
             else:
                 audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-            lang_code, _prob = model.detect_language(audio)
+            lang_code = _fw_language(model.detect_language(audio))
         detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
 
@@ -1639,12 +1680,17 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
     try: 
         logging.info(f"Extracting audio segment: start_time={start_time}s, duration={duration}s")
         
-        out, _ = (
-            ffmpeg
-            .input('pipe:0', ss=start_time, t=duration)
-            .output('pipe:1', format='wav', acodec='pcm_s16le', ar=16000)
-            .run(input=audio_content, capture_stdout=True, capture_stderr=True)
-        )
+        # Read from a temp file, not stdin: from a pipe ffmpeg returned ~25 s of a 30 s
+        # request, and MP4/MOV with the index at the end can't be decoded from a pipe at all.
+        with tempfile.NamedTemporaryFile(prefix='subgen_detect_') as tmp:
+            tmp.write(audio_content)
+            tmp.flush()
+            out, _ = (
+                ffmpeg
+                .input(tmp.name, ss=start_time, t=duration)
+                .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)  # mono: callers read raw samples
+                .run(capture_stdout=True, capture_stderr=True)
+            )
         
         if not out:
             raise ValueError("FFmpeg output is empty")
@@ -1683,7 +1729,7 @@ def detect_language_task(path, original_task_data=None):
             lang_code = detect_language_whispercpp(audio_segment)
         else:
             audio = wav_bytes_to_numpy(audio_segment)
-            lang_code, _prob = model.detect_language(audio)
+            lang_code = _fw_language(model.detect_language(audio))
         detected_language = LanguageCode.from_string(lang_code)
 
         logging.info(f"Detected language: {detected_language.to_name()}")
@@ -1856,6 +1902,25 @@ def _whispercpp_device_args() -> list:
     return []
 
 
+def _available_cpus() -> int:
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 4
+
+
+def whispercpp_threads() -> int:
+    """CPU threads per whisper-cli job.
+
+    WHISPER_THREADS wins when set. Otherwise share the available cores between the
+    CONCURRENT_TRANSCRIPTIONS jobs (min 4, max 16). On a 24-core CPU, one job on 16 threads
+    ran 2.4x faster than on the old fixed 4; with a GPU the setting barely matters.
+    """
+    if _whisper_threads_env.isdigit():
+        return int(_whisper_threads_env)
+    return max(4, min(16, _available_cpus() // max(1, concurrent_transcriptions)))
+
+
 def _whispercpp_base_cmd(model_path: str, audio_path: str, output_prefix: str) -> list:
     cli = shutil.which(whisper_cli_path) or whisper_cli_path
     # -mc 0: don't feed previously decoded text back in as context. Same as
@@ -1863,7 +1928,7 @@ def _whispercpp_base_cmd(model_path: str, audio_path: str, output_prefix: str) -
     # falls into repetition loops (re-transcribing whole passages), which in testing on a
     # 22-minute episode raised WER from 7.5% to 10.6% and made it 25% slower.
     return [cli, '-m', model_path, '-f', audio_path, '-of', output_prefix,
-            '-t', str(whisper_threads), '-mc', '0'] + _whispercpp_device_args()
+            '-t', str(whispercpp_threads()), '-mc', '0'] + _whispercpp_device_args()
 
 
 def _log_whispercpp_device(stderr: str) -> None:
@@ -1922,18 +1987,32 @@ def _audio_for_whispercpp(content: bytes, encode: bool) -> bytes:
     if (head[:4] == b'RIFF' and head[8:12] == b'WAVE') or head[:4] in (b'fLaC', b'OggS') \
             or head[:3] == b'ID3' or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
         return content
+    # Through a temp file, not stdin: MP4/MOV often keep their index at the end and can't be
+    # decoded from a pipe.
+    with tempfile.NamedTemporaryFile(prefix='subgen_upload_') as tmp:
+        tmp.write(content)
+        tmp.flush()
+        out = _media_file_to_wav(tmp.name)
+    return out or content
+
+
+def _media_file_to_wav(path: str) -> Union[bytes, None]:
+    """16 kHz mono WAV of a media file's default audio track, via ffmpeg. None on failure.
+
+    whisper-cli can't read video containers (MKV, MP4, ...), and reading a whole movie into
+    memory to hand it over would cost gigabytes; this keeps only the audio (~32 KB/s)."""
     try:
         out, _ = (
             ffmpeg
-            .input('pipe:0')
+            .input(path)
             .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)
-            .run(input=content, capture_stdout=True, capture_stderr=True)
+            .run(capture_stdout=True, capture_stderr=True)
         )
-        if out:
-            return out
+        return out or None
     except ffmpeg.Error as e:
-        logging.warning(f"ffmpeg could not convert the upload for whisper.cpp: {e.stderr.decode(errors='ignore')[-300:]}")
-    return content
+        logging.warning(f"ffmpeg could not extract audio from {os.path.basename(path)}: "
+                        f"{(e.stderr or b'').decode(errors='ignore')[-300:]}")
+        return None
 
 
 def detect_language_whispercpp(wav_bytes: bytes) -> str:
@@ -2127,8 +2206,33 @@ def start_model():
     with model_load_lock:
         if model is None:
             logging.debug("Model was purged, need to re-create")
+            _preload_cuda_libraries()
             import faster_whisper
             model = faster_whisper.WhisperModel(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+
+def _fw_language(detected) -> str:
+    """Language code from faster-whisper's detect_language().
+
+    It returns (language, probability) in older releases and
+    (language, probability, all_language_probs) in 1.2+, so take the first item."""
+    return detected[0]
+
+
+def _preload_cuda_libraries() -> None:
+    """Load torch's bundled CUDA libraries before faster-whisper uses the GPU.
+
+    CTranslate2 dlopens libcublas.so.12 at the first CUDA call. In images where cuBLAS
+    only ships inside torch's pip wheels it isn't on the loader path, and faster-whisper
+    fails with "Library libcublas.so.12 is not found or cannot be loaded". main imported
+    torch at startup, which loaded them as a side effect; do the same, only when needed.
+    """
+    if transcribe_device.lower() not in ('cuda', 'gpu'):
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pass
+
 
 def schedule_model_cleanup():
     """Schedule model cleanup with a delay to allow concurrent requests.
@@ -2270,11 +2374,10 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         display_name = os.path.basename(file_path)
 
         if transcribe_backend == 'whispercpp':
-            if extracted_audio_file:
-                audio_bytes = extracted_audio_file
-            else:
-                with open(file_path, 'rb') as _fh:
-                    audio_bytes = _fh.read()
+            # A chosen track arrives as WAV bytes; otherwise extract the default audio track.
+            audio_bytes = extracted_audio_file or _media_file_to_wav(file_path)
+            if not audio_bytes:
+                raise RuntimeError(f"could not extract audio from {display_name}")
             result = _transcribe_whispercpp(
                 audio_bytes, transcription_type, force_language.to_iso_639_1() or '', display_name,
             )
@@ -2321,7 +2424,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         # Provide the generated subtitle result to any waiting ASR endpoint requests
         with task_results_lock:
             if file_path in task_results:
-                task_results[file_path].set_result(segments_to_srt(result.segments))
+                task_results[file_path].set_result(result)
 
     except Exception as e:
         logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
@@ -3294,7 +3397,11 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
 if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
-    logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
+    threads = whispercpp_threads() if transcribe_backend == 'whispercpp' else whisper_threads
+    logging.info(f"Threads: {threads}, Concurrent transcriptions: {concurrent_transcriptions}")
+    for removed in ('CUSTOM_REGROUP', 'WORD_LEVEL_HIGHLIGHT'):
+        if os.getenv(removed):
+            logging.warning(f"{removed} is set but no longer has any effect: it was a stable-ts option, and stable-ts has been removed.")
     if transcribe_backend == 'whispercpp':
         cli = shutil.which(whisper_cli_path) or whisper_cli_path
         reason = "auto: whisper-cli found" if os.getenv('TRANSCRIBE_BACKEND', 'auto').strip().lower() in ('', 'auto') else "TRANSCRIBE_BACKEND"
