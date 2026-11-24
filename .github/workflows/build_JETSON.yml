@@ -1,0 +1,100 @@
+name: Build Jetson Docker image
+
+# Builds Dockerfile.jetson on GitHub's hosted arm64 runner. No GPU is needed:
+# the image only installs prebuilt CUDA wheels/libraries, it compiles nothing.
+# This catches dependency rot (moved wheel URLs, hash changes, broken pins)
+# but cannot exercise CUDA itself; that still needs a real Jetson.
+#
+# PRs and pushes to main: build + smoke test only, nothing is published.
+# Manual run (Actions > Build Jetson Docker image > Run workflow) with
+# "push" ticked: also publishes mccloud/subgen:jetson and :<version>-jetson.
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile.jetson'
+      - 'requirements.jetson.txt'
+      - 'subgen.py'
+      - 'language_code.py'
+      - 'launcher.py'
+      - 'entrypoint.sh'
+      - '.github/workflows/build_JETSON.yml'
+  push:
+    branches: ["main"]
+    paths:
+      - 'Dockerfile.jetson'
+      - 'requirements.jetson.txt'
+      - 'subgen.py'
+      - 'language_code.py'
+      - 'launcher.py'
+      - 'entrypoint.sh'
+      - '.github/workflows/build_JETSON.yml'
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Publish to Docker Hub (mccloud/subgen:jetson)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: docker-jetson-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from subgen.py
+        run: |
+          version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
+          echo "version=$version" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.jetson
+          platforms: linux/arm64
+          load: true
+          tags: subgen:jetson-ci
+          cache-from: type=gha,scope=jetson
+          cache-to: type=gha,scope=jetson,mode=max
+
+      - name: Smoke test (imports and shared libraries resolve, no GPU)
+        run: |
+          docker run --rm --entrypoint python3 subgen:jetson-ci -c "
+          import ctranslate2, faster_whisper, stable_whisper, fastapi, av
+          print('ctranslate2', ctranslate2.__version__)
+          print('faster_whisper', faster_whisper.__version__)
+          print('CUDA devices (expected 0 on CI):', ctranslate2.get_cuda_device_count())
+          "
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push to Docker Hub
+        if: github.event_name == 'workflow_dispatch' && inputs.push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.jetson
+          platforms: linux/arm64
+          push: true
+          tags: |
+            mccloud/subgen:jetson
+            mccloud/subgen:${{ env.version }}-jetson
+          cache-from: type=gha,scope=jetson

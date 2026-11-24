@@ -161,6 +161,15 @@ The easiest way to run Subgen is via Docker. We maintain an image on Docker Hub 
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
+### 1b. NVIDIA Jetson (Orin / Thor, arm64)
+
+The images above are amd64, and pip's `ctranslate2` aarch64 wheels are CPU-only, so Jetson containers silently fall back to CPU. `Dockerfile.jetson` provides a Jetson-specific build with real CUDA acceleration:
+
+> `docker build -f Dockerfile.jetson -t subgen:jetson-cuda .`
+> `docker compose -f docker-compose.jetson.yml up -d`
+
+Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself or any other arm64 machine (no GPU needed to build). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
+
 ### 2. Standalone (Without Docker)
 1. Install Python 3.9–3.11 and `ffmpeg`.
 2. Ensure you have the proper NVIDIA drivers/CUDA toolkit installed (if using GPU).
