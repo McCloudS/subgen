@@ -23,8 +23,10 @@ concurrency:
 
 jobs:
   # ── GPU ────────────────────────────────────────────────────────────────────
-  # main:  faster-whisper + CUDA  →  mccloud/subgen:latest
-  # dev:   whisper.cpp CUDA 12.8 (Pascal → Blackwell)  →  mccloud/subgen:dev
+  # Tags are named by GPU backend (what the user's hardware needs), the same on
+  # main and dev: cuda, vulkan, cpu (and jetson in build_JETSON.yml).
+  # main:  CUDA  →  mccloud/subgen:latest, :cuda, :<version>, :<version>-cuda
+  # dev:   whisper.cpp CUDA 12.8 (Pascal → Blackwell)  →  mccloud/subgen:dev, :dev-cuda
   gpu:
     runs-on: [self-hosted]
     steps:
@@ -38,12 +40,12 @@ jobs:
       - name: Compute tags and build config
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
-            { echo "docker_tags<<EOF"; printf 'mccloud/subgen:latest\nmccloud/subgen:%s\n' "$version"; echo "EOF"; } >> $GITHUB_ENV
+            { echo "docker_tags<<EOF"; printf 'mccloud/subgen:latest\nmccloud/subgen:cuda\nmccloud/subgen:%s\nmccloud/subgen:%s-cuda\n' "$version" "$version"; echo "EOF"; } >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile" >> $GITHUB_ENV
             echo "build_args=" >> $GITHUB_ENV
           else
             # whisper.cpp built from source on CUDA 12.x: CUDA 13 (upstream's main-cuda) drops Pascal/Volta
-            echo "docker_tags=mccloud/subgen:dev" >> $GITHUB_ENV
+            { echo "docker_tags<<EOF"; printf 'mccloud/subgen:dev\nmccloud/subgen:dev-cuda\n'; echo "EOF"; } >> $GITHUB_ENV
             echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
             { echo "build_args<<EOF"; printf 'GGML_BACKEND=cuda\nSUBGEN_BRANCH=dev\nBUILD_BASE=nvidia/cuda:12.8.1-devel-ubuntu24.04\nRUNTIME_BASE=nvidia/cuda:12.8.1-runtime-ubuntu24.04\n'; echo "EOF"; } >> $GITHUB_ENV
           fi
@@ -119,7 +121,7 @@ jobs:
 
   # ── AMD (ROCm) ─────────────────────────────────────────────────────────────
   # main:  faster-whisper ROCm    →  mccloud/subgen:amd
-  # dev:   not built here; :dev-amd is a tag on the Vulkan image (whispercpp job)
+  # dev:   not built here; AMD GPUs use the Vulkan image (:dev-vulkan)
   # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
   amd:
     if: github.ref_name == 'main'
@@ -159,12 +161,14 @@ jobs:
           cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
           cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
 
-  # ── whisper.cpp (Vulkan, multi-arch) ──────────────────────────────────────
+  # ── Vulkan (whisper.cpp, multi-arch) ──────────────────────────────────────
   # Intel iGPU/Arc, AMD dGPU/APU, NVIDIA, any Vulkan GPU. Each arch is built
   # separately (arm64 under QEMU) and merged into one multi-arch manifest.
-  # main:  mccloud/subgen:whispercpp  (linux/amd64 + linux/arm64)
-  # dev:   mccloud/subgen:dev-whispercpp, also tagged :dev-amd
-  whispercpp:
+  # main:  mccloud/subgen:vulkan, :<version>-vulkan  (linux/amd64 + linux/arm64)
+  # dev:   mccloud/subgen:dev-vulkan
+  #        :dev-whispercpp and :dev-amd are deprecated aliases of :dev-vulkan,
+  #        kept so existing installs keep updating.
+  vulkan:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
@@ -177,12 +181,12 @@ jobs:
       - name: Compute tags
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
-            echo "final_tag=mccloud/subgen:whispercpp" >> $GITHUB_ENV
-            echo "versioned_tag=mccloud/subgen:${version}-whispercpp" >> $GITHUB_ENV
+            echo "final_tag=mccloud/subgen:vulkan" >> $GITHUB_ENV
+            echo "alias_tags=mccloud/subgen:${version}-vulkan" >> $GITHUB_ENV
             echo "subgen_branch=main" >> $GITHUB_ENV
           else
-            echo "final_tag=mccloud/subgen:dev-whispercpp" >> $GITHUB_ENV
-            echo "versioned_tag=mccloud/subgen:dev-amd" >> $GITHUB_ENV
+            echo "final_tag=mccloud/subgen:dev-vulkan" >> $GITHUB_ENV
+            echo "alias_tags=mccloud/subgen:dev-whispercpp mccloud/subgen:dev-amd" >> $GITHUB_ENV
             echo "subgen_branch=dev" >> $GITHUB_ENV
           fi
 
@@ -228,11 +232,8 @@ jobs:
 
       - name: Merge into multi-arch manifest
         run: |
-          docker buildx imagetools create -t ${{ env.final_tag }} \
+          tags="-t ${{ env.final_tag }}"
+          for t in ${{ env.alias_tags }}; do tags="$tags -t $t"; done
+          docker buildx imagetools create $tags \
             ${{ env.final_tag }}-amd64 \
             ${{ env.final_tag }}-arm64
-          if [ -n "${{ env.versioned_tag }}" ]; then
-            docker buildx imagetools create -t ${{ env.versioned_tag }} \
-              ${{ env.final_tag }}-amd64 \
-              ${{ env.final_tag }}-arm64
-          fi
