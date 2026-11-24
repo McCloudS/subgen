@@ -12,6 +12,6 @@ subgen.env
 models/
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .pytest_cache/
 .venv/

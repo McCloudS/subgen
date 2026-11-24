@@ -259,13 +259,16 @@ class TestBackendAndParamValidation:
         assert resp.json()["language_code"] == "de"
         detect.assert_called_once_with(b"WAV")
 
-    def test_asr_rejects_unknown_task(self, client):
+    # The enums are documentation only (json_schema_extra), as they were before
+    # FastAPI removed Query(enum=...): unknown values are not rejected, so existing
+    # clients keep working. Unknown tasks transcribe and unknown outputs return SRT.
+    def test_asr_does_not_reject_unknown_task(self, client):
         resp = client.post("/asr?task=bogus", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
-        assert resp.status_code == 422
+        assert resp.status_code != 422
 
-    def test_asr_rejects_unknown_output(self, client):
+    def test_asr_does_not_reject_unknown_output(self, client):
         resp = client.post("/asr?output=docx", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
-        assert resp.status_code == 422
+        assert resp.status_code != 422
 
     def test_asr_openapi_keeps_enums(self, client):
         params = {p["name"]: p for p in client.get("/openapi.json").json()["paths"]["/asr"]["post"]["parameters"]}

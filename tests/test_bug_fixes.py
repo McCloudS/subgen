@@ -7,6 +7,7 @@ Bugs covered:
 3. transcribe_existing() uses `path` after loop — scoping bug when multiple folders
 4. SUBTITLE_LANGUAGE_NAME set + unknown audio language skipped by generic subtitle check (#337)
 5. SKIP_ONLY_SUBGEN_SUBTITLES=True still skipped based on embedded subtitle streams (#339)
+6. TRANSCRIBE_OR_TRANSLATE=translate did not force English subtitle naming
 """
 import sys
 import os
@@ -17,7 +18,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import pytest
 from unittest.mock import patch, MagicMock, call
 import subgen
-from subgen import get_subtitle_languages, refresh_jellyfin_metadata, transcribe_existing, should_skip_file
+from subgen import (
+    get_subtitle_languages,
+    refresh_jellyfin_metadata,
+    transcribe_existing,
+    should_skip_file,
+    define_subtitle_language_naming,
+    name_subtitle,
+)
 from language_code import LanguageCode
 
 
@@ -355,3 +363,74 @@ class TestSkipOnlySubgenIgnoresEmbedded:
             assert should_skip_file(str(video), LanguageCode.ENGLISH) is True, (
                 "SKIP_ONLY_SUBGEN_SUBTITLES=True must still skip when a subgen external file exists"
             )
+
+
+# ---------------------------------------------------------------------------
+# Bug 6: TRANSCRIBE_OR_TRANSLATE=translate did not force English subtitle naming
+# ---------------------------------------------------------------------------
+class TestTranslateForcesEnglishNaming:
+    """
+    define_subtitle_language_naming() built switch_dict *before* reassigning
+    `language = LanguageCode.ENGLISH` for translation. The dict values are bound
+    methods, resolved against the original language at construction time, so the
+    override never reached them.
+
+    Consequence: should_skip_file() forces English and looks for `movie.eng.srt`,
+    while the write path passes the detected language and produces `movie.nor.srt`.
+    The skip check could never match the produced file, so every file was
+    re-translated on every scan.
+    """
+
+    @staticmethod
+    def _patch(monkeypatch, mode, naming_type):
+        monkeypatch.setattr(subgen, "subtitle_language_name", "")
+        monkeypatch.setattr(subgen, "transcribe_or_translate", mode)
+        monkeypatch.setattr(subgen, "subtitle_language_naming_type", naming_type)
+
+    @pytest.mark.parametrize("naming_type,expected", [
+        ("ISO_639_1", "en"),
+        ("ISO_639_2_T", "eng"),
+        ("ISO_639_2_B", "eng"),
+        ("NAME", "English"),
+        ("NATIVE", "English"),
+    ])
+    def test_translate_forces_english_for_every_naming_type(self, monkeypatch, naming_type, expected):
+        self._patch(monkeypatch, "translate", naming_type)
+        assert define_subtitle_language_naming(LanguageCode.NORWEGIAN, naming_type) == expected, (
+            f"translate must name the output in English for {naming_type}"
+        )
+
+    @pytest.mark.parametrize("naming_type,expected", [
+        ("ISO_639_1", "no"),
+        ("ISO_639_2_T", "nor"),
+        ("ISO_639_2_B", "nor"),
+        ("NAME", "Norwegian"),
+        ("NATIVE", "Norsk"),
+    ])
+    def test_transcribe_keeps_detected_language(self, monkeypatch, naming_type, expected):
+        """Guard against over-correcting: transcription must not be renamed to English."""
+        self._patch(monkeypatch, "transcribe", naming_type)
+        assert define_subtitle_language_naming(LanguageCode.NORWEGIAN, naming_type) == expected
+
+    def test_unknown_naming_type_falls_back_to_english_name_when_translating(self, monkeypatch):
+        self._patch(monkeypatch, "translate", "BOGUS")
+        assert define_subtitle_language_naming(LanguageCode.NORWEGIAN, "BOGUS") == "English"
+
+    def test_subtitle_language_name_still_wins_over_translate_override(self, monkeypatch):
+        self._patch(monkeypatch, "translate", "ISO_639_2_B")
+        monkeypatch.setattr(subgen, "subtitle_language_name", "custom")
+        assert define_subtitle_language_naming(LanguageCode.NORWEGIAN, "ISO_639_2_B") == "custom"
+
+    def test_name_subtitle_matches_skip_check_expectation(self, monkeypatch):
+        """
+        The exact invariant should_skip_file() depends on: when translating, the
+        filename computed from the detected language must equal the one computed
+        from the English target it forces at subgen.py:1943.
+        """
+        self._patch(monkeypatch, "translate", "ISO_639_2_B")
+        monkeypatch.setattr(subgen, "show_in_subname_subgen", False)
+        monkeypatch.setattr(subgen, "show_in_subname_model", False)
+
+        detected = name_subtitle("/media/movie.mkv", LanguageCode.NORWEGIAN)
+        forced = name_subtitle("/media/movie.mkv", LanguageCode.ENGLISH)
+        assert detected == forced == "/media/movie.eng.srt"
