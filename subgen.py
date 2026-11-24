@@ -1680,12 +1680,17 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
     try: 
         logging.info(f"Extracting audio segment: start_time={start_time}s, duration={duration}s")
         
-        out, _ = (
-            ffmpeg
-            .input('pipe:0', ss=start_time, t=duration)
-            .output('pipe:1', format='wav', acodec='pcm_s16le', ar=16000)
-            .run(input=audio_content, capture_stdout=True, capture_stderr=True)
-        )
+        # Read from a temp file, not stdin: from a pipe ffmpeg returned ~25 s of a 30 s
+        # request, and MP4/MOV with the index at the end can't be decoded from a pipe at all.
+        with tempfile.NamedTemporaryFile(prefix='subgen_detect_') as tmp:
+            tmp.write(audio_content)
+            tmp.flush()
+            out, _ = (
+                ffmpeg
+                .input(tmp.name, ss=start_time, t=duration)
+                .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)  # mono: callers read raw samples
+                .run(capture_stdout=True, capture_stderr=True)
+            )
         
         if not out:
             raise ValueError("FFmpeg output is empty")

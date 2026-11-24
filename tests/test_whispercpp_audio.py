@@ -91,3 +91,29 @@ class TestFileAudioForWhisperCpp:
         monkeypatch.setattr(subgen, "_media_file_to_wav", lambda path: paths.append(path) or b"RIFFwav")
         assert subgen._audio_for_whispercpp(b"\x00\x00\x00\x18ftypmp42 moov later", encode=True) == b"RIFFwav"
         assert paths and os.path.basename(paths[0]).startswith("subgen_upload_")
+
+
+def test_detect_language_clip_is_downmixed_to_mono(monkeypatch):
+    # faster-whisper reads these samples directly; stereo would be read as garbled mono
+    # (an English MKV upload was detected as Spanish).
+    seen = {}
+
+    class FakeStream:
+        def __init__(self, kwargs):
+            seen.update(kwargs)
+
+        def run(self, **k):
+            return b"RIFF", b""
+
+    class FakeInput:
+        def output(self, *a, **kwargs):
+            return FakeStream(kwargs)
+
+    def fake_input(src, **k):
+        seen["src"] = src
+        return FakeInput()
+    monkeypatch.setattr(subgen.ffmpeg, "input", fake_input)
+    subgen.extract_audio_segment_from_content(b"mkv", 0, 30)
+    assert seen.get("ac") == 1 and seen.get("ar") == 16000
+    # from a temp file, not stdin (a pipe returned ~25 s of a 30 s request)
+    assert seen["src"] != "pipe:0" and os.path.basename(seen["src"]).startswith("subgen_detect_")
