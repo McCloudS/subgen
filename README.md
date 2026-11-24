@@ -6,7 +6,7 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
-24 Nov 2026 (dev): The `dev` images now use **whisper.cpp**, which runs on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64. faster-whisper stays available as a fallback (`TRANSCRIBE_BACKEND=faster-whisper`). Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions) and [Upgrading from stable-ts](#-upgrading-from-stable-ts-main).
+24 Nov 2026 (dev): The `dev` images now use **whisper.cpp**, which runs on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64. The whisper.cpp images don't include faster-whisper; it is still supported for standalone installs (`TRANSCRIBE_BACKEND=faster-whisper`). Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions) and [Upgrading from stable-ts](#-upgrading-from-stable-ts-main).
 
 8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
 
@@ -251,7 +251,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graphics (Vulkan), and CPU. It is the default whenever the `whisper-cli` binary is present (the `whispercpp` images).
 | Variable | Default | Description |
 |---|---|---|
-| `TRANSCRIBE_BACKEND` | `auto` | `auto` uses whisper.cpp when `whisper-cli` is installed, otherwise faster-whisper. Force one with `whispercpp` or `faster-whisper`. |
+| `TRANSCRIBE_BACKEND` | `auto` | `auto` uses whisper.cpp when `whisper-cli` is installed, otherwise faster-whisper. Force one with `whispercpp` or `faster-whisper`. The whisper.cpp images don't include faster-whisper, so asking for it there logs a warning and uses whisper.cpp. |
 | `WHISPER_CPP_MODEL` | *(derived)* | Path to a GGML model file. If unset, it is derived from `WHISPER_MODEL` (e.g. `large-v3-turbo` → `ggml-large-v3-turbo.bin`) and downloaded to `MODEL_PATH`. |
 | `WHISPER_CPP_REPO` | *(derived)* | Hugging Face repo to download `WHISPER_CPP_MODEL` from. |
 | `WHISPER_CLI_PATH` | `whisper-cli` | Path to the `whisper-cli` binary. |

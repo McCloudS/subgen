@@ -178,13 +178,30 @@ def resolve_transcribe_backend(requested: str, cli_path: str) -> str:
     which covers every GPU vendor, and falls back to faster-whisper otherwise.
     """
     value = (requested or 'auto').strip().lower()
+    has_cli = bool(shutil.which(cli_path))
     if value in ('whispercpp', 'whisper.cpp', 'whisper-cpp', 'whisper_cpp'):
         return 'whispercpp'
     if value in ('faster-whisper', 'faster_whisper', 'fasterwhisper'):
-        return 'faster-whisper'
+        if _module_available('faster_whisper') or not has_cli:
+            return 'faster-whisper'
+        # The whisper.cpp images don't include faster-whisper. Without this, the server
+        # would start and then fail every request with "No module named 'faster_whisper'".
+        logging.warning("TRANSCRIBE_BACKEND=faster-whisper, but faster-whisper isn't installed in this "
+                        "image; using whisper.cpp instead.")
+        return 'whispercpp'
     if value != 'auto':
         logging.warning(f"Unknown TRANSCRIBE_BACKEND '{requested}'; using auto-detection")
-    return 'whispercpp' if shutil.which(cli_path) else 'faster-whisper'
+    return 'whispercpp' if has_cli else 'faster-whisper'
+
+
+def _module_available(name: str) -> bool:
+    if name in sys.modules:
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
 
 
 transcribe_backend = resolve_transcribe_backend(os.getenv('TRANSCRIBE_BACKEND', 'auto'), whisper_cli_path)

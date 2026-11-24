@@ -59,6 +59,17 @@ class TestBackendResolution:
         monkeypatch.setattr(subgen.shutil, "which", lambda p: "/usr/bin/whisper-cli")
         assert subgen.resolve_transcribe_backend("faster-whisper", "whisper-cli") == "faster-whisper"
 
+    def test_faster_whisper_missing_falls_back_to_whispercpp(self, monkeypatch):
+        # The whisper.cpp images don't ship faster-whisper; don't start a server that fails every request.
+        monkeypatch.setattr(subgen.shutil, "which", lambda p: "/usr/bin/whisper-cli")
+        monkeypatch.setattr(subgen, "_module_available", lambda name: False)
+        assert subgen.resolve_transcribe_backend("faster-whisper", "whisper-cli") == "whispercpp"
+
+    def test_faster_whisper_missing_without_cli_keeps_faster_whisper(self, monkeypatch):
+        monkeypatch.setattr(subgen.shutil, "which", lambda p: None)
+        monkeypatch.setattr(subgen, "_module_available", lambda name: False)
+        assert subgen.resolve_transcribe_backend("faster-whisper", "whisper-cli") == "faster-whisper"
+
     def test_unknown_value_uses_auto(self, monkeypatch):
         monkeypatch.setattr(subgen.shutil, "which", lambda p: None)
         assert subgen.resolve_transcribe_backend("bogus", "whisper-cli") == "faster-whisper"
