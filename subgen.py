@@ -1249,7 +1249,8 @@ def asr_task_worker(task_data: dict) -> None:
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
 
         if transcribe_backend == 'whispercpp':
-            result = _transcribe_whispercpp(file_content, task, language or '', display_name)
+            audio = _audio_for_whispercpp(file_content, encode)
+            result = _transcribe_whispercpp(audio, task, language or '', display_name)
         else:
             # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS.
             # Merge so caller-supplied values win over the defaults (restores main-branch behaviour
@@ -1791,6 +1792,32 @@ def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
         wf.setframerate(sample_rate)
         wf.writeframes(pcm)
     return buf.getvalue()
+
+
+def _audio_for_whispercpp(content: bytes, encode: bool) -> bytes:
+    """Make an /asr upload readable by whisper-cli, which only reads WAV, FLAC, MP3 and OGG.
+
+    encode=False is raw 16 kHz mono s16le PCM (what Bazarr sends by default): add a WAV
+    header. encode=True is an encoded file: pass formats whisper-cli reads through, and
+    convert anything else (AAC, MP4, MKV, ...) to 16 kHz mono WAV with ffmpeg."""
+    if not encode:
+        return pcm16_to_wav_bytes(content)
+    head = content[:12]
+    if (head[:4] == b'RIFF' and head[8:12] == b'WAVE') or head[:4] in (b'fLaC', b'OggS') \
+            or head[:3] == b'ID3' or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
+        return content
+    try:
+        out, _ = (
+            ffmpeg
+            .input('pipe:0')
+            .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)
+            .run(input=content, capture_stdout=True, capture_stderr=True)
+        )
+        if out:
+            return out
+    except ffmpeg.Error as e:
+        logging.warning(f"ffmpeg could not convert the upload for whisper.cpp: {e.stderr.decode(errors='ignore')[-300:]}")
+    return content
 
 
 def detect_language_whispercpp(wav_bytes: bytes) -> str:
