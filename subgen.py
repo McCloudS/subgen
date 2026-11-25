@@ -2513,7 +2513,10 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
             audio_track = audio_tracks[0]
-        
+        lang = audio_track['language']
+        logging.info(f"Using audio track {audio_track['index']} ({lang.to_name() if hasattr(lang, 'to_name') else lang}, "
+                     f"{audio_track.get('codec', '?')}) of {len(audio_tracks)} for {os.path.basename(file_path)}")
+
         audio_bytes = extract_audio_track_to_memory(file_path, audio_track["index"])
         if audio_bytes is None:
             logging.error(f"Failed to extract audio track {audio_track['index']} from {file_path}")
@@ -2539,18 +2542,23 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
         return None
 
     try:
-        # Use FFmpeg to extract the specific audio track and output to memory
+        output_args = dict(
+            map=f"0:{track_index}",  # Select the specific audio track
+            format="wav",
+            ac=1,
+            ar=16000,
+            loglevel="quiet",
+        )
+        # Mapping one track makes ffmpeg start the output at that track's first sample, so a
+        # track that starts after the rest of the file (common in WEB-DLs) loses its lead-in and
+        # every subtitle comes out early by that much. Pad it back with silence.
+        lead = _track_lead_seconds(input_video_path, track_index)
+        if lead > 0.02:
+            output_args["af"] = f"adelay={round(lead * 1000)}:all=1"
         out, _ = (
             ffmpeg.input(input_video_path)
-            .output(
-                "pipe:", # Direct output to a pipe
-                map=f"0:{track_index}", # Select the specific audio track
-                format="wav", # Output format
-                ac=1, # Mono audio (optional)
-                ar=16000, # Sample rate 16 kHz (recommended for speech models)
-                loglevel="quiet"
-            )
-            .run(capture_stdout=True, capture_stderr=True) # Capture output in memory
+            .output("pipe:", **output_args)
+            .run(capture_stdout=True, capture_stderr=True)
         )
         # Return bytes directly instead of BytesIO to prevent memory leak
         return out
@@ -2558,6 +2566,19 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr.decode()}")
         return None
+
+def _track_lead_seconds(path: str, track_index) -> float:
+    """How much later a stream starts than the file as a whole (stream start_time - format start_time)."""
+    try:
+        probe = ffmpeg.probe(path)
+        stream = next((st for st in probe.get("streams", []) if st.get("index") == int(track_index)), None)
+        if stream is None:
+            return 0.0
+        return max(0.0, float(stream.get("start_time") or 0) - float(probe.get("format", {}).get("start_time") or 0))
+    except Exception as e:
+        logging.debug(f"Could not read start times for {path}: {e}")
+        return 0.0
+
 
 def get_audio_track_by_language(audio_tracks, language):
     """
