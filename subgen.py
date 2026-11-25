@@ -1962,12 +1962,34 @@ def _log_whispercpp_device(stderr: str) -> None:
                         "--gpus for NVIDIA) and that you are using the image for your GPU.")
 
 
+_DAMAGED_MODEL = re.compile(r"not all tensors loaded|failed to load model|invalid model|bad magic", re.IGNORECASE)
+
+
 def _run_whispercpp(cmd: list, timeout: int) -> subprocess.CompletedProcess:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     _log_whispercpp_device(proc.stderr)
     if proc.returncode != 0:
+        if _DAMAGED_MODEL.search(proc.stderr or "") and "-m" in cmd:
+            _handle_damaged_model(cmd[cmd.index("-m") + 1])
         raise RuntimeError(f"whisper-cli exited {proc.returncode}: {(proc.stderr or '')[-500:]}")
     return proc
+
+
+def _handle_damaged_model(path: str) -> None:
+    """A model file whisper-cli can't load (e.g. an interrupted copy) would fail every job forever.
+
+    If subgen downloaded it (WHISPER_CPP_MODEL not set), move it aside so the next job downloads
+    it again; a file the user configured is never touched."""
+    if not os.getenv("WHISPER_CPP_MODEL") and os.path.isfile(path):
+        try:
+            os.replace(path, path + ".damaged")
+            logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Moved it to "
+                          f"{os.path.basename(path)}.damaged; it will be downloaded again on the next job.")
+            return
+        except OSError as e:
+            logging.debug(f"Could not move damaged model {path}: {e}")
+    logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Replace or delete it "
+                  f"(WHISPER_CPP_MODEL points at it) and restart subgen.")
 
 
 def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
@@ -2482,7 +2504,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
                 task_results[file_path].set_result(result)
 
     except Exception as e:
-        logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
+        logging.error(f"Error processing or transcribing {file_path} in {force_language}: {e}")
         # FIX: Inform waiting ASR endpoint requests of the error so they don't hang
         with task_results_lock:
             if file_path in task_results:

@@ -77,3 +77,33 @@ def test_no_speech_writes_no_subtitle(monkeypatch, tmp_path):
     monkeypatch.setattr(subgen, "send_completion_webhook", lambda *a, **k: hooks.append(a))
     subgen.gen_subtitles(str(video), "transcribe", LanguageCode.ENGLISH)
     assert not list(tmp_path.glob("*.srt")) and not hooks
+
+
+class TestDamagedModel:
+    def _fail(self, monkeypatch):
+        class P:
+            returncode = 3
+            stderr = "whisper_model_load: ERROR not all tensors loaded from model file - expected 587, got 13\\nfailed to load model"
+        monkeypatch.setattr(subgen.subprocess, "run", lambda *a, **k: P())
+
+    def test_downloaded_model_is_moved_aside_for_redownload(self, monkeypatch, tmp_path):
+        model = tmp_path / "ggml-base.bin"
+        model.write_bytes(b"truncated")
+        monkeypatch.delenv("WHISPER_CPP_MODEL", raising=False)
+        self._fail(monkeypatch)
+        try:
+            subgen._run_whispercpp(["whisper-cli", "-m", str(model), "-f", "a.wav"], timeout=5)
+        except RuntimeError:
+            pass
+        assert not model.exists() and (tmp_path / "ggml-base.bin.damaged").exists()
+
+    def test_user_configured_model_is_left_alone(self, monkeypatch, tmp_path):
+        model = tmp_path / "mine.bin"
+        model.write_bytes(b"truncated")
+        monkeypatch.setenv("WHISPER_CPP_MODEL", str(model))
+        self._fail(monkeypatch)
+        try:
+            subgen._run_whispercpp(["whisper-cli", "-m", str(model), "-f", "a.wav"], timeout=5)
+        except RuntimeError:
+            pass
+        assert model.exists()
