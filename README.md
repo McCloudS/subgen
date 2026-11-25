@@ -306,7 +306,7 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_OR_TRANSLATE` | `transcribe` | `transcribe` (matches input language) or `translate` (outputs English). |
-| `SUBTITLE_LANGUAGE_NAME` | `aa` | Subtitle file name language code (e.g. `en`). Defaults to `aa` so it floats to the top of Plex's list. |
+| `SUBTITLE_LANGUAGE_NAME` | *(detected language)* | Language code to put in the subtitle file name instead of the detected one (e.g. `en`). Many people set `aa` so subgen's file floats to the top of Plex's list. |
 | `SUBTITLE_LANGUAGE_NAMING_TYPE`| `ISO_639_2_B` | Format to name files (`ISO_639_1`, `ISO_639_2_T`, `NAME`, `NATIVE`). |
 | `LRC_FOR_AUDIO_FILES` | `True` | Generates `.lrc` instead of `.srt` if processing pure audio files (e.g., mp3, flac). |
 | `MAX_LINE_LENGTH` | `42` | Maximum characters per subtitle line. Lines are balanced across two rows where possible. |
