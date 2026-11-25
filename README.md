@@ -237,7 +237,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_DEVICE` | `cpu` | Device to transcribe on: `cpu`, `gpu`, or `cuda`. |
-| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, etc. **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
+| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, quantized versions like `large-v3-turbo-q5_0`, etc. See [Choosing a model](#-choosing-a-model). **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
 | `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. With whisper.cpp each one loads its own copy of the model, so memory grows with this number. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions). |
 | `WHISPER_THREADS` | *auto* / `4` | CPU threads per transcription. whisper.cpp: unset means the CPU cores are shared between `CONCURRENT_TRANSCRIPTIONS` (between 4 and 16 each). faster-whisper: `4`. |
 | `COMPUTE_TYPE` | `auto` | Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). |
@@ -336,6 +336,29 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | `PLEX_TOKEN` | *(None)* | Your Plex Token for API access. |
 | `JELLYFIN_SERVER` | *(None)* | Local Jellyfin address (e.g., `http://192.168.1.100:8096`). |
 | `JELLYFIN_TOKEN` | *(None)* | Generated API token from Jellyfin UI. |
+
+---
+
+## 🧩 Choosing a model
+
+Set `WHISPER_MODEL` to one of these names. With whisper.cpp, subgen downloads the matching GGML file to `MODEL_PATH` on first use (or set `WHISPER_CPP_MODEL` to a `.bin` file of your own). Memory use is about the file size plus 0.3 to 0.5 GB per concurrent transcription; `large-v3-turbo-q5_0` measured 1.0 GB of video memory.
+
+| `WHISPER_MODEL` | File size | Translate to English? | Notes |
+|---|---|---|---|
+| `large-v3-turbo` | 1.5 GB | No | Best speed/accuracy balance on a GPU. |
+| `large-v3-turbo-q8_0` / `-q5_0` | 833 / 547 MB | No | Quantized turbo: about a third of the memory. `q5_0` is what the benchmarks in this README used. |
+| `large-v3` | 2.9 GB | Yes | Most accurate. Use this (or a quantized version) for `TRANSCRIBE_OR_TRANSLATE=translate`. |
+| `large-v3-q5_0` | 1.0 GB | Yes | Quantized `large-v3`, good for translation on smaller GPUs. |
+| `large-v2`, `large-v2-q8_0`, `large-v2-q5_0`, `large-v1` | 1.0 to 2.9 GB | Yes | Older large models. |
+| `distil-large-v3.5`, `distil-large-v3` | 1.4 GB | No | Distilled, English only, fast. `distil-large-v3.fp32` is a 2.9 GB full-precision version. |
+| `medium` (default), `medium-q8_0`, `medium-q5_0` | 1.5 GB / 785 MB / 514 MB | Yes | Good on CPU. |
+| `small`, `small-q8_0`, `small-q5_1` | 465 / 252 / 181 MB | Yes | Low-power machines. |
+| `base`, `base-q8_0`, `base-q5_1` | 141 / 77 / 56 MB | Yes | Low-power hardware; less accurate. |
+| `tiny`, `tiny-q8_0`, `tiny-q5_1` | 74 / 41 / 30 MB | Yes | Testing only. |
+
+* Add `.en` for English-only versions of `medium`, `small`, `base` and `tiny` (e.g. `small.en`, `base.en-q5_1`). They are slightly better at English but can't detect or transcribe other languages.
+* Quantized names (`-q5_0`, `-q8_0`, `-q5_1`) are whisper.cpp only. faster-whisper accepts the plain names (`large-v3`, `large-v3-turbo`, `distil-large-v3`, `medium`, ...) and sets precision with `COMPUTE_TYPE` instead.
+* An unknown name stops subgen with an error that tells you to set `WHISPER_CPP_MODEL`.
 
 ---
 
