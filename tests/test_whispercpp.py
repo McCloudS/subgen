@@ -120,9 +120,19 @@ class TestTranscribeCommand:
         cmd = run.calls[0]
         assert cmd[cmd.index("-mc") + 1] == "0"
 
+    def test_vad_ignored_while_unsupported(self, wcp, monkeypatch):
+        # whisper.cpp --vad leaves token timestamps on the VAD-trimmed timeline; cues collapse to the start.
+        monkeypatch.setattr(subgen, "vad_filter", True)
+        monkeypatch.setattr(subgen, "_ensure_whispercpp_vad_model", lambda: "/m/vad.bin")
+        run = _fake_run_writing({"result": {"language": "en"}, "transcription": []})
+        monkeypatch.setattr(subgen.subprocess, "run", run)
+        subgen._transcribe_whispercpp(b"RIFF", "transcribe", "en", "x.mkv")
+        assert "--vad" not in run.calls[0]
+
     def test_vad_uses_real_flags(self, wcp, monkeypatch):
         vad = wcp / "ggml-silero-v5.1.2.bin"
         vad.write_bytes(b"x")
+        monkeypatch.setattr(subgen, "_WHISPERCPP_VAD_SUPPORTED", True)
         monkeypatch.setattr(subgen, "vad_filter", True)
         monkeypatch.setattr(subgen, "vad_threshold", 0.6)
         monkeypatch.setattr(subgen, "whisper_cpp_vad_model", str(vad))

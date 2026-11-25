@@ -1868,6 +1868,10 @@ def _wcp_tokens_to_words(transcription: list) -> list:
     return words
 
 
+# whisper-cli's --vad maps segment times back to the original audio but not the per-token
+# times subgen builds subtitles from (v1.9.5: a 15-minute clip came out squeezed into its first
+# 17 seconds), and it merges minutes of audio into one segment. Keep it off until that's fixed.
+_WHISPERCPP_VAD_SUPPORTED = False
 _WHISPERCPP_VAD_FILENAME = "ggml-silero-v5.1.2.bin"
 _WHISPERCPP_VAD_REPO = "ggml-org/whisper-vad"
 _WCP_DEVICE_RE = re.compile(r"whisper_backend_init_gpu: (?:using (?P<dev>.+?) backend|(?P<none>no GPU found))")
@@ -2055,7 +2059,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
             # whisper-cli defaults to English; 'auto' makes it detect the language instead
             '-l', language or 'auto',
         ]
-        if vad_filter:
+        if vad_filter and _WHISPERCPP_VAD_SUPPORTED:
             vad_model = _ensure_whispercpp_vad_model()
             if vad_model:
                 cmd += ['--vad', '-vm', vad_model, '-vt', str(vad_threshold)]
@@ -2513,7 +2517,10 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
             audio_track = audio_tracks[0]
-        
+        lang = audio_track['language']
+        logging.info(f"Using audio track {audio_track['index']} ({lang.to_name() if hasattr(lang, 'to_name') else lang}, "
+                     f"{audio_track.get('codec', '?')}) of {len(audio_tracks)} for {os.path.basename(file_path)}")
+
         audio_bytes = extract_audio_track_to_memory(file_path, audio_track["index"])
         if audio_bytes is None:
             logging.error(f"Failed to extract audio track {audio_track['index']} from {file_path}")
@@ -2539,18 +2546,23 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
         return None
 
     try:
-        # Use FFmpeg to extract the specific audio track and output to memory
+        output_args = dict(
+            map=f"0:{track_index}",  # Select the specific audio track
+            format="wav",
+            ac=1,
+            ar=16000,
+            loglevel="quiet",
+        )
+        # Mapping one track makes ffmpeg start the output at that track's first sample, so a
+        # track that starts after the rest of the file (common in WEB-DLs) loses its lead-in and
+        # every subtitle comes out early by that much. Pad it back with silence.
+        lead = _track_lead_seconds(input_video_path, track_index)
+        if lead > 0.02:
+            output_args["af"] = f"adelay={round(lead * 1000)}:all=1"
         out, _ = (
             ffmpeg.input(input_video_path)
-            .output(
-                "pipe:", # Direct output to a pipe
-                map=f"0:{track_index}", # Select the specific audio track
-                format="wav", # Output format
-                ac=1, # Mono audio (optional)
-                ar=16000, # Sample rate 16 kHz (recommended for speech models)
-                loglevel="quiet"
-            )
-            .run(capture_stdout=True, capture_stderr=True) # Capture output in memory
+            .output("pipe:", **output_args)
+            .run(capture_stdout=True, capture_stderr=True)
         )
         # Return bytes directly instead of BytesIO to prevent memory leak
         return out
@@ -2558,6 +2570,19 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr.decode()}")
         return None
+
+def _track_lead_seconds(path: str, track_index) -> float:
+    """How much later a stream starts than the file as a whole (stream start_time - format start_time)."""
+    try:
+        probe = ffmpeg.probe(path)
+        stream = next((st for st in probe.get("streams", []) if st.get("index") == int(track_index)), None)
+        if stream is None:
+            return 0.0
+        return max(0.0, float(stream.get("start_time") or 0) - float(probe.get("format", {}).get("start_time") or 0))
+    except Exception as e:
+        logging.debug(f"Could not read start times for {path}: {e}")
+        return 0.0
+
 
 def get_audio_track_by_language(audio_tracks, language):
     """
@@ -3399,6 +3424,9 @@ if __name__ == "__main__":
     logging.info(f"Subgen v{subgen_version}")
     threads = whispercpp_threads() if transcribe_backend == 'whispercpp' else whisper_threads
     logging.info(f"Threads: {threads}, Concurrent transcriptions: {concurrent_transcriptions}")
+    if vad_filter and transcribe_backend == 'whispercpp' and not _WHISPERCPP_VAD_SUPPORTED:
+        logging.warning("VAD_FILTER is ignored with whisper.cpp: its VAD breaks subtitle timing (all cues end up "
+                        "near the start). It still applies to faster-whisper.")
     for removed in ('CUSTOM_REGROUP', 'WORD_LEVEL_HIGHLIGHT'):
         if os.getenv(removed):
             logging.warning(f"{removed} is set but no longer has any effect: it was a stable-ts option, and stable-ts has been removed.")
