@@ -306,7 +306,7 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_OR_TRANSLATE` | `transcribe` | `transcribe` (matches input language) or `translate` (outputs English). |
-| `SUBTITLE_LANGUAGE_NAME` | `aa` | Subtitle file name language code (e.g. `en`). Defaults to `aa` so it floats to the top of Plex's list. |
+| `SUBTITLE_LANGUAGE_NAME` | *(detected language)* | Language code to put in the subtitle file name instead of the detected one (e.g. `en`). Many people set `aa` so subgen's file floats to the top of Plex's list. |
 | `SUBTITLE_LANGUAGE_NAMING_TYPE`| `ISO_639_2_B` | Format to name files (`ISO_639_1`, `ISO_639_2_T`, `NAME`, `NATIVE`). |
 | `LRC_FOR_AUDIO_FILES` | `True` | Generates `.lrc` instead of `.srt` if processing pure audio files (e.g., mp3, flac). |
 | `MAX_LINE_LENGTH` | `42` | Maximum characters per subtitle line. Lines are balanced across two rows where possible. |
@@ -436,7 +436,9 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 ---
 
 ## 🪲 Known Issues
-* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations based on background noise.
+* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations, mostly over music and background noise (e.g. "Thank you.", "For more information", "Transcribed by ..."). With whisper.cpp, subgen drops cues that fall on silence and writes no subtitle for a file with no speech, but it can't catch text invented over music.
+* The queue is kept in memory: files queued but not yet transcribed when the container stops are dropped. A webhook sent again, `/batch`, or the `TRANSCRIBE_FOLDERS` scan on the next start queues them again.
+* If a Bazarr request and a webhook arrive for the same file at once, subgen transcribes it once and returns the result to Bazarr, which saves the subtitle; subgen doesn't write a second copy.
 
 ## ❤️ Credits
 * [whisper.cpp](https://github.com/ggml-org/whisper.cpp), the transcription engine

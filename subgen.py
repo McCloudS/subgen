@@ -670,9 +670,11 @@ def format_transcription(result, fmt: str, task: str = "transcribe") -> str:
     if fmt == "json":
         return json.dumps({"text": full_text})
     if fmt == "verbose_json":
+        lang = LanguageCode.from_string(result.language)
         return json.dumps({
             "task": task,
-            "language": result.language,
+            # OpenAI (and subgen main) report the language name in lowercase, e.g. "english"
+            "language": lang.to_name().lower() if lang != LanguageCode.NONE else (result.language or ""),
             "duration": round(segments[-1]["end"], 3) if segments else 0.0,
             "text": full_text,
             "segments": [{"id": i, "seek": 0, "start": round(seg["start"], 3), "end": round(seg["end"], 3),
@@ -1102,7 +1104,7 @@ async def asr(
     task_id = None
     
     try:
-        # Unknown values are tolerated (as on main) so existing clients keep working.
+        # Unknown values are tolerated rather than rejected (main returned an error for an unknown task).
         if task not in ("transcribe", "translate"):
             logging.warning(f"ASR: unknown task '{task}', transcribing")
             task = "transcribe"
@@ -1960,12 +1962,34 @@ def _log_whispercpp_device(stderr: str) -> None:
                         "--gpus for NVIDIA) and that you are using the image for your GPU.")
 
 
+_DAMAGED_MODEL = re.compile(r"not all tensors loaded|failed to load model|invalid model|bad magic", re.IGNORECASE)
+
+
 def _run_whispercpp(cmd: list, timeout: int) -> subprocess.CompletedProcess:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     _log_whispercpp_device(proc.stderr)
     if proc.returncode != 0:
+        if _DAMAGED_MODEL.search(proc.stderr or "") and "-m" in cmd:
+            _handle_damaged_model(cmd[cmd.index("-m") + 1])
         raise RuntimeError(f"whisper-cli exited {proc.returncode}: {(proc.stderr or '')[-500:]}")
     return proc
+
+
+def _handle_damaged_model(path: str) -> None:
+    """A model file whisper-cli can't load (e.g. an interrupted copy) would fail every job forever.
+
+    If subgen downloaded it (WHISPER_CPP_MODEL not set), move it aside so the next job downloads
+    it again; a file the user configured is never touched."""
+    if not os.getenv("WHISPER_CPP_MODEL") and os.path.isfile(path):
+        try:
+            os.replace(path, path + ".damaged")
+            logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Moved it to "
+                          f"{os.path.basename(path)}.damaged; it will be downloaded again on the next job.")
+            return
+        except OSError as e:
+            logging.debug(f"Could not move damaged model {path}: {e}")
+    logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Replace or delete it "
+                  f"(WHISPER_CPP_MODEL points at it) and restart subgen.")
 
 
 def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
@@ -2041,6 +2065,47 @@ def detect_language_whispercpp(wav_bytes: bytes) -> str:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+_SILENCE_RMS = 10 ** (-55 / 20)  # -55 dBFS: far below any dialogue, above digital silence and hiss
+
+
+def _drop_silent_segments(segments: list, audio_bytes: bytes, display_name: str = "") -> list:
+    """Drop cues whose stretch of audio is effectively silent.
+
+    Whisper reliably invents text over silence ("Thank you.", "you"): a 60-second silent clip
+    came back as two "Thank you." cues. Only 16-bit WAV input is checked (what subgen produces
+    for whisper.cpp); anything else is returned unchanged. Every 16th sample is enough to tell
+    silence from sound and keeps a feature-length film to about a second."""
+    import array
+    if not segments or not audio_bytes or audio_bytes[:4] != b'RIFF':
+        return segments
+    try:
+        with wave.open(io.BytesIO(audio_bytes)) as wf:
+            rate, width, channels = wf.getframerate(), wf.getsampwidth(), wf.getnchannels()
+            if width != 2:
+                return segments
+            samples = array.array('h')
+            samples.frombytes(wf.readframes(wf.getnframes()))
+        if sys.byteorder == 'big':
+            samples.byteswap()
+    except Exception as e:
+        logging.debug(f"Silence check skipped for {display_name}: {e}")
+        return segments
+    step = 16 * channels
+    threshold = (_SILENCE_RMS * 32768.0) ** 2
+    kept = []
+    for seg in segments:
+        lo = int(seg["start"] * rate) * channels
+        hi = max(int(seg["end"] * rate) * channels, lo + 1)
+        window = samples[lo:hi:step]
+        if len(window) and sum(x * x for x in window) / len(window) < threshold:
+            logging.debug(f"Dropped cue over silence in {display_name}: {seg['text']!r}")
+            continue
+        kept.append(seg)
+    if len(kept) < len(segments):
+        logging.info(f"Removed {len(segments) - len(kept)} cue(s) over silence in {display_name} (Whisper hallucinations)")
+    return kept
+
+
 def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display_name: str) -> "TranscriptionResult":
     """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
     model_path = _ensure_whispercpp_model()
@@ -2094,6 +2159,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
                     })
             logging.info(f"whisper.cpp: {len(segments)} segments (no token data) for {display_name}")
 
+        segments = _drop_silent_segments(segments, audio_bytes, display_name)
         return TranscriptionResult(segments=segments, language=detected_language)
 
     finally:
@@ -2409,6 +2475,13 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
                 language=info.language,
             )
 
+        if not result.segments:
+            logging.info(f"No speech found in {display_name}; no subtitle written.")
+            with task_results_lock:
+                if file_path in task_results:
+                    task_results[file_path].set_result(result)
+            return
+
         appendLine(result)
 
         output_language = LanguageCode.from_string(result.language)
@@ -2431,7 +2504,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
                 task_results[file_path].set_result(result)
 
     except Exception as e:
-        logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
+        logging.error(f"Error processing or transcribing {file_path} in {force_language}: {e}")
         # FIX: Inform waiting ASR endpoint requests of the error so they don't hang
         with task_results_lock:
             if file_path in task_results:
@@ -2516,7 +2589,7 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
         if language is not None:
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
-            audio_track = audio_tracks[0]
+            audio_track = next((t for t in audio_tracks if not t.get('commentary')), audio_tracks[0])
         lang = audio_track['language']
         logging.info(f"Using audio track {audio_track['index']} ({lang.to_name() if hasattr(lang, 'to_name') else lang}, "
                      f"{audio_track.get('codec', '?')}) of {len(audio_tracks)} for {os.path.basename(file_path)}")
@@ -2595,10 +2668,9 @@ def get_audio_track_by_language(audio_tracks, language):
     Returns:
         dict: The first audio track with the given language, or None if no match is found.
     """
-    for track in audio_tracks: 
-        if track['language'] == language:
-            return track
-    return None
+    matches = [track for track in audio_tracks if track['language'] == language]
+    # Prefer the main track over a commentary track in the same language.
+    return next((t for t in matches if not t.get('commentary')), matches[0] if matches else None)
 
 def choose_transcribe_language(file_path, forced_language, audio_tracks=None):
     """
@@ -2673,7 +2745,8 @@ def get_audio_tracks(video_file):
                 "default": stream.get("disposition", {}).get("default", 0) == 1,
                 "forced": stream.get("disposition", {}).get("forced", 0) == 1,
                 "original": stream.get("disposition", {}).get("original", 0) == 1,
-                "commentary": "commentary" in stream.get("tags", {}).get("title", "").lower()
+                "commentary": ("commentary" in stream.get("tags", {}).get("title", "").lower()
+                               or stream.get("disposition", {}).get("comment", 0) == 1)
             }
             audio_tracks.append(audio_track) 
         return audio_tracks

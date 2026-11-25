@@ -64,6 +64,7 @@ class TestFormatTranscription:
     def test_openai_verbose_json(self):
         body = json.loads(subgen.format_transcription(RESULT, "verbose_json", "translate"))
         assert body["task"] == "translate" and body["duration"] == 3.25 and len(body["segments"]) == 2
+        assert body["language"] == "english"  # OpenAI and subgen main use the lowercase name
 
 
 def _finish_immediately(item, *a, **k):
