@@ -436,7 +436,9 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 ---
 
 ## 🪲 Known Issues
-* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations based on background noise.
+* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations, mostly over music and background noise (e.g. "Thank you.", "For more information", "Transcribed by ..."). With whisper.cpp, subgen drops cues that fall on silence and writes no subtitle for a file with no speech, but it can't catch text invented over music.
+* The queue is kept in memory: files queued but not yet transcribed when the container stops are dropped. A webhook sent again, `/batch`, or the `TRANSCRIBE_FOLDERS` scan on the next start queues them again.
+* If a Bazarr request and a webhook arrive for the same file at once, subgen transcribes it once and returns the result to Bazarr, which saves the subtitle; subgen doesn't write a second copy.
 
 ## ❤️ Credits
 * [whisper.cpp](https://github.com/ggml-org/whisper.cpp), the transcription engine
