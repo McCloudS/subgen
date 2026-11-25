@@ -173,12 +173,16 @@ The images above are amd64, and pip's `ctranslate2` aarch64 wheels are CPU-only,
 Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself or any other arm64 machine (no GPU needed to build). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
 
 ### 2. Standalone (Without Docker)
-1. Install Python 3.9–3.11 and `ffmpeg`.
+1. Install Python 3.11 or 3.12 and `ffmpeg`.
 2. Ensure you have the proper NVIDIA drivers/CUDA toolkit installed (if using GPU).
 3. Download `launcher.py` from this repository and run:
    > `python3 launcher.py -u -i -s`
 
+   For the dev branch, add `-b dev`. The launcher installs the requirements of the branch you choose.
+
 *(Launcher includes a wizard to help standalone users easily configure common variables).*
+
+A standalone install transcribes with faster-whisper. To use whisper.cpp instead (for example on an AMD or Intel GPU), build or install `whisper-cli` from [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and put it on your `PATH` or set `WHISPER_CLI_PATH`; subgen then picks it automatically (see `TRANSCRIBE_BACKEND`).
 
 ### 3. Unraid
 While Unraid doesn't have an app or template for quick install, with minor manual work, you can easily install it. See [this discussion thread](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
