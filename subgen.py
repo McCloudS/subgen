@@ -1868,6 +1868,10 @@ def _wcp_tokens_to_words(transcription: list) -> list:
     return words
 
 
+# whisper-cli's --vad maps segment times back to the original audio but not the per-token
+# times subgen builds subtitles from (v1.9.5: a 15-minute clip came out squeezed into its first
+# 17 seconds), and it merges minutes of audio into one segment. Keep it off until that's fixed.
+_WHISPERCPP_VAD_SUPPORTED = False
 _WHISPERCPP_VAD_FILENAME = "ggml-silero-v5.1.2.bin"
 _WHISPERCPP_VAD_REPO = "ggml-org/whisper-vad"
 _WCP_DEVICE_RE = re.compile(r"whisper_backend_init_gpu: (?:using (?P<dev>.+?) backend|(?P<none>no GPU found))")
@@ -2055,7 +2059,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
             # whisper-cli defaults to English; 'auto' makes it detect the language instead
             '-l', language or 'auto',
         ]
-        if vad_filter:
+        if vad_filter and _WHISPERCPP_VAD_SUPPORTED:
             vad_model = _ensure_whispercpp_vad_model()
             if vad_model:
                 cmd += ['--vad', '-vm', vad_model, '-vt', str(vad_threshold)]
@@ -3420,6 +3424,9 @@ if __name__ == "__main__":
     logging.info(f"Subgen v{subgen_version}")
     threads = whispercpp_threads() if transcribe_backend == 'whispercpp' else whisper_threads
     logging.info(f"Threads: {threads}, Concurrent transcriptions: {concurrent_transcriptions}")
+    if vad_filter and transcribe_backend == 'whispercpp' and not _WHISPERCPP_VAD_SUPPORTED:
+        logging.warning("VAD_FILTER is ignored with whisper.cpp: its VAD breaks subtitle timing (all cues end up "
+                        "near the start). It still applies to faster-whisper.")
     for removed in ('CUSTOM_REGROUP', 'WORD_LEVEL_HIGHLIGHT'):
         if os.getenv(removed):
             logging.warning(f"{removed} is set but no longer has any effect: it was a stable-ts option, and stable-ts has been removed.")

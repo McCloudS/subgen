@@ -244,7 +244,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
-| `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. |
+| `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. **faster-whisper only for now:** whisper.cpp's VAD breaks subtitle timing, so subgen ignores this setting with whisper.cpp and logs a warning. |
 | `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
 ### 🖥️ Backend & GPU (whisper.cpp)
@@ -256,8 +256,8 @@ whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graph
 | `WHISPER_CPP_REPO` | *(derived)* | Hugging Face repo to download `WHISPER_CPP_MODEL` from. |
 | `WHISPER_CLI_PATH` | `whisper-cli` | Path to the `whisper-cli` binary. |
 | `WHISPER_CPP_DEVICE` | *(auto)* | whisper.cpp uses a GPU automatically when it can see one. Set a GPU index (`0`, `1`, ...) to pick one, or `cpu` to force CPU. `TRANSCRIBE_DEVICE` only applies to faster-whisper. Check the log for `whisper.cpp is using GPU device: ...`. |
-| `WHISPER_CPP_VAD_MODEL` | *(auto)* | Silero VAD model used when `VAD_FILTER=True`. Downloaded to `MODEL_PATH` on first use. |
-| `VAD_THRESHOLD` | `0.5` | Speech probability threshold for whisper.cpp VAD. |
+| `WHISPER_CPP_VAD_MODEL` | *(auto)* | Silero VAD model for whisper.cpp. Currently unused: whisper.cpp VAD is disabled (see `VAD_FILTER`). |
+| `VAD_THRESHOLD` | `0.5` | Speech probability threshold for whisper.cpp VAD (currently disabled). |
 
 ### ⚡ Processing Triggers & Queuing
 *(Not relevant for Bazarr users)*
