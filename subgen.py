@@ -2391,13 +2391,14 @@ def is_audio_file_extension(file_extension):
     return file_extension.casefold() in AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         for segment in result.segments:
             start = segment["start"]
             minutes, secs = divmod(int(start), 60)
             fraction = int((start - int(start)) * 100)
-            # remove embedded newlines in text, since some players ignore text after newlines
-            text = segment["text"].replace('\n', '')
+            # One line per cue, since some players ignore text after a newline. Wrapped subtitle
+            # lines become a space, not nothing ("of\na pony" must not become "ofa pony").
+            text = " ".join(segment["text"].split())
             file.write(f"[{minutes:02d}:{secs:02d}.{fraction:02d}]{text}\n")
 
 def send_completion_webhook(source_file_path: str, subtitle_file_path: str, language: LanguageCode, task_type: str):
