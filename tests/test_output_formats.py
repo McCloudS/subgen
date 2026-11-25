@@ -138,3 +138,11 @@ class TestFasterWhisperDetectLanguage:
         monkeypatch.setattr(subgen, "wav_bytes_to_numpy", lambda b: [0.0])
         resp = client.post("/detect-language", files={"audio_file": ("a.wav", b"RIFF0000", "audio/wav")})
         assert resp.json()["language_code"] == "de", resp.json()
+
+
+def test_lrc_joins_wrapped_lines_with_a_space(tmp_path):
+    """Subtitle cues are wrapped at 42 characters; LRC needs one line per cue without gluing words."""
+    path = tmp_path / "song.lrc"
+    subgen.write_lrc(RESULT, str(path))
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines == ["[00:00.00]Hello there, General Kenobi.", "[00:02.00]You are a bold one."]
