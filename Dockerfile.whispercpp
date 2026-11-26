@@ -10,6 +10,11 @@
 # BUILD_BASE / RUNTIME_BASE must match the backend (the CI workflow sets them):
 #   cpu, vulkan: ubuntu:24.04 / ubuntu:24.04
 #   cuda:        nvidia/cuda:12.8.1-devel-ubuntu24.04 / nvidia/cuda:12.8.1-runtime-ubuntu24.04
+#   Jetson:      GGML_BACKEND=cuda, BUILD_BASE=nvidia/cuda:12.6.3-devel-ubuntu24.04, RUNTIME_BASE=ubuntu:24.04,
+#                CUDA_ARCHITECTURES=87, BUNDLE_CUDA_LIBS=1 (built on arm64; see docs/JETSON.md).
+#                Jetson needs a plain OS runtime: nvidia/cuda runtime images bake in cuda-compat driver
+#                libraries that break on Jetson, so cudart/cuBLAS are copied in and the driver comes
+#                from the host via nvidia-container-toolkit.
 
 ARG BUILD_BASE=ubuntu:24.04
 ARG RUNTIME_BASE=ubuntu:24.04
@@ -23,6 +28,8 @@ ARG TARGETARCH
 # Pascal (61), Volta (70), Turing (75), Ampere (80/86), Ada (89), Hopper (90), Blackwell (120).
 # CUDA 13 cannot target 61/70, which is why this image stays on CUDA 12.x.
 ARG CUDA_ARCHITECTURES="61;70;75;80;86;89;90;120"
+# 1: copy cudart and cuBLAS from the build image next to whisper-cli (for a plain RUNTIME_BASE, e.g. Jetson)
+ARG BUNDLE_CUDA_LIBS=0
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -41,6 +48,8 @@ RUN set -eux; \
       cpu)    flags="" ;; \
       vulkan) flags="-DGGML_VULKAN=ON" ;; \
       cuda)   flags="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" ; \
+              # Plain runtime (Jetson): no NCCL there, and it only helps multi-GPU servers
+              if [ "$BUNDLE_CUDA_LIBS" = "1" ]; then flags="$flags -DGGML_CUDA_NCCL=OFF"; fi; \
               # No driver in the build container: link against the CUDA stub libcuda.
               export LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" ;; \
       *)      echo "unknown GGML_BACKEND=$GGML_BACKEND" >&2; exit 1 ;; \
@@ -59,7 +68,11 @@ RUN set -eux; \
     # With GGML_BACKEND_DL the CPU/GPU backends are .so files loaded from the executable's directory
     mkdir -p /out; \
     cp build/bin/whisper-cli /out/; \
-    find build -name '*.so*' -exec cp -a {} /out/ \;
+    find build -name '*.so*' -exec cp -a {} /out/ \;; \
+    if [ "$GGML_BACKEND" = "cuda" ] && [ "$BUNDLE_CUDA_LIBS" = "1" ]; then \
+        cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* \
+              /usr/local/cuda/lib64/libcublasLt.so.12* /out/; \
+    fi
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
 FROM ${RUNTIME_BASE}

@@ -7,12 +7,8 @@ on:
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
-      - 'requirements.txt'
       - 'requirements.whispercpp.txt'
       - 'entrypoint.sh'
-      - 'Dockerfile'
-      - 'Dockerfile.cpu'
-      - 'Dockerfile.AMD'
       - 'Dockerfile.whispercpp'
       - '.github/workflows/build_GPU.yml'
   workflow_dispatch:
@@ -23,10 +19,13 @@ concurrency:
 
 jobs:
   # ── GPU ────────────────────────────────────────────────────────────────────
+  # Every image is whisper.cpp (faster-whisper and stable-ts images ended with the
+  # stable-ts code, preserved on the legacy-stable-ts branch, which builds nothing).
   # Tags are named by GPU backend (what the user's hardware needs), the same on
   # main and dev: cuda, vulkan, cpu (and jetson in build_JETSON.yml).
-  # main:  CUDA  →  mccloud/subgen:latest, :cuda, :<version>, :<version>-cuda
-  # dev:   whisper.cpp CUDA 12.8 (Pascal → Blackwell)  →  mccloud/subgen:dev, :dev-cuda
+  # whisper.cpp CUDA 12.8 (Pascal → Blackwell):
+  # main:  mccloud/subgen:latest, :cuda, :<version>, :<version>-cuda
+  # dev:   mccloud/subgen:dev, :dev-cuda
   gpu:
     runs-on: [self-hosted]
     steps:
@@ -41,14 +40,12 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             { echo "docker_tags<<EOF"; printf 'mccloud/subgen:latest\nmccloud/subgen:cuda\nmccloud/subgen:%s\nmccloud/subgen:%s-cuda\n' "$version" "$version"; echo "EOF"; } >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile" >> $GITHUB_ENV
-            echo "build_args=" >> $GITHUB_ENV
           else
-            # whisper.cpp built from source on CUDA 12.x: CUDA 13 (upstream's main-cuda) drops Pascal/Volta
             { echo "docker_tags<<EOF"; printf 'mccloud/subgen:dev\nmccloud/subgen:dev-cuda\n'; echo "EOF"; } >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
-            { echo "build_args<<EOF"; printf 'GGML_BACKEND=cuda\nSUBGEN_BRANCH=dev\nBUILD_BASE=nvidia/cuda:12.8.1-devel-ubuntu24.04\nRUNTIME_BASE=nvidia/cuda:12.8.1-runtime-ubuntu24.04\n'; echo "EOF"; } >> $GITHUB_ENV
           fi
+          # whisper.cpp built from source on CUDA 12.x: CUDA 13 (upstream's main-cuda) drops Pascal/Volta
+          echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+          { echo "build_args<<EOF"; printf 'GGML_BACKEND=cuda\nSUBGEN_BRANCH=%s\nBUILD_BASE=nvidia/cuda:12.8.1-devel-ubuntu24.04\nRUNTIME_BASE=nvidia/cuda:12.8.1-runtime-ubuntu24.04\n' "${{ github.ref_name }}"; echo "EOF"; } >> $GITHUB_ENV
 
       - uses: docker/setup-buildx-action@v3
         with:
@@ -70,8 +67,9 @@ jobs:
           cache-to: type=registry,ref=mccloud/subgen:buildcache${{ github.ref_name != 'main' && '-dev' || '' }},mode=max
 
   # ── CPU ────────────────────────────────────────────────────────────────────
-  # main:  faster-whisper CPU (multi-arch)  →  mccloud/subgen:cpu
-  # dev:   whisper.cpp CPU (multi-arch)     →  mccloud/subgen:dev-cpu
+  # whisper.cpp CPU, linux/amd64 + linux/arm64:
+  # main:  mccloud/subgen:cpu, :<version>-cpu
+  # dev:   mccloud/subgen:dev-cpu
   cpu:
     runs-on: [self-hosted]
     steps:
@@ -86,15 +84,12 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             { echo "docker_tags<<EOF"; printf 'mccloud/subgen:cpu\nmccloud/subgen:%s-cpu\n' "$version"; echo "EOF"; } >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile.cpu" >> $GITHUB_ENV
-            echo "build_args=" >> $GITHUB_ENV
-            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
           else
             echo "docker_tags=mccloud/subgen:dev-cpu" >> $GITHUB_ENV
-            echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
-            { echo "build_args<<EOF"; printf 'GGML_BACKEND=cpu\nSUBGEN_BRANCH=dev\n'; echo "EOF"; } >> $GITHUB_ENV
-            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
           fi
+          echo "dockerfile=./Dockerfile.whispercpp" >> $GITHUB_ENV
+          { echo "build_args<<EOF"; printf 'GGML_BACKEND=cpu\nSUBGEN_BRANCH=%s\n' "${{ github.ref_name }}"; echo "EOF"; } >> $GITHUB_ENV
+          echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_ENV
 
       - uses: docker/setup-qemu-action@v3
         with:
@@ -119,52 +114,12 @@ jobs:
           cache-from: type=registry,ref=mccloud/subgen:cpu-buildcache
           cache-to: type=registry,ref=mccloud/subgen:cpu-buildcache,mode=max
 
-  # ── AMD (ROCm) ─────────────────────────────────────────────────────────────
-  # main:  faster-whisper ROCm    →  mccloud/subgen:amd
-  # dev:   not built here; AMD GPUs use the Vulkan image (:dev-vulkan)
-  # NOTE: On main, AMD builds after GPU+CPU to avoid large-upload contention.
-  amd:
-    if: github.ref_name == 'main'
-    runs-on: [self-hosted]
-    needs: [gpu, cpu]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get version
-        run: |
-          version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
-          echo "version=$version" >> $GITHUB_ENV
-
-      - name: Compute tags and build config
-        run: |
-          { echo "docker_tags<<EOF"; printf 'mccloud/subgen:amd\nmccloud/subgen:%s-amd\n' "$version"; echo "EOF"; } >> $GITHUB_ENV
-          echo "dockerfile=./Dockerfile.AMD" >> $GITHUB_ENV
-          echo "build_args=" >> $GITHUB_ENV
-
-      - uses: docker/setup-buildx-action@v3
-        with:
-          name: subgen-amd-builder
-          keep-state: true
-      - uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ env.dockerfile }}
-          build-args: ${{ env.build_args }}
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.docker_tags }}
-          cache-from: type=registry,ref=mccloud/subgen:amd-buildcache
-          cache-to: type=registry,ref=mccloud/subgen:amd-buildcache,mode=max
-
   # ── Vulkan (whisper.cpp, multi-arch) ──────────────────────────────────────
   # Intel iGPU/Arc, AMD dGPU/APU, NVIDIA, any Vulkan GPU. Each arch is built
   # separately (arm64 under QEMU) and merged into one multi-arch manifest.
   # main:  mccloud/subgen:vulkan, :<version>-vulkan  (linux/amd64 + linux/arm64)
+  #        :amd and :<version>-amd are aliases: the faster-whisper ROCm image
+  #        ended with stable-ts, so existing AMD installs move to Vulkan.
   # dev:   mccloud/subgen:dev-vulkan
   #        :dev-whispercpp and :dev-amd are deprecated aliases of :dev-vulkan,
   #        kept so existing installs keep updating.
@@ -182,7 +137,7 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "main" ]; then
             echo "final_tag=mccloud/subgen:vulkan" >> $GITHUB_ENV
-            echo "alias_tags=mccloud/subgen:${version}-vulkan" >> $GITHUB_ENV
+            echo "alias_tags=mccloud/subgen:${version}-vulkan mccloud/subgen:amd mccloud/subgen:${version}-amd" >> $GITHUB_ENV
             echo "subgen_branch=main" >> $GITHUB_ENV
           else
             echo "final_tag=mccloud/subgen:dev-vulkan" >> $GITHUB_ENV

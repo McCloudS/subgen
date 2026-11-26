@@ -6,7 +6,7 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
-24 Nov 2026 (dev): The `dev` images now use **whisper.cpp**, which runs on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64. The whisper.cpp images don't include faster-whisper; it is still supported for standalone installs (`TRANSCRIBE_BACKEND=faster-whisper`). Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. New `HALLUCINATION_FILTER` (on by default) removes phrases Whisper loops over music and invented credits like "Transcription by CastingWords". See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions) and [Upgrading from stable-ts](#-upgrading-from-stable-ts-main).
+Nov 2026: **Subgen now uses whisper.cpp.** Every image runs whisper.cpp, on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64, plus a new whisper.cpp image for NVIDIA Jetson. On NVIDIA it is about twice as fast as faster-whisper with less VRAM. Models download again on first start; see [Upgrading from stable-ts](#-upgrading-from-stable-ts) for everything that changes. `:amd` now points to the Vulkan image (the ROCm image is retired). The images no longer include faster-whisper; standalone installs still use it unless `whisper-cli` is installed. The previous stable-ts version is preserved, unsupported, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch. Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. New `HALLUCINATION_FILTER` (on by default) removes phrases Whisper loops over music and invented credits like "Transcription by CastingWords". See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions).
 
 8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
 
@@ -151,26 +151,22 @@ That's it. No new environment variables are required. Files without an audio off
 ## 🛠 Installation & Setup
 
 ### 1. Docker (Recommended)
-The easiest way to run Subgen is via Docker. We maintain an image on Docker Hub (`mccloud/subgen`).
-* `mccloud/subgen:latest` (Supports both CPU and GPU/CUDA)
-* `mccloud/subgen:cpu` (Smaller image, CPU only)
-* `mccloud/subgen:amd` (ROCm/AMD GPU)
-* Development builds (whisper.cpp engine, may be unstable):
-  * `mccloud/subgen:dev-cuda` (also `:dev`): NVIDIA (CUDA 12.8, GTX 10xx/Tesla P4 and newer). Run with `--gpus all`.
-  * `mccloud/subgen:dev-vulkan`: Intel iGPU/Arc, AMD GPUs/APUs, and any other Vulkan GPU. Pass `/dev/dri` into the container. `:dev-whispercpp` and `:dev-amd` are deprecated aliases of this tag; switch to `:dev-vulkan`.
-  * `mccloud/subgen:dev-cpu`: CPU only (amd64 and arm64).
-  * Tags are named by GPU backend, so pick the one your hardware needs: `cuda` for NVIDIA, `vulkan` for everything else with a GPU, `cpu` for no GPU.
+The easiest way to run Subgen is via Docker. We maintain images on Docker Hub (`mccloud/subgen`), all using whisper.cpp. Tags are named by GPU backend, so pick the one your hardware needs:
+
+| Tag | Hardware | How to pass the GPU |
+|---|---|---|
+| `mccloud/subgen:latest` (also `:cuda`) | NVIDIA, GTX 10xx / Tesla P4 (Pascal) and newer, CUDA 12.8 | `--gpus all` (or `--runtime=nvidia`) |
+| `mccloud/subgen:vulkan` (also `:amd`) | Intel iGPU/Arc, AMD GPUs and APUs, any other Vulkan GPU (amd64 and arm64) | `--device /dev/dri` |
+| `mccloud/subgen:cpu` | No GPU (amd64 and arm64) | |
+| `mccloud/subgen:jetson` | NVIDIA Jetson Orin / Thor | see below |
+
+Each tag also has a version-pinned copy (e.g. `:2026.11.4-cuda`). Development builds use the same names with a `dev-` prefix (`:dev-cuda`, `:dev-vulkan`, `:dev-cpu`, `:dev-jetson`; `:dev` is `:dev-cuda`) and may be unstable.
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
 ### 1b. NVIDIA Jetson (Orin / Thor, arm64)
 
-The images above are amd64, and pip's `ctranslate2` aarch64 wheels are CPU-only, so Jetson containers silently fall back to CPU. `Dockerfile.jetson` provides a Jetson-specific build with real CUDA acceleration:
-
-> `docker build -f Dockerfile.jetson -t subgen:jetson-cuda .`
-> `docker compose -f docker-compose.jetson.yml up -d`
-
-Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself or any other arm64 machine (no GPU needed to build). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
+`mccloud/subgen:jetson` is whisper.cpp built with CUDA for Jetson (Orin natively; newer chips such as Thor compile it on first use). Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`. Run it with `--runtime nvidia` and `PUID=0` (Jetson's GPU memory device is root-only); see `docker-compose.jetson.yml`. Check the log for `whisper.cpp is using GPU device: ...`. See [docs/JETSON.md](docs/JETSON.md) for how CUDA is wired up and why the usual `nvidia/cuda` images break on Jetson. *This image is built and tested by CI without a GPU; reports from Jetson owners are welcome.*
 
 ### 2. Standalone (Without Docker)
 1. Install Python 3.11 or 3.12 and `ffmpeg`.
@@ -240,20 +236,20 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 ### 🧠 Core Whisper & AI Settings
 | Variable | Default | Description |
 |---|---|---|
-| `TRANSCRIBE_DEVICE` | `cpu` | Device to transcribe on: `cpu`, `gpu`, or `cuda`. |
+| `TRANSCRIBE_DEVICE` | `cpu` | faster-whisper only (standalone installs): `cpu`, `gpu`, or `cuda`. whisper.cpp uses a GPU automatically; see `WHISPER_CPP_DEVICE`. |
 | `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, quantized versions like `large-v3-turbo-q5_0`, etc. See [Choosing a model](#-choosing-a-model). **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
 | `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. With whisper.cpp each one loads its own copy of the model, so memory grows with this number. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions). |
 | `WHISPER_THREADS` | *auto* / `4` | CPU threads per transcription. whisper.cpp: unset means the CPU cores are shared between `CONCURRENT_TRANSCRIPTIONS` (between 4 and 16 each). faster-whisper: `4`. |
-| `COMPUTE_TYPE` | `auto` | Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). |
+| `COMPUTE_TYPE` | `auto` | faster-whisper only. Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). With whisper.cpp, pick a quantized model instead (e.g. `large-v3-turbo-q5_0`). |
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
 | `HALLUCINATION_FILTER` | `True` | Removes two common Whisper hallucinations: a phrase of 3 or more words looped back to back 3 or more times keeps only its first copy, and cues that are only an invented credit ("Transcription by CastingWords", "Subtitles by the Amara.org community", "Thanks for watching!") are dropped. Short repeats such as "No! No! No!" and phrases said twice are never touched. A line really repeated 3 or more times in a row (a chant, a song chorus) keeps only one copy; set to `False` to keep everything. |
 | `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. **faster-whisper only for now:** whisper.cpp's VAD breaks subtitle timing, so subgen ignores this setting with whisper.cpp and logs a warning. |
-| `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
+| `SUBGEN_KWARGS` | `{}` | faster-whisper only. JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
 ### 🖥️ Backend & GPU (whisper.cpp)
-whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graphics (Vulkan), and CPU. It is the default whenever the `whisper-cli` binary is present (the `whispercpp` images).
+whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graphics (Vulkan), and CPU. It is what every Docker image uses, and the default whenever the `whisper-cli` binary is present.
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_BACKEND` | `auto` | `auto` uses whisper.cpp when `whisper-cli` is installed, otherwise faster-whisper. Force one with `whispercpp` or `faster-whisper`. The whisper.cpp images don't include faster-whisper, so asking for it there logs a warning and uses whisper.cpp. |
@@ -392,8 +388,11 @@ Running two files at once is **not** twice as fast on a GPU: one transcription a
 
 ---
 
-## 🔄 Upgrading from stable-ts (main)
+## 🔄 Upgrading from stable-ts
 
+Subgen used faster-whisper with stable-ts until November 2026. That version is preserved, unsupported and without new images, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch (standalone: `python3 launcher.py -b legacy-stable-ts`). Existing version-pinned images such as `:2026.11.3` stay on Docker Hub. What changes when you update:
+
+* **Your image tag:** NVIDIA stays on `:latest` / `:cuda`. `:cpu` stays `:cpu`. AMD (`:amd`) now gets the Vulkan image: pass `/dev/dri` instead of the ROCm devices (`/dev/kfd`), and drop `HSA_OVERRIDE_GFX_VERSION` and `CT2_CUDA_ALLOCATOR`.
 * **Models are downloaded again on first start.** whisper.cpp uses GGML model files (`ggml-*.bin`), not faster-whisper's. They are derived from `WHISPER_MODEL` and saved to `MODEL_PATH`. Point `WHISPER_CPP_MODEL` at a file to use your own.
 * **`CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` were removed** with stable-ts. Subgen logs a warning if they are still set. Line length and cue splitting are controlled by `MAX_LINE_LENGTH` and `GAP_SPLIT_SECS`.
 * **`TRANSCRIBE_DEVICE` only applies to faster-whisper.** whisper.cpp picks the GPU it can see; use `WHISPER_CPP_DEVICE` to choose one or force `cpu`.

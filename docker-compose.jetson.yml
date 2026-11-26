@@ -1,35 +1,29 @@
-# docker-compose for NVIDIA Jetson (Orin / Thor, aarch64) with CUDA.
+# docker-compose for NVIDIA Jetson (Orin / Thor, aarch64) with CUDA (whisper.cpp).
 #
 # Prereqs on the host:
-#   * JetPack 6+ (L4T r36+) — ideally r38/r39 (JetPack 7) which is what this
-#     build was validated on; older r36.4 works too (driver userspace is
-#     mounted from the host).
+#   * JetPack 6+ (L4T r36+).
 #   * nvidia-container-toolkit installed and configured (docker
-#     default-runtime nvidia, or add `runtime: nvidia` below).
+#     default-runtime nvidia, or `runtime: nvidia` below).
 #
-# Build on the Jetson:  docker build -f Dockerfile.jetson -t subgen:jetson-cuda .
-# Start:                docker compose -f docker-compose.jetson.yml up -d
+# Start:  docker compose -f docker-compose.jetson.yml up -d
+# Check the log for "whisper.cpp is using GPU device: ...". See docs/JETSON.md.
 
 services:
    subgen:
       container_name: subgen
       tty: true
-      image: subgen:jetson-cuda
-      build:
-         context: .
-         dockerfile: Dockerfile.jetson
-      # Jetson + nvidia-container-toolkit: the simplest way to expose the GPU.
+      image: mccloud/subgen:jetson
+      # Jetson + nvidia-container-toolkit: mounts the host's GPU driver into the container.
       # (If your daemon's default runtime is already "nvidia" this is a no-op.)
       runtime: nvidia
       environment:
          - "NVIDIA_VISIBLE_DEVICES=all"
          # Jetson specifics: /dev/nvmap is 0440 root:video on headless L4T,
-         # so the CUDA path needs root inside the container. PUID=0 makes
+         # so CUDA needs root inside the container. PUID=0 makes
          # entrypoint.sh skip the unprivileged user switch.
          - "PUID=0"
          - "PGID=0"
-         - "WHISPER_MODEL=large-v3"
-         - "WHISPER_THREADS=4"
+         - "WHISPER_MODEL=large-v3-turbo-q5_0"
          - "PROCADDEDMEDIA=True"
          - "PROCMEDIAONPLAY=False"
          - "NAMESUBLANG=aa"
@@ -39,32 +33,20 @@ services:
          - "JELLYFINTOKEN=token here"
          - "JELLYFINSERVER=http://jellyfin:8096"
          - "WEBHOOKPORT=9000"
-         # Orin shares unified memory: 1 concurrent large-v3 job is plenty;
-         # raise only if you have the RAM headroom (~3GB per large-v3 CUDA worker).
+         # Jetson memory is shared with the CPU, and each concurrent job loads its own model copy.
          - "CONCURRENT_TRANSCRIPTIONS=1"
-         - "WORD_LEVEL_HIGHLIGHT=False"
          - "DEBUG=True"
          - "USE_PATH_MAPPING=False"
          - "PATH_MAPPING_FROM=/tv"
          - "PATH_MAPPING_TO=/Volumes/TV"
-         # 'gpu' is mapped to 'cuda' inside subgen.py — this is the whole point.
-         - "TRANSCRIBE_DEVICE=gpu"
          - "CLEAR_VRAM_ON_COMPLETE=True"
          - "MODEL_PATH=/subgen/models"
          - "UPDATE=False"
          - "APPEND=False"
-         - "USE_MODEL_PROMPT=False"
-         - "CUSTOM_MODEL_PROMPT="
          - "LRC_FOR_AUDIO_FILES=True"
-         - "CUSTOM_REGROUP=cm_sl=84_sl=42++++++1"
       volumes:
          - "${TV}:/tv"
          - "${MOVIES}:/movies"
          - "${APPDATA}/subgen/models:/subgen/models"
-         # HF model downloads (XDG/HF cache baked into the image at /cache)
-         - "subgen-cache:/cache"
       ports:
          - "9000:9000"
-
-volumes:
-   subgen-cache:
