@@ -160,7 +160,7 @@ The easiest way to run Subgen is via Docker. We maintain images on Docker Hub (`
 | `mccloud/subgen:cpu` | No GPU (amd64 and arm64) | |
 | `mccloud/subgen:jetson` | NVIDIA Jetson Orin / Thor | see below |
 
-Each tag also has a version-pinned copy (e.g. `:2026.11.4-cuda`). Development builds use the same names with a `dev-` prefix (`:dev-cuda`, `:dev-vulkan`, `:dev-cpu`, `:dev-jetson`; `:dev` is `:dev-cuda`) and may be unstable.
+Each tag also has a version-pinned copy (e.g. `:2026.11.5-cuda`). Development builds use the same names with a `dev-` prefix (`:dev-cuda`, `:dev-vulkan`, `:dev-cpu`, `:dev-jetson`; `:dev` is `:dev-cuda`) and may be unstable.
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
@@ -390,7 +390,14 @@ Running two files at once is **not** twice as fast on a GPU: one transcription a
 
 ## 🔄 Upgrading from stable-ts
 
-Subgen used faster-whisper with stable-ts until November 2026. That version is preserved, unsupported and without new images, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch (standalone: `python3 launcher.py -b legacy-stable-ts`). Existing version-pinned images such as `:2026.11.3` stay on Docker Hub. What changes when you update:
+Subgen used faster-whisper with stable-ts until November 2026. That version is preserved, unsupported and without new images, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch.
+
+**To stay on stable-ts** (no fixes or support from here on):
+* **Docker:** pin the last stable-ts image instead of `:latest`: `mccloud/subgen:2026.11.2` (NVIDIA), `:2026.11.2-cpu` or `:2026.11.2-amd` (ROCm). Its code is the same as the `legacy-stable-ts` branch.
+* **And set `UPDATE=False`**, or `BRANCH=legacy-stable-ts`. With `UPDATE=True` and no `BRANCH`, the launcher downloads the newest `subgen.py` from `main` into the old image, which then runs the new code on faster-whisper without stable-ts.
+* **Standalone:** `python3 launcher.py -b legacy-stable-ts`.
+
+What changes when you update:
 
 * **Your image tag:** NVIDIA stays on `:latest` / `:cuda`. `:cpu` stays `:cpu`. AMD (`:amd`) now gets the Vulkan image: pass `/dev/dri` instead of the ROCm devices (`/dev/kfd`), and drop `HSA_OVERRIDE_GFX_VERSION` and `CT2_CUDA_ALLOCATOR`.
 * **If you mapped a folder over `/subgen` itself** (the old Unraid template did) **and set `UPDATE=False`**, your old copy of `subgen.py` in that folder would run and fail, because the new images don't include stable-ts. Map the folder to `/subgen/models` instead and set `MODEL_PATH=/subgen/models` (the updated Unraid template does this), or set `UPDATE=True` once to download the new code.
