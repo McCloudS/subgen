@@ -1,40 +1,38 @@
 name: Build Jetson Docker image
 
-# Builds Dockerfile.jetson on GitHub's hosted arm64 runner. No GPU is needed:
-# the image only installs prebuilt CUDA wheels/libraries, it compiles nothing.
-# This catches dependency rot (moved wheel URLs, hash changes, broken pins)
-# but cannot exercise CUDA itself; that still needs a real Jetson.
+# whisper.cpp with CUDA for NVIDIA Jetson (Orin, and Thor via PTX), built natively on
+# GitHub's hosted arm64 runner from Dockerfile.whispercpp (see docs/JETSON.md).
 #
-# PRs and pushes to main: build + smoke test only, nothing is published.
-# Manual run (Actions > Build Jetson Docker image > Run workflow) with
-# "push" ticked: also publishes mccloud/subgen:jetson and :<version>-jetson.
+# CI has no GPU, so it checks that every library resolves (except the driver,
+# which comes from the Jetson host) and transcribes a clip, which runs on the CPU
+# because the CUDA backend can't load without a driver. CUDA itself still needs a
+# check on a real Jetson.
+#
+# Pull requests: build and test only.
+# Pushes to main: also publish mccloud/subgen:jetson and :<version>-jetson.
+# Pushes to dev:  also publish mccloud/subgen:dev-jetson.
 
 on:
   pull_request:
     paths:
-      - 'Dockerfile.jetson'
-      - 'requirements.jetson.txt'
+      - 'Dockerfile.whispercpp'
+      - 'requirements.whispercpp.txt'
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
       - 'entrypoint.sh'
       - '.github/workflows/build_JETSON.yml'
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths:
-      - 'Dockerfile.jetson'
-      - 'requirements.jetson.txt'
+      - 'Dockerfile.whispercpp'
+      - 'requirements.whispercpp.txt'
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
       - 'entrypoint.sh'
       - '.github/workflows/build_JETSON.yml'
   workflow_dispatch:
-    inputs:
-      push:
-        description: "Publish to Docker Hub (mccloud/subgen:jetson)"
-        type: boolean
-        default: false
 
 concurrency:
   group: docker-jetson-${{ github.ref }}
@@ -46,15 +44,26 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get version from subgen.py
+      - name: Get version and tags
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
+            { echo "tags<<EOF"; printf 'mccloud/subgen:jetson\nmccloud/subgen:%s-jetson\n' "$version"; echo "EOF"; } >> $GITHUB_ENV
+            echo "branch=main" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "dev" ]; then
+            echo "tags=mccloud/subgen:dev-jetson" >> $GITHUB_ENV
+            echo "branch=dev" >> $GITHUB_ENV
+          else
+            echo "tags=" >> $GITHUB_ENV
+            echo "branch=dev" >> $GITHUB_ENV
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -63,38 +72,61 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.jetson
+          file: ./Dockerfile.whispercpp
+          build-args: |
+            GGML_BACKEND=cuda
+            BUILD_BASE=nvidia/cuda:12.6.3-devel-ubuntu24.04
+            RUNTIME_BASE=ubuntu:24.04
+            CUDA_ARCHITECTURES=87
+            BUNDLE_CUDA_LIBS=1
+            SUBGEN_BRANCH=${{ env.branch }}
           platforms: linux/arm64
           load: true
           tags: subgen:jetson-ci
-          cache-from: type=gha,scope=jetson
-          cache-to: type=gha,scope=jetson,mode=max
+          cache-from: type=gha,scope=jetson-whispercpp
+          cache-to: type=gha,scope=jetson-whispercpp,mode=max
 
-      - name: Smoke test (imports and shared libraries resolve, no GPU)
+      - name: Libraries resolve (only the host driver missing)
         run: |
-          docker run --rm --entrypoint python3 subgen:jetson-ci -c "
-          import ctranslate2, faster_whisper, stable_whisper, fastapi, av
-          print('ctranslate2', ctranslate2.__version__)
-          print('faster_whisper', faster_whisper.__version__)
-          print('CUDA devices (expected 0 on CI):', ctranslate2.get_cuda_device_count())
-          "
+          docker run --rm --entrypoint bash subgen:jetson-ci -c '
+            set -e
+            for f in /opt/whisper/whisper-cli /opt/whisper/libggml-cuda.so; do
+              echo "== $f"; ldd "$f" | grep -E "cuda|cublas|not found" || true
+            done
+            missing=$(ldd /opt/whisper/whisper-cli /opt/whisper/libggml-cuda.so | grep "not found" | grep -v "libcuda.so.1" || true)
+            if [ -n "$missing" ]; then echo "Missing libraries: $missing"; exit 1; fi
+            ls /opt/whisper | grep -E "libcudart|libcublas"
+          '
+
+      - name: Transcribe a clip (CPU fallback, no GPU on CI)
+        run: |
+          curl -fsSL -o jfk.wav https://raw.githubusercontent.com/ggml-org/whisper.cpp/v1.9.5/samples/jfk.wav
+          curl -fsSL -o ggml-tiny.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
+          docker run --rm -v "$PWD:/w" --entrypoint whisper-cli subgen:jetson-ci \
+            -m /w/ggml-tiny.bin -f /w/jfk.wav -l en -nt | tee out.txt
+          grep -qi "country" out.txt
 
       - name: Login to Docker Hub
-        if: github.event_name == 'workflow_dispatch' && inputs.push
+        if: env.tags != ''
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push to Docker Hub
-        if: github.event_name == 'workflow_dispatch' && inputs.push
+        if: env.tags != ''
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.jetson
+          file: ./Dockerfile.whispercpp
+          build-args: |
+            GGML_BACKEND=cuda
+            BUILD_BASE=nvidia/cuda:12.6.3-devel-ubuntu24.04
+            RUNTIME_BASE=ubuntu:24.04
+            CUDA_ARCHITECTURES=87
+            BUNDLE_CUDA_LIBS=1
+            SUBGEN_BRANCH=${{ env.branch }}
           platforms: linux/arm64
           push: true
-          tags: |
-            mccloud/subgen:jetson
-            mccloud/subgen:${{ env.version }}-jetson
-          cache-from: type=gha,scope=jetson
+          tags: ${{ env.tags }}
+          cache-from: type=gha,scope=jetson-whispercpp
