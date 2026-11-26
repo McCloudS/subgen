@@ -48,30 +48,41 @@ import ctypes
 import ctypes.util
 import gc
 import hashlib
+import io
 import json
 import logging
 import os
 import queue
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import wave
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Event, Lock, Timer
 from typing import Union
 
 import av
-import faster_whisper
 import ffmpeg
 import numpy as np
 import requests
-import stable_whisper
-import torch
-from fastapi import Body, FastAPI, File, Form, Header, Query, Request, UploadFile
+from fastapi import (
+    Body,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
-from stable_whisper import Segment
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
 
@@ -115,7 +126,9 @@ jellyfinserver = get_env_with_fallback('JELLYFIN_SERVER', 'JELLYFINSERVER', 'htt
 
 # Whisper Configuration
 whisper_model = os.getenv('WHISPER_MODEL', 'medium')
-whisper_threads = int(os.getenv('WHISPER_THREADS', 4))
+_whisper_threads_env = os.getenv('WHISPER_THREADS', '').strip()
+# faster-whisper keeps its historical default of 4; whisper.cpp sizes itself (see whispercpp_threads()).
+whisper_threads = int(_whisper_threads_env) if _whisper_threads_env.isdigit() else 4
 concurrent_transcriptions = int(os.getenv('CONCURRENT_TRANSCRIPTIONS', 2))
 transcribe_device = os.getenv('TRANSCRIBE_DEVICE', 'cpu')
 
@@ -128,7 +141,6 @@ subtitle_language_name = get_env_with_fallback('SUBTITLE_LANGUAGE_NAME', 'NAMESU
 
 # System Configuration - with backwards compatibility
 webhookport = get_env_with_fallback('WEBHOOK_PORT', 'WEBHOOKPORT', 9000, int)
-word_level_highlight = convert_to_bool(os.getenv('WORD_LEVEL_HIGHLIGHT', False))
 debug = convert_to_bool(os.getenv('DEBUG', True))
 use_path_mapping = convert_to_bool(os.getenv('USE_PATH_MAPPING', False))
 path_mapping_from = os.getenv('PATH_MAPPING_FROM', r'/tv')
@@ -143,7 +155,57 @@ compute_type = os.getenv('COMPUTE_TYPE', 'auto')
 append = convert_to_bool(os.getenv('APPEND', False))
 reload_script_on_change = convert_to_bool(os.getenv('RELOAD_SCRIPT_ON_CHANGE', False))
 lrc_for_audio_files = convert_to_bool(os.getenv('LRC_FOR_AUDIO_FILES', True))
-custom_regroup = os.getenv('CUSTOM_REGROUP', 'cm_sl=84_sl=42++++++1')
+max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
+gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
+max_segment_secs = float(os.getenv('MAX_SEGMENT_SECS', '5.0'))
+vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
+hallucination_filter = convert_to_bool(os.getenv('HALLUCINATION_FILTER', True))
+whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
+whisper_cpp_repo = os.getenv('WHISPER_CPP_REPO', '')
+whisper_cli_path = os.getenv('WHISPER_CLI_PATH', 'whisper-cli')
+# whisper.cpp GPU selection: '' = first GPU (automatic), a number = that GPU (-dev N), 'cpu' = no GPU (-ng).
+# Deliberately separate from TRANSCRIBE_DEVICE, which defaults to 'cpu' for faster-whisper and is set to
+# 'cpu' in many existing compose files; honouring it here would silently disable the GPU.
+whisper_cpp_device = os.getenv('WHISPER_CPP_DEVICE', '').strip().lower()
+# Silero VAD model for whisper.cpp; auto-downloaded to MODEL_PATH when VAD_FILTER is on.
+whisper_cpp_vad_model = os.getenv('WHISPER_CPP_VAD_MODEL', '')
+vad_threshold = float(os.getenv('VAD_THRESHOLD', '0.5'))
+
+
+def resolve_transcribe_backend(requested: str, cli_path: str) -> str:
+    """Map TRANSCRIBE_BACKEND to 'whispercpp' or 'faster-whisper'.
+
+    'auto' (the default) prefers whisper.cpp when the whisper-cli binary is on PATH,
+    which covers every GPU vendor, and falls back to faster-whisper otherwise.
+    """
+    value = (requested or 'auto').strip().lower()
+    has_cli = bool(shutil.which(cli_path))
+    if value in ('whispercpp', 'whisper.cpp', 'whisper-cpp', 'whisper_cpp'):
+        return 'whispercpp'
+    if value in ('faster-whisper', 'faster_whisper', 'fasterwhisper'):
+        if _module_available('faster_whisper') or not has_cli:
+            return 'faster-whisper'
+        # The whisper.cpp images don't include faster-whisper. Without this, the server
+        # would start and then fail every request with "No module named 'faster_whisper'".
+        logging.warning("TRANSCRIBE_BACKEND=faster-whisper, but faster-whisper isn't installed in this "
+                        "image; using whisper.cpp instead.")
+        return 'whispercpp'
+    if value != 'auto':
+        logging.warning(f"Unknown TRANSCRIBE_BACKEND '{requested}'; using auto-detection")
+    return 'whispercpp' if has_cli else 'faster-whisper'
+
+
+def _module_available(name: str) -> bool:
+    if name in sys.modules:
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec(name) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+transcribe_backend = resolve_transcribe_backend(os.getenv('TRANSCRIBE_BACKEND', 'auto'), whisper_cli_path)
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
 detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
@@ -441,7 +503,8 @@ class MultiplePatternsFilter(logging.Filter):
             "misdetection possible",
             "srt was added",
             "doesn't have any audio to transcribe",
-            "Calling on_"
+            "Calling on_",
+            "VAD filter kept the following audio segments"
         ]
         # Return False if any of the patterns are found, True otherwise
         return not any(pattern in record.getMessage() for pattern in patterns)
@@ -516,23 +579,410 @@ class ProgressHandler:
                 
 TIME_OFFSET = 5
 
-def appendLine(result):
-    if append:
-        lastSegment = result.segments[-1]
-        date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
-        appended_text = f"Transcribed by whisperAI with faster-whisper ({whisper_model}) on {date_time_str}"
-        
-        # Create a new segment with the updated information
-        newSegment = Segment(
-            start=lastSegment.start + TIME_OFFSET,
-            end=lastSegment.end + TIME_OFFSET,
-            text=appended_text,
-            words=[], # Empty list for words
-            id=lastSegment.id + 1
+# ============================================================================
+# TRANSCRIPTION RESULT + SUBTITLE SEGMENTATION
+# Replaces stable-ts WhisperResult, Segment, and regroup machinery.
+# Segmenter ported from bazarr-openai-whisperbridge (Netflix-style guidelines).
+# ============================================================================
+
+def _consume_segments_with_progress(gen, info, display_name: str) -> list:
+    """
+    Drain a faster-whisper segment generator, logging progress through
+    ProgressHandler (same format as main-branch: %, seek/total s, ETA,
+    speed, queue status — throttled to once every 5 wall-clock seconds).
+
+    Uses info.duration (original timeline) as the denominator so the
+    percentage reflects the full audio position even when VAD is enabled.
+    """
+    progress = ProgressHandler(display_name)
+    total = info.duration or 0.0
+    segments = []
+    for seg in gen:
+        segments.append(seg)
+        progress(seg.end, total)
+    return segments
+
+@dataclass
+class TranscriptionResult:
+    """Lightweight result container replacing stable-ts WhisperResult."""
+    segments: list = field(default_factory=list)  # list of {"start", "end", "text"}
+    language: str = ""
+
+_SENTENCE_END     = re.compile(r'[.!?][\'")\]]*$')
+_ABBREV           = re.compile(r'^(?:Mr|Mrs|Ms|Dr|Prof|St|Ave|vs|etc|Jr|Sr|Lt|Sgt|Cpl|Pfc|Pvt|Cpt|Col|Gen|Adm|Rev|Hon|Gov|Sen|Rep|Pres|Mt|Ft|Dept|Assoc|Corp|Inc|Ltd|Co|Bros|Blvd|Rd|Ln|Pkwy|Sq|Bldg|Apt|Ste|No|Vol|Fig|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.$', re.IGNORECASE)
+_INITIAL          = re.compile(r'^[A-Z]\.$')
+_SOFT_BREAK   = re.compile(r'[,;:]$')
+_CONJUNCTIONS = frozenset({
+    'and', 'but', 'or', 'so', 'yet', 'for', 'nor',
+    'as', 'if', 'when', 'then', 'because', 'although',
+})
+
+def seconds_to_srt_timestamp(seconds: float) -> str:
+    millis = int(round(seconds * 1000))
+    hours,  millis = divmod(millis, 3_600_000)
+    minutes, millis = divmod(millis, 60_000)
+    secs,   millis = divmod(millis, 1_000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+def segments_to_srt(segments: list, filepath: str = None) -> str:
+    """Serialise subtitle segment dicts to SRT.  Writes file if filepath given."""
+    lines = []
+    for i, seg in enumerate(segments, start=1):
+        lines.append(
+            f"{i}\n"
+            f"{seconds_to_srt_timestamp(seg['start'])} --> {seconds_to_srt_timestamp(seg['end'])}\n"
+            f"{seg['text']}\n"
         )
-        
-        # Append the new segment to the result's segments
-        result.segments.append(newSegment)
+    content = "\n".join(lines)
+    if filepath:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+    return content
+
+def format_transcription(result, fmt: str, task: str = "transcribe") -> str:
+    """Render a TranscriptionResult in an /asr or OpenAI output format.
+
+    /asr (whisper-asr-webservice compatible): srt, vtt, txt, tsv, json.
+    OpenAI: json ({"text"} only), text, srt, vtt, verbose_json.
+    """
+    segments = result.segments
+    full_text = " ".join(seg["text"].replace("\n", " ") for seg in segments)
+    if fmt == "vtt":
+        cues = ["WEBVTT\n"]
+        for seg in segments:
+            start = seconds_to_srt_timestamp(seg["start"]).replace(",", ".")
+            end = seconds_to_srt_timestamp(seg["end"]).replace(",", ".")
+            cues.append(f"{start} --> {end}\n{seg['text']}\n")
+        return "\n".join(cues)
+    if fmt in ("txt", "text"):
+        return "\n".join(seg["text"].replace("\n", " ") for seg in segments) + "\n" if fmt == "txt" else full_text
+    if fmt == "tsv":
+        rows = ["start\tend\ttext"]
+        rows += [f"{round(seg['start'] * 1000)}\t{round(seg['end'] * 1000)}\t{seg['text'].replace(chr(10), ' ').replace(chr(9), ' ')}"
+                 for seg in segments]
+        return "\n".join(rows) + "\n"
+    if fmt == "asr_json":
+        return json.dumps({
+            "text": full_text,
+            "language": result.language,
+            "segments": [{"id": i, "start": round(seg["start"], 3), "end": round(seg["end"], 3), "text": seg["text"]}
+                         for i, seg in enumerate(segments)],
+        })
+    if fmt == "json":
+        return json.dumps({"text": full_text})
+    if fmt == "verbose_json":
+        lang = LanguageCode.from_string(result.language)
+        return json.dumps({
+            "task": task,
+            # OpenAI (and subgen main) report the language name in lowercase, e.g. "english"
+            "language": lang.to_name().lower() if lang != LanguageCode.NONE else (result.language or ""),
+            "duration": round(segments[-1]["end"], 3) if segments else 0.0,
+            "text": full_text,
+            "segments": [{"id": i, "seek": 0, "start": round(seg["start"], 3), "end": round(seg["end"], 3),
+                          "text": seg["text"], "tokens": [], "temperature": 0.0, "avg_logprob": 0.0,
+                          "compression_ratio": 1.0, "no_speech_prob": 0.0}
+                         for i, seg in enumerate(segments)],
+        })
+    return segments_to_srt(segments)
+
+
+_ASR_MEDIA_TYPES = {"json": "application/json", "vtt": "text/vtt", "srt": "text/plain", "txt": "text/plain",
+                    "tsv": "text/tab-separated-values"}
+
+
+def _find_line_split(words: list) -> int:
+    texts = [w["word"] for w in words]
+    n = len(texts)
+    best_idx, best_score = max(1, n // 2), float("inf")
+    for i in range(1, n):
+        line1 = " ".join(texts[:i])
+        line2 = " ".join(texts[i:])
+        if len(line1) > max_line_length or len(line2) > max_line_length:
+            continue
+        balance      = abs(len(line1) - len(line2))
+        punct_bonus  = -20 if _SENTENCE_END.search(texts[i - 1]) else \
+                       -10 if _SOFT_BREAK.search(texts[i - 1]) else 0
+        conj_penalty =  6 if texts[i].lower().rstrip(".,!?;:") in _CONJUNCTIONS else 0
+        score = balance + punct_bonus + conj_penalty
+        if score < best_score:
+            best_score, best_idx = score, i
+    return best_idx
+
+def _join(words: list) -> str:
+    return " ".join(w["word"] for w in words)
+
+def _fits_two_lines(words: list) -> bool:
+    """True if the words fit in at most two lines of max_line_length.
+
+    Fills the first line greedily; that leaves the shortest possible second line,
+    so if this fails no split works."""
+    if len(_join(words)) <= max_line_length:
+        return True
+    length, i = -1, 0
+    while i < len(words) and length + 1 + len(words[i]["word"]) <= max_line_length:
+        length += 1 + len(words[i]["word"])
+        i += 1
+    return i > 0 and len(_join(words[i:])) <= max_line_length
+
+def _format_subtitle(words: list) -> dict:
+    text  = _join(words)
+    start = words[0]["start"]
+    end   = min(words[-1]["end"], start + max_segment_secs)
+    if len(text) <= max_line_length or len(words) < 2:
+        return {"start": start, "end": end, "text": text}
+    idx   = _find_line_split(words)
+    line1 = _join(words[:idx])
+    line2 = _join(words[idx:])
+    return {"start": start, "end": end, "text": f"{line1}\n{line2}"}
+
+_DANGLING = frozenset({'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on', 'at', 'by',
+                       'and', 'but', 'or', 'so', 'yet', 'for', 'nor'})
+_MERGE_GAP_SECS = 1.0   # never pack text across a pause longer than this into one cue
+_MIN_CUE_SECS   = 1.0   # extend shorter cues (into the following silence) when possible
+_MAX_CPS        = 20.0  # extend cues read faster than this, if the next cue allows
+
+def _is_sentence_end(word: str) -> bool:
+    return bool(_SENTENCE_END.search(word)) and not _ABBREV.match(word) and not _INITIAL.match(word)
+
+def _bare(word: str) -> str:
+    return word.lower().rstrip(".,!?;:")
+
+def _split_units(words: list) -> list:
+    """Split words into units at sentence ends and at pauses (gap_split_secs).
+
+    A pause doesn't split inside parentheses or right after a dangling word
+    ("the", "to", single letters)."""
+    units, cur = [], []
+    for w in words:
+        if cur and (w["start"] - cur[-1]["end"]) >= gap_split_secs:
+            text, last = _join(cur), _bare(cur[-1]["word"])
+            if text.count("(") <= text.count(")") and last not in _DANGLING and len(last) > 1:
+                units.append(cur)
+                cur = []
+        cur.append(w)
+        if _is_sentence_end(w["word"]):
+            units.append(cur)
+            cur = []
+    if cur:
+        units.append(cur)
+    return units
+
+def _fits_cue(words: list) -> bool:
+    return _fits_two_lines(words) and (words[-1]["end"] - words[0]["start"]) <= max_segment_secs
+
+def _split_long_unit(unit: list) -> list:
+    """Cut a unit that doesn't fit one cue into pieces that do.
+
+    Scores every way of cutting the whole unit and keeps the cheapest: few pieces,
+    cuts after a comma/semicolon (or before a conjunction), no piece ending on a
+    dangling word ("the", "to", ...) and no tiny leftover pieces."""
+    n = len(unit)
+    if _fits_cue(unit):
+        return [unit]
+
+    def cut_cost(i: int, j: int) -> float:
+        piece = unit[i:j]
+        cost = 10.0                                   # every extra cue costs something
+        last_word = piece[-1]["word"]
+        if (len(_join(piece)) < max_line_length // 3 and not _SOFT_BREAK.search(last_word)
+                and not _is_sentence_end(last_word)):
+            cost += 12                                # stray fragment (not a natural phrase like "Oh, Nina,")
+        if j < n:                                     # quality of the cut after this piece
+            last = piece[-1]["word"]
+            if _SOFT_BREAK.search(last):
+                pass
+            elif _bare(unit[j]["word"]) in _CONJUNCTIONS:
+                cost += 3
+            else:
+                cost += 8
+            if _bare(last) in _DANGLING:
+                cost += 15
+        return cost
+
+    best = [0.0] + [float("inf")] * n   # best[j] = cheapest way to cut unit[:j]
+    back = [0] * (n + 1)
+    for j in range(1, n + 1):
+        for i in range(j - 1, -1, -1):
+            if not _fits_cue(unit[i:j]):
+                if j - i > 1:
+                    break                 # longer pieces ending at j won't fit either
+            c = best[i] + cut_cost(i, j)
+            if c < best[j]:
+                best[j], back[j] = c, i
+    pieces, j = [], n
+    while j > 0:
+        pieces.append(unit[back[j]:j])
+        j = back[j]
+    return pieces[::-1]
+
+def _sentence_count(words: list) -> int:
+    return sum(1 for w in words if _is_sentence_end(w["word"]))
+
+def _can_merge(cur: list, piece: list) -> bool:
+    """Whether piece can join the cue being built (cur) without breaking the rules."""
+    if not _fits_cue(cur + piece):
+        return False
+    if _sentence_count(cur + piece) > 2:
+        return False  # one or two sentences per cue, like professional subtitles
+    ends_sentence = _is_sentence_end(cur[-1]["word"])
+    if ends_sentence and not _is_sentence_end(piece[-1]["word"]):
+        return False  # don't start a sentence at the end of a cue and finish it in the next one
+    gap = piece[0]["start"] - cur[-1]["end"]
+    fragment = not ends_sentence and not _SOFT_BREAK.search(cur[-1]["word"])
+    limit = _MERGE_GAP_SECS * (2 if fragment and len(_join(cur)) < max_line_length // 2 else 1)
+    return gap <= limit
+
+def _extend_short_cues(segments: list) -> None:
+    """Keep very short or fast cues on screen longer, without overlapping the next cue."""
+    for i, seg in enumerate(segments):
+        chars = len(seg["text"].replace("\n", ""))
+        target = max(_MIN_CUE_SECS, chars / _MAX_CPS)
+        limit = segments[i + 1]["start"] if i + 1 < len(segments) else seg["start"] + target
+        new_end = min(seg["start"] + target, limit, seg["start"] + max_segment_secs)
+        if new_end > seg["end"]:
+            seg["end"] = new_end
+
+# Whisper hallucination filter (HALLUCINATION_FILTER, on by default).
+# Over music or non-speech Whisper can loop one phrase ("I'm sorry, I can't help it." 16 times in
+# 30 s) or emit credits from its training subtitles ("Transcription by CastingWords").
+_REPEAT_MIN_WORDS  = 3    # shorter phrases ("No! No! No!") are often real speech, never collapsed
+_REPEAT_MAX_WORDS  = 25
+_REPEAT_MIN_COPIES = 3    # a phrase said twice is left alone
+_REPEAT_MAX_GAP    = 2.0  # copies must follow each other without a real pause (seconds)
+# Matched against the whole cue (lowercase, punctuation removed), never a part of it.
+_CREDIT_PATTERNS = [re.compile(p) for p in (
+    r'(?:transcription|transcribed|subtitles|captions?) by castingwords(?: com)?',
+    r'.{0,50}\bamara ?org\b.{0,20}',
+    r'(?:sub(?:title)?s|captions?) by .{1,40}',
+    r'thanks? (?:you )?for watching',
+    r'please (?:like and )?subscribe.{0,40}',
+    r'untertitel (?:im auftrag des zdf|der amara|von)\b.{0,40}',
+)]
+
+
+def _norm_word(word: str) -> str:
+    return re.sub(r"[^\w]", "", word.lower())
+
+
+def _collapse_repeated_phrases(words: list) -> tuple:
+    """Keep the first copy of a phrase repeated back to back 3+ times. Returns (words, phrases_removed)."""
+    norm = [_norm_word(w["word"]) for w in words]
+    out, removed, i, n = [], 0, 0, len(words)
+    while i < n:
+        best_p, best_k = 0, 1
+        for p in range(_REPEAT_MIN_WORDS, min(_REPEAT_MAX_WORDS, (n - i) // _REPEAT_MIN_COPIES) + 1):
+            phrase = norm[i:i + p]
+            if not all(phrase):
+                continue
+            k = 1
+            while (i + (k + 1) * p <= n and norm[i + k * p:i + (k + 1) * p] == phrase
+                   and words[i + k * p]["start"] - words[i + k * p - 1]["end"] <= _REPEAT_MAX_GAP):
+                k += 1
+            if k >= _REPEAT_MIN_COPIES and k * p > best_k * best_p:
+                best_p, best_k = p, k
+        if best_p:
+            out.extend(words[i:i + best_p])
+            removed += best_k - 1
+            i += best_p * best_k
+        else:
+            out.append(words[i])
+            i += 1
+    return out, removed
+
+
+def _is_credit(text: str) -> bool:
+    t = " ".join(re.sub(r"[^\w\s]", " ", text.lower()).split())
+    return any(p.fullmatch(t) for p in _CREDIT_PATTERNS)
+
+
+def _drop_credit_cues(segments: list) -> tuple:
+    """Drop cues that are only a known invented credit, also when it is split over two cues."""
+    keep, removed, i = [], 0, 0
+    while i < len(segments):
+        if _is_credit(segments[i]["text"]):
+            removed, i = removed + 1, i + 1
+        elif (i + 1 < len(segments) and len(segments[i]["text"].split()) <= 3
+              and not _is_credit(segments[i + 1]["text"])
+              and _is_credit(segments[i]["text"] + " " + segments[i + 1]["text"])):
+            removed, i = removed + 2, i + 2
+        else:
+            keep.append(segments[i])
+            i += 1
+    return keep, removed
+
+
+def _log_hallucinations(repeats: int, credits: int, display_name: str) -> None:
+    if repeats or credits:
+        parts = ([f"{repeats} repeated phrase(s)"] if repeats else []) + ([f"{credits} credit cue(s)"] if credits else [])
+        where = f" in {display_name}" if display_name else ""
+        logging.info(f"Removed {' and '.join(parts)}{where} (Whisper hallucinations; HALLUCINATION_FILTER=False keeps them)")
+
+
+def split_segments(words: list, display_name: str = "") -> list:
+    """Convert flat word list → subtitle segment dicts (Netflix-style guidelines).
+
+    1. Split into units at sentence ends and pauses.
+    2. Cut units too long for one cue (two lines of max_line_length, max_segment_secs).
+    3. Pack consecutive pieces into cues while they fit, so short sentences share a
+       two-line cue and stray fragments join their sentence.
+    4. Extend cues that would flash by too quickly.
+    With HALLUCINATION_FILTER, phrases looped 3+ times keep one copy and invented credits are dropped."""
+    if not words:
+        return []
+    repeats = credits = 0
+    if hallucination_filter:
+        words, repeats = _collapse_repeated_phrases(words)
+    cues, cur = [], []
+    for unit in _split_units(words):
+        for piece in _split_long_unit(unit):
+            if cur and _can_merge(cur, piece):
+                cur = cur + piece
+            else:
+                if cur:
+                    cues.append(cur)
+                cur = list(piece)
+    if cur:
+        cues.append(cur)
+    segments = [_format_subtitle(c) for c in cues]
+    if hallucination_filter:
+        segments, credits = _drop_credit_cues(segments)
+    _log_hallucinations(repeats, credits, display_name)
+    _extend_short_cues(segments)
+    return segments
+
+def extract_words(fw_segments: list) -> list:
+    """Flatten faster-whisper segments into word dicts for split_segments()."""
+    words = []
+    for seg in fw_segments:
+        if seg.words:
+            for w in seg.words:
+                words.append({"word": w.word.strip(), "start": w.start, "end": w.end})
+        else:
+            # No word timestamps — treat segment as single unit
+            words.append({"word": seg.text.strip(), "start": seg.start, "end": seg.end})
+    return words
+
+def wav_bytes_to_numpy(audio_bytes: bytes) -> np.ndarray:
+    """Convert WAV bytes (16 kHz PCM s16le) → float32 numpy array for faster-whisper."""
+    try:
+        with wave.open(io.BytesIO(audio_bytes)) as wf:
+            frames = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
+        return frames.astype(np.float32) / 32768.0
+    except Exception:
+        return np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+
+# Kwargs that are stable-ts-specific and must not be forwarded to faster-whisper
+_STABLE_TS_KWARGS = frozenset({'regroup', 'input_sr', 'progress_callback'})
+
+def appendLine(result):
+    if append and result.segments:
+        last = result.segments[-1]
+        date_time_str = datetime.now().strftime("%d %b %Y - %H:%M:%S")
+        result.segments.append({
+            "start": last["start"] + TIME_OFFSET,
+            "end":   last["end"]   + TIME_OFFSET,
+            "text":  f"Transcribed by whisperAI with {transcribe_backend} ({whisper_model}) on {date_time_str}",
+        })
 
 @app.get("/plex")
 @app.get("/webhook")
@@ -550,7 +1000,10 @@ def webui():
 
 @app.get("/status")
 def status():
-    return {"version": f"Subgen {subgen_version}, stable-ts {stable_whisper.__version__}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
+    if transcribe_backend == 'whispercpp':
+        return {"version": f"Subgen {subgen_version}, whisper.cpp ({docker_status})"}
+    import faster_whisper
+    return {"version": f"Subgen {subgen_version}, faster-whisper {faster_whisper.__version__} ({docker_status})"}
 
 @app.post("/tautulli")
 def receive_tautulli_webhook(
@@ -735,6 +1188,13 @@ async def asr(
     task_id = None
     
     try:
+        # Unknown values are tolerated rather than rejected (main returned an error for an unknown task).
+        if task not in ("transcribe", "translate"):
+            logging.warning(f"ASR: unknown task '{task}', transcribing")
+            task = "transcribe"
+        if output not in _ASR_MEDIA_TYPES:
+            logging.warning(f"ASR: unknown output '{output}', returning srt")
+            output = "srt"
         logging.info(
             f"ASR {task.capitalize()} received for file '{video_file}'" 
             if video_file 
@@ -804,12 +1264,12 @@ async def asr(
                     "task_id": task_id,
                     "message": f"ASR processing failed: {task_result.error}"
                 }
-            else: 
+            else:
                 logging.info(f"ASR task {task_id} completed")
                 return StreamingResponse(
-                    iter(task_result.result),
-                    media_type="text/plain",
-                    headers={'Source': f'{task.capitalize()}d using stable-ts from Subgen!'}
+                    iter([format_transcription(task_result.result, "asr_json" if output == "json" else output, task)]),
+                    media_type=_ASR_MEDIA_TYPES[output],
+                    headers={'Source': f'{task.capitalize()}d using {transcribe_backend} from Subgen!'}
                 )
         else:
             logging.error(f"ASR task {task_id} timed out")
@@ -818,8 +1278,8 @@ async def asr(
                 "task_id": task_id,
                 "message": f"ASR processing timed out after {asr_timeout} seconds"
             }
-            
-    except Exception as e: 
+
+    except Exception as e:
         logging.error(f"Error in ASR endpoint: {e}", exc_info=True)
         return {"status": "error", "message": f"Error: {str(e)}"}
     finally:
@@ -880,7 +1340,6 @@ async def openai_transcriptions(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -894,7 +1353,7 @@ async def openai_transcriptions(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "transcribe")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -946,7 +1405,6 @@ async def openai_translations(
             'initial_prompt': prompt,
             'audio_content': file_content,
             'encode': True,
-            'output_format': response_format,
             'word_timestamps': response_format == 'verbose_json',
             'result_container': task_result,
         }
@@ -960,7 +1418,7 @@ async def openai_translations(
             if task_result.error:
                 return {"error": task_result.error}
             return StreamingResponse(
-                iter([task_result.result]),
+                iter([format_transcription(task_result.result, response_format, "translate")]),
                 media_type=_OPENAI_MEDIA_TYPES.get(response_format, "text/plain"),
             )
         else:
@@ -1016,34 +1474,20 @@ def get_audio_start_time(video_path: str) -> float:
     return 0.0
 
 
-def apply_timestamp_offset(result, offset: float) -> None:
+def apply_timestamp_offset(result: TranscriptionResult, offset: float) -> None:
     """
-    Shift all segment and word timestamps forward by the given offset.
-    
-    This compensates for audio start_time offsets in containers where the
-    audio stream starts later than the video stream. Whisper produces
-    timestamps relative to the audio stream start, but subtitles need
-    to be aligned to the video/container timeline.
-    
-    Note: Segment.start/end are properties that delegate to the first/last
-    word timestamps, so we only need to shift word timestamps to avoid
-    double-application. For segments without words, we shift _default_start/end.
+    Shift all subtitle segment timestamps forward by the given offset.
+
+    Used to compensate for audio containers where the audio stream begins
+    after the video stream (e.g. Amazon WEB-DL files with ~4 s of silence
+    prepended by Bazarr). Whisper ignores that silence, so its timestamps
+    are 'offset' seconds early relative to the container.
     """
     if offset <= 0:
         return
-    
-    for segment in result.segments:
-        if hasattr(segment, 'words') and segment.words:
-            for word in segment.words:
-                word.start += offset
-                word.end += offset
-        else:
-            # Segments without words use _default_start/_default_end
-            if hasattr(segment, '_default_start'):
-                segment._default_start += offset
-            if hasattr(segment, '_default_end'):
-                segment._default_end += offset
-    
+    for seg in result.segments:
+        seg["start"] += offset
+        seg["end"]   += offset
     logging.info(f"Applied +{offset:.3f}s timestamp offset to {len(result.segments)} segments")
 
 
@@ -1066,67 +1510,51 @@ def asr_task_worker(task_data: dict) -> None:
         
         start_model()
 
-        args = {}
         display_name = os.path.basename(video_file) if video_file else task_id
-        args['progress_callback'] = ProgressHandler(display_name)
-        
-        # Handle audio encoding
-        if encode:
-            args['audio'] = file_content
-        else:
-            args['audio'] = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-            args['input_sr'] = 16000
 
-        if custom_regroup and custom_regroup.lower() != 'default':
-            args['regroup'] = custom_regroup
-
-        args.update(kwargs)
-        
         # Detect audio start_time offset from source file (if accessible)
         audio_offset = get_audio_start_time(video_file) if video_file else 0.0
-        
-        # Perform transcription
-        result = model.transcribe(task=task, language=language, **args, verbose=None)
-        
+
+        if transcribe_backend == 'whispercpp':
+            audio = _audio_for_whispercpp(file_content, encode)
+            result = _transcribe_whispercpp(audio, task, language or '', display_name)
+        else:
+            # Build faster-whisper kwargs; strip any stable-ts-specific keys from SUBGEN_KWARGS.
+            # Merge so caller-supplied values win over the defaults (restores main-branch behaviour
+            # where args.update(kwargs) meant user kwargs overrode defaults rather than colliding).
+            fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
+            fw_call = {
+                "task": task,
+                "language": language or None,
+                "word_timestamps": True,
+                "vad_filter": vad_filter,
+                "condition_on_previous_text": False,
+                **fw_kwargs,
+            }
+
+            # Prepare audio: encoded bytes → BytesIO (in-memory); raw PCM → numpy float32
+            if encode:
+                audio = io.BytesIO(file_content)
+            else:
+                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+
+            fw_segments_gen, info = model.transcribe(audio, **fw_call)
+            fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
+            words = extract_words(fw_segments)
+            result = TranscriptionResult(
+                segments=split_segments(words, display_name),
+                language=info.language,
+            )
+
         # Apply audio start_time offset to compensate for container timing
-        # Whisper ignores silence padding (adelay) from Bazarr, so timestamps
-        # are relative to audio stream start, not container start
         if audio_offset > 0:
             apply_timestamp_offset(result, audio_offset)
-        
+
         appendLine(result)
-        
-        # Set result for blocking endpoint
+
+        # Hand the transcription to the waiting request(s); each formats it as it asked.
         if result_container:
-            output_format = task_data.get('output_format', 'srt')
-            if output_format == 'json':
-                formatted = json.dumps({"text": result.text.strip()})
-            elif output_format == 'text':
-                formatted = result.text.strip()
-            elif output_format == 'vtt':
-                formatted = result.to_srt_vtt(filepath=None, word_level=word_level_highlight, vtt=True)
-            elif output_format == 'verbose_json':
-                segs = []
-                for i, seg in enumerate(result.segments):
-                    s = {
-                        "id": i, "seek": 0,
-                        "start": round(seg.start, 3), "end": round(seg.end, 3),
-                        "text": seg.text, "tokens": [], "temperature": 0.0,
-                        "avg_logprob": 0.0, "compression_ratio": 1.0, "no_speech_prob": 0.0,
-                    }
-                    if seg.words:
-                        s["words"] = [{"word": w.word, "start": round(w.start, 3), "end": round(w.end, 3)} for w in seg.words]
-                    segs.append(s)
-                formatted = json.dumps({
-                    "task": task,
-                    "language": result.language,
-                    "duration": round(result.segments[-1].end, 3) if result.segments else 0.0,
-                    "text": result.text.strip(),
-                    "segments": segs,
-                })
-            else:  # srt (default)
-                formatted = result.to_srt_vtt(filepath=None, word_level=word_level_highlight)
-            result_container.set_result(formatted)
+            result_container.set_result(result)
 
     except Exception as e:
         logging.error(f"Error processing ASR (ID: {task_id}): {e}", exc_info=True)
@@ -1206,19 +1634,28 @@ async def detect_language(
         
         if encode:
             audio_bytes = await asyncio.to_thread(
-                extract_audio_segment_from_content, 
-                file_content, 
-                detect_lang_offset, 
+                extract_audio_segment_from_content,
+                file_content,
+                detect_lang_offset,
                 detect_lang_length
             )
-            audio_data = np.frombuffer(audio_bytes, np.int16).flatten().astype(np.float32) / 32768.0
         else:
-            audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
+            audio_bytes = None
 
         # Offload the heavy AI inference to a background thread
-        result = await asyncio.to_thread(model.transcribe, audio_data, input_sr=16000, verbose=False)
-        
-        detected = LanguageCode.from_string(result.language)
+        if transcribe_backend == 'whispercpp':
+            if audio_bytes is None:
+                start = detect_lang_offset * 16000 * 2
+                audio_bytes = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+            lang_code = await asyncio.to_thread(detect_language_whispercpp, audio_bytes)
+        else:
+            if audio_bytes is not None:
+                audio_data = wav_bytes_to_numpy(audio_bytes)
+            else:
+                audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
+            lang_code = _fw_language(await asyncio.to_thread(model.detect_language, audio_data))
+
+        detected = LanguageCode.from_string(lang_code)
         
         logging.info(f"Detect Language Result: {detected.to_name()} ({detected.to_iso_639_1()})")
         
@@ -1266,29 +1703,28 @@ def detect_language_from_upload(task_data: dict) -> None:
         
         start_model()
 
-        args = {}
-        args['progress_callback'] = None
-        
-        # Handle audio extraction
-        if encode:
-            audio_bytes = extract_audio_segment_from_content(
-                file_content, 
-                detect_lang_offset, 
-                detect_lang_length
-            )
-            args['audio'] = audio_bytes
-            args['input_sr'] = 16000
+        if transcribe_backend == 'whispercpp':
+            if encode:
+                wav = extract_audio_segment_from_content(file_content, detect_lang_offset, detect_lang_length)
+            else:
+                start = detect_lang_offset * 16000 * 2
+                wav = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+            lang_code = detect_language_whispercpp(wav)
         else:
-            args['audio'] = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
-            args['input_sr'] = 16000
-
-        args.update(kwargs)
-        args['verbose'] = False # Hide the confusing progress bar
-        
-        result = model.transcribe(**args)
-        detected_language = LanguageCode.from_string(result.language)
+            # Prepare audio as numpy float32 for detect_language
+            if encode:
+                audio_bytes = extract_audio_segment_from_content(
+                    file_content,
+                    detect_lang_offset,
+                    detect_lang_length
+                )
+                audio = wav_bytes_to_numpy(audio_bytes)
+            else:
+                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+            lang_code = _fw_language(model.detect_language(audio))
+        detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
-        
+
         logging.info(f"Detected language: {detected_language.to_name()} ({language_code}) - ID: {task_id}")
         
         # Set the result for the blocking endpoint
@@ -1330,12 +1766,17 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
     try: 
         logging.info(f"Extracting audio segment: start_time={start_time}s, duration={duration}s")
         
-        out, _ = (
-            ffmpeg
-            .input('pipe:0', ss=start_time, t=duration)
-            .output('pipe:1', format='wav', acodec='pcm_s16le', ar=16000)
-            .run(input=audio_content, capture_stdout=True, capture_stderr=True)
-        )
+        # Read from a temp file, not stdin: from a pipe ffmpeg returned ~25 s of a 30 s
+        # request, and MP4/MOV with the index at the end can't be decoded from a pipe at all.
+        with tempfile.NamedTemporaryFile(prefix='subgen_detect_') as tmp:
+            tmp.write(audio_content)
+            tmp.flush()
+            out, _ = (
+                ffmpeg
+                .input(tmp.name, ss=start_time, t=duration)
+                .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)  # mono: callers read raw samples
+                .run(capture_stdout=True, capture_stderr=True)
+            )
         
         if not out:
             raise ValueError("FFmpeg output is empty")
@@ -1370,10 +1811,13 @@ def detect_language_task(path, original_task_data=None):
             int(detect_language_length)
         )
         
-        # FIX: Hide confusing progress bar and use from_string for ISO codes
-        result = model.transcribe(audio_segment, verbose=False)
-        detected_language = LanguageCode.from_string(result.language)
-        
+        if transcribe_backend == 'whispercpp':
+            lang_code = detect_language_whispercpp(audio_segment)
+        else:
+            audio = wav_bytes_to_numpy(audio_segment)
+            lang_code = _fw_language(model.detect_language(audio))
+        detected_language = LanguageCode.from_string(lang_code)
+
         logging.info(f"Detected language: {detected_language.to_name()}")
 
     except Exception as e:
@@ -1445,12 +1889,507 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         logging.error(f"Error: {str(e)}")
         return None
 
+_WCP_SPECIAL_TOKEN = re.compile(r'^\[.*\]$|^<\|.*\|>$')
+_WCP_SPEAKER_DASH  = re.compile(r'^\s*-\s*')
+
+
+def _wcp_tokens_to_words(transcription: list) -> list:
+    """Extract word-level dicts from whisper.cpp full-JSON transcription array.
+
+    whisper.cpp uses BPE tokens: continuation tokens (e.g. 'ingo' in 'B'+'ingo')
+    have no leading space; word-boundary tokens do (' Bingo', ' Mom').
+    We merge continuations into the previous word so split_segments() sees real words.
+    """
+    words = []
+    for seg in transcription:
+        seg_start = seg.get('offsets', {}).get('from', 0) / 1000.0
+        seg_end   = seg.get('offsets', {}).get('to',   0) / 1000.0
+        tokens = seg.get('tokens', [])
+        if not tokens:
+            # No token-level data — treat whole segment text as one word
+            text = _WCP_SPEAKER_DASH.sub('', seg.get('text', '').strip()).strip()
+            if text:
+                words.append({'word': text, 'start': seg_start, 'end': seg_end})
+            continue
+
+        force_new = True  # the first real token of a segment always starts a word
+        for tok in tokens:
+            raw = tok.get('text', '')
+            if not raw:
+                continue
+            stripped = raw.strip()
+            if not stripped or _WCP_SPECIAL_TOKEN.match(stripped):
+                continue
+            has_space = raw[0] == ' '  # leading space = word boundary in GPT-2 tokenizer
+
+            t_from = tok.get('offsets', {}).get('from', seg_start * 1000) / 1000.0
+            t_to   = tok.get('offsets', {}).get('to',   seg_end   * 1000) / 1000.0
+            # cap single-token duration so a sound-effect token spanning 25s
+            # can't produce a cue that exceeds the hard segment limit
+            t_to = min(t_to, t_from + max_segment_secs)
+
+            if set(stripped) == {'-'}:
+                if (has_space or force_new) or not words:
+                    # speaker-change dash (" -" or at segment start): drop it, and make
+                    # sure the next token starts a new word instead of gluing onto the last
+                    force_new = True
+                else:
+                    # attached to the previous word: a hyphen ("C" "-" "note") or an
+                    # interruption ("I'm--"); keep it so the next token continues the word
+                    words[-1]['word'] += stripped
+                    words[-1]['end'] = t_to
+                continue
+
+            if has_space or force_new or not words:
+                # new word: strip a speaker dash glued to its front (" -Ew")
+                text = _WCP_SPEAKER_DASH.sub('', stripped).strip()
+                if text:
+                    words.append({'word': text, 'start': t_from, 'end': t_to})
+                    force_new = False
+            else:
+                # continuation token: keep it verbatim (it may start with a hyphen, "-note")
+                words[-1]['word'] += stripped
+                words[-1]['end'] = t_to
+
+    return words
+
+
+# whisper-cli's --vad maps segment times back to the original audio but not the per-token
+# times subgen builds subtitles from (v1.9.5: a 15-minute clip came out squeezed into its first
+# 17 seconds), and it merges minutes of audio into one segment. Keep it off until that's fixed.
+_WHISPERCPP_VAD_SUPPORTED = False
+_WHISPERCPP_VAD_FILENAME = "ggml-silero-v5.1.2.bin"
+_WHISPERCPP_VAD_REPO = "ggml-org/whisper-vad"
+_WCP_DEVICE_RE = re.compile(r"whisper_backend_init_gpu: (?:using (?P<dev>.+?) backend|(?P<none>no GPU found))")
+_WCP_DEVICE_FAIL_RE = re.compile(r"whisper_backend_init_gpu: failed to initialize")
+_whispercpp_last_device = None
+_whispercpp_device_lock = Lock()
+
+
+def _ensure_whispercpp_vad_model() -> str:
+    """Return a path to the Silero VAD model, downloading it on first use. '' if unavailable."""
+    path = whisper_cpp_vad_model or os.path.join(model_location, _WHISPERCPP_VAD_FILENAME)
+    if os.path.isfile(path):
+        return path
+    try:
+        from huggingface_hub import hf_hub_download
+        logging.info(f"Downloading whisper.cpp VAD model {_WHISPERCPP_VAD_FILENAME} from {_WHISPERCPP_VAD_REPO}...")
+        return hf_hub_download(repo_id=_WHISPERCPP_VAD_REPO, filename=os.path.basename(path),
+                               local_dir=os.path.dirname(os.path.abspath(path)) or model_location)
+    except Exception as e:
+        logging.warning(f"VAD_FILTER is on but the whisper.cpp VAD model is unavailable ({e}); continuing without VAD")
+        return ''
+
+
+def _whispercpp_device_args() -> list:
+    """GPU selection flags. whisper.cpp uses a GPU automatically when one is present."""
+    if whisper_cpp_device == 'cpu':
+        return ['-ng']
+    if whisper_cpp_device.isdigit():
+        return ['-dev', whisper_cpp_device]
+    if whisper_cpp_device:
+        logging.warning(f"Ignoring WHISPER_CPP_DEVICE='{whisper_cpp_device}': use a GPU index like 0 or 1, or 'cpu'")
+    return []
+
+
+def _available_cpus() -> int:
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return os.cpu_count() or 4
+
+
+def whispercpp_threads() -> int:
+    """CPU threads per whisper-cli job.
+
+    WHISPER_THREADS wins when set. Otherwise share the available cores between the
+    CONCURRENT_TRANSCRIPTIONS jobs (min 4, max 16). On a 24-core CPU, one job on 16 threads
+    ran 2.4x faster than on the old fixed 4; with a GPU the setting barely matters.
+    """
+    if _whisper_threads_env.isdigit():
+        return int(_whisper_threads_env)
+    return max(4, min(16, _available_cpus() // max(1, concurrent_transcriptions)))
+
+
+def _whispercpp_base_cmd(model_path: str, audio_path: str, output_prefix: str) -> list:
+    cli = shutil.which(whisper_cli_path) or whisper_cli_path
+    # -mc 0: don't feed previously decoded text back in as context. Same as
+    # condition_on_previous_text=False on the faster-whisper path; without it whisper.cpp
+    # falls into repetition loops (re-transcribing whole passages), which in testing on a
+    # 22-minute episode raised WER from 7.5% to 10.6% and made it 25% slower.
+    return [cli, '-m', model_path, '-f', audio_path, '-of', output_prefix,
+            '-t', str(whispercpp_threads()), '-mc', '0'] + _whispercpp_device_args()
+
+
+def _log_whispercpp_device(stderr: str) -> None:
+    """whisper.cpp silently falls back to CPU, so surface which device it actually used."""
+    global _whispercpp_last_device
+    match = _WCP_DEVICE_RE.search(stderr or '')
+    if not match:
+        return
+    device = match.group('dev') or 'CPU'
+    if _WCP_DEVICE_FAIL_RE.search(stderr):
+        device = 'CPU'  # "using X backend" is logged before init; init failed so it fell back to CPU
+    with _whispercpp_device_lock:
+        if device == _whispercpp_last_device:
+            return
+        _whispercpp_last_device = device
+    if device != 'CPU':
+        logging.info(f"whisper.cpp is using GPU device: {device}")
+    elif whisper_cpp_device == 'cpu':
+        logging.info("whisper.cpp is running on CPU (WHISPER_CPP_DEVICE=cpu)")
+    elif os.getenv('GGML_BACKEND', '').lower() == 'cpu':
+        logging.info("whisper.cpp is running on CPU (CPU-only image)")
+    else:
+        logging.warning("whisper.cpp found no usable GPU and is running on CPU. "
+                        "Check that the GPU is passed into the container (/dev/dri for Intel/AMD Vulkan, "
+                        "--gpus for NVIDIA) and that you are using the image for your GPU.")
+
+
+_DAMAGED_MODEL = re.compile(r"not all tensors loaded|failed to load model|invalid model|bad magic", re.IGNORECASE)
+
+
+def _run_whispercpp(cmd: list, timeout: int) -> subprocess.CompletedProcess:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    _log_whispercpp_device(proc.stderr)
+    if proc.returncode != 0:
+        if _DAMAGED_MODEL.search(proc.stderr or "") and "-m" in cmd:
+            _handle_damaged_model(cmd[cmd.index("-m") + 1])
+        raise RuntimeError(f"whisper-cli exited {proc.returncode}: {(proc.stderr or '')[-500:]}")
+    return proc
+
+
+def _handle_damaged_model(path: str) -> None:
+    """A model file whisper-cli can't load (e.g. an interrupted copy) would fail every job forever.
+
+    If subgen downloaded it (WHISPER_CPP_MODEL not set), move it aside so the next job downloads
+    it again; a file the user configured is never touched."""
+    if not os.getenv("WHISPER_CPP_MODEL") and os.path.isfile(path):
+        try:
+            os.replace(path, path + ".damaged")
+            logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Moved it to "
+                          f"{os.path.basename(path)}.damaged; it will be downloaded again on the next job.")
+            return
+        except OSError as e:
+            logging.debug(f"Could not move damaged model {path}: {e}")
+    logging.error(f"The whisper.cpp model {path} is damaged (incomplete or corrupt). Replace or delete it "
+                  f"(WHISPER_CPP_MODEL points at it) and restart subgen.")
+
+
+def pcm16_to_wav_bytes(pcm: bytes, sample_rate: int = 16000) -> bytes:
+    """Wrap raw mono s16le PCM in a WAV header so whisper-cli can read it."""
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
+
+
+def _audio_for_whispercpp(content: bytes, encode: bool) -> bytes:
+    """Make an /asr upload readable by whisper-cli, which only reads WAV, FLAC, MP3 and OGG.
+
+    encode=False is raw 16 kHz mono s16le PCM (what Bazarr sends by default): add a WAV
+    header. encode=True is an encoded file: pass formats whisper-cli reads through, and
+    convert anything else (AAC, MP4, MKV, ...) to 16 kHz mono WAV with ffmpeg."""
+    if not encode:
+        return pcm16_to_wav_bytes(content)
+    head = content[:12]
+    if (head[:4] == b'RIFF' and head[8:12] == b'WAVE') or head[:4] in (b'fLaC', b'OggS') \
+            or head[:3] == b'ID3' or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
+        return content
+    # Through a temp file, not stdin: MP4/MOV often keep their index at the end and can't be
+    # decoded from a pipe.
+    with tempfile.NamedTemporaryFile(prefix='subgen_upload_') as tmp:
+        tmp.write(content)
+        tmp.flush()
+        out = _media_file_to_wav(tmp.name)
+    return out or content
+
+
+def _media_file_to_wav(path: str) -> Union[bytes, None]:
+    """16 kHz mono WAV of a media file's default audio track, via ffmpeg. None on failure.
+
+    whisper-cli can't read video containers (MKV, MP4, ...), and reading a whole movie into
+    memory to hand it over would cost gigabytes; this keeps only the audio (~32 KB/s)."""
+    try:
+        out, _ = (
+            ffmpeg
+            .input(path)
+            .output('pipe:1', format='wav', acodec='pcm_s16le', ac=1, ar=16000)
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+        return out or None
+    except ffmpeg.Error as e:
+        logging.warning(f"ffmpeg could not extract audio from {os.path.basename(path)}: "
+                        f"{(e.stderr or b'').decode(errors='ignore')[-300:]}")
+        return None
+
+
+def detect_language_whispercpp(wav_bytes: bytes) -> str:
+    """Detect the spoken language with `whisper-cli -dl`. Returns an ISO 639-1 code; raises on failure."""
+    model_path = _ensure_whispercpp_model()
+    if re.search(r'\.en(?:[.-]|$)', os.path.basename(model_path)):
+        return 'en'  # English-only model (e.g. ggml-base.en.bin) can't detect other languages
+    tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_dl_')
+    try:
+        audio_path = os.path.join(tmp_dir, 'audio.wav')
+        output_prefix = os.path.join(tmp_dir, 'out')
+        with open(audio_path, 'wb') as f:
+            f.write(wav_bytes)
+        cmd = _whispercpp_base_cmd(model_path, audio_path, output_prefix) + ['-dl', '-oj']
+        _run_whispercpp(cmd, timeout=600)
+        with open(output_prefix + '.json', encoding='utf-8') as f:
+            language = json.load(f).get('result', {}).get('language', '')
+        if not language:
+            raise RuntimeError("whisper-cli did not report a language")
+        return language
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+_SILENCE_RMS = 10 ** (-55 / 20)  # -55 dBFS: far below any dialogue, above digital silence and hiss
+
+
+def _drop_silent_segments(segments: list, audio_bytes: bytes, display_name: str = "") -> list:
+    """Drop cues whose stretch of audio is effectively silent.
+
+    Whisper reliably invents text over silence ("Thank you.", "you"): a 60-second silent clip
+    came back as two "Thank you." cues. Only 16-bit WAV input is checked (what subgen produces
+    for whisper.cpp); anything else is returned unchanged. Every 16th sample is enough to tell
+    silence from sound and keeps a feature-length film to about a second."""
+    import array
+    if not segments or not audio_bytes or audio_bytes[:4] != b'RIFF':
+        return segments
+    try:
+        with wave.open(io.BytesIO(audio_bytes)) as wf:
+            rate, width, channels = wf.getframerate(), wf.getsampwidth(), wf.getnchannels()
+            if width != 2:
+                return segments
+            samples = array.array('h')
+            samples.frombytes(wf.readframes(wf.getnframes()))
+        if sys.byteorder == 'big':
+            samples.byteswap()
+    except Exception as e:
+        logging.debug(f"Silence check skipped for {display_name}: {e}")
+        return segments
+    step = 16 * channels
+    threshold = (_SILENCE_RMS * 32768.0) ** 2
+    kept = []
+    for seg in segments:
+        lo = int(seg["start"] * rate) * channels
+        hi = max(int(seg["end"] * rate) * channels, lo + 1)
+        window = samples[lo:hi:step]
+        if len(window) and sum(x * x for x in window) / len(window) < threshold:
+            logging.debug(f"Dropped cue over silence in {display_name}: {seg['text']!r}")
+            continue
+        kept.append(seg)
+    if len(kept) < len(segments):
+        logging.info(f"Removed {len(segments) - len(kept)} cue(s) over silence in {display_name} (Whisper hallucinations)")
+    return kept
+
+
+def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display_name: str) -> "TranscriptionResult":
+    """Transcribe via whisper.cpp CLI subprocess. Returns a TranscriptionResult."""
+    model_path = _ensure_whispercpp_model()
+
+    tmp_dir = tempfile.mkdtemp(prefix='subgen_wcp_')
+    audio_path = os.path.join(tmp_dir, 'audio')
+    output_prefix = os.path.join(tmp_dir, 'out')
+    json_path = output_prefix + '.json'
+
+    try:
+        with open(audio_path, 'wb') as f:
+            f.write(audio_bytes)
+
+        cmd = _whispercpp_base_cmd(model_path, audio_path, output_prefix) + [
+            '-ojf',          # full JSON — includes per-token timestamps
+            # whisper-cli defaults to English; 'auto' makes it detect the language instead
+            '-l', language or 'auto',
+        ]
+        if vad_filter and _WHISPERCPP_VAD_SUPPORTED:
+            vad_model = _ensure_whispercpp_vad_model()
+            if vad_model:
+                cmd += ['--vad', '-vm', vad_model, '-vt', str(vad_threshold)]
+        if task == 'translate':
+            cmd += ['--translate']
+
+        logging.info(f"whisper.cpp: transcribing {display_name}")
+        # Never shorter than the previous fixed 3600s; ASR_TIMEOUT=900 for fast Bazarr failures must not kill long files
+        _run_whispercpp(cmd, timeout=max(asr_timeout, 3600))
+
+        with open(json_path, encoding='utf-8') as f:
+            data = json.load(f)
+
+        detected_language = data.get('result', {}).get('language', language or '')
+        transcription = data.get('transcription', [])
+        words = _wcp_tokens_to_words(transcription)
+
+        if words:
+            segments = split_segments(words, display_name)
+            logging.info(f"whisper.cpp: {len(transcription)} raw segments → {len(segments)} after Netflix split for {display_name}")
+        else:
+            # Fallback: raw segment text (no word timestamps available)
+            segments = []
+            for seg in transcription:
+                offsets = seg.get('offsets', {})
+                text = _WCP_SPEAKER_DASH.sub('', seg.get('text', '').strip()).strip()
+                if text:
+                    segments.append({
+                        'start': offsets.get('from', 0) / 1000.0,
+                        'end':   offsets.get('to',   0) / 1000.0,
+                        'text':  text,
+                    })
+            logging.info(f"whisper.cpp: {len(segments)} segments (no token data) for {display_name}")
+            if hallucination_filter:
+                segments, credits = _drop_credit_cues(segments)
+                _log_hallucinations(0, credits, display_name)
+
+        segments = _drop_silent_segments(segments, audio_bytes, display_name)
+        return TranscriptionResult(segments=segments, language=detected_language)
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+_WHISPERCPP_DEFAULT_REPO = "ggerganov/whisper.cpp"
+
+# Map WHISPER_MODEL friendly names → (gguf_filename, hf_repo).
+# Used to auto-derive WHISPER_CPP_MODEL when it isn't set explicitly.
+_D = _WHISPERCPP_DEFAULT_REPO  # shorthand
+_DISTIL35 = "distil-whisper/distil-large-v3.5-ggml"
+_DISTIL3  = "distil-whisper/distil-large-v3-ggml"
+
+_WHISPER_MODEL_TO_GGUF = {
+    # distil models
+    "distil-large-v3.5":       ("ggml-model.bin",                _DISTIL35),
+    "distil-large-v3":         ("ggml-distil-large-v3.bin",      _DISTIL3),
+    "distil-large-v3.fp32":    ("ggml-distil-large-v3.fp32.bin", _DISTIL3),
+    # large
+    "large-v3-turbo":          ("ggml-large-v3-turbo.bin",       _D),
+    "large-v3-turbo-q5_0":     ("ggml-large-v3-turbo-q5_0.bin", _D),
+    "large-v3-turbo-q8_0":     ("ggml-large-v3-turbo-q8_0.bin", _D),
+    "large-v3":                ("ggml-large-v3.bin",             _D),
+    "large-v3-q5_0":           ("ggml-large-v3-q5_0.bin",       _D),
+    "large-v2":                ("ggml-large-v2.bin",             _D),
+    "large-v2-q5_0":           ("ggml-large-v2-q5_0.bin",       _D),
+    "large-v2-q8_0":           ("ggml-large-v2-q8_0.bin",       _D),
+    "large-v1":                ("ggml-large-v1.bin",             _D),
+    # medium
+    "medium":                  ("ggml-medium.bin",               _D),
+    "medium-q5_0":             ("ggml-medium-q5_0.bin",          _D),
+    "medium-q8_0":             ("ggml-medium-q8_0.bin",          _D),
+    "medium.en":               ("ggml-medium.en.bin",            _D),
+    "medium.en-q5_0":          ("ggml-medium.en-q5_0.bin",       _D),
+    "medium.en-q8_0":          ("ggml-medium.en-q8_0.bin",       _D),
+    # small
+    "small":                   ("ggml-small.bin",                _D),
+    "small-q5_1":              ("ggml-small-q5_1.bin",           _D),
+    "small-q8_0":              ("ggml-small-q8_0.bin",           _D),
+    "small.en":                ("ggml-small.en.bin",             _D),
+    "small.en-q5_1":           ("ggml-small.en-q5_1.bin",        _D),
+    "small.en-q8_0":           ("ggml-small.en-q8_0.bin",        _D),
+    # base
+    "base":                    ("ggml-base.bin",                 _D),
+    "base-q5_1":               ("ggml-base-q5_1.bin",            _D),
+    "base-q8_0":               ("ggml-base-q8_0.bin",            _D),
+    "base.en":                 ("ggml-base.en.bin",              _D),
+    "base.en-q5_1":            ("ggml-base.en-q5_1.bin",         _D),
+    "base.en-q8_0":            ("ggml-base.en-q8_0.bin",         _D),
+    # tiny
+    "tiny":                    ("ggml-tiny.bin",                 _D),
+    "tiny-q5_1":               ("ggml-tiny-q5_1.bin",            _D),
+    "tiny-q8_0":               ("ggml-tiny-q8_0.bin",            _D),
+    "tiny.en":                 ("ggml-tiny.en.bin",              _D),
+    "tiny.en-q5_1":            ("ggml-tiny.en-q5_1.bin",         _D),
+    "tiny.en-q8_0":            ("ggml-tiny.en-q8_0.bin",         _D),
+}
+
+# For users who set WHISPER_CPP_MODEL to an explicit filename path.
+# Only needed for filenames that can't be looked up via _WHISPER_MODEL_TO_GGUF.
+_WHISPERCPP_REPO_BY_FILENAME = {
+    f: repo for (f, repo) in _WHISPER_MODEL_TO_GGUF.values()
+}
+
+
+def _ensure_whispercpp_model() -> str:
+    """Return the local path to the whisper.cpp GGUF model, downloading from HuggingFace if missing."""
+    global whisper_cpp_model
+
+    # Auto-derive from WHISPER_MODEL when WHISPER_CPP_MODEL is not explicitly set.
+    if not whisper_cpp_model:
+        entry = _WHISPER_MODEL_TO_GGUF.get(whisper_model)
+        if not entry:
+            raise RuntimeError(
+                f"WHISPER_CPP_MODEL is not set and WHISPER_MODEL='{whisper_model}' has no "
+                f"known GGUF mapping. Set WHISPER_CPP_MODEL to the path of your .bin file."
+            )
+        derived_filename, derived_repo = entry
+        whisper_cpp_model = os.path.join(model_location, derived_filename)
+        logging.info(f"WHISPER_CPP_MODEL not set; derived '{derived_filename}' from WHISPER_MODEL={whisper_model}")
+
+    if os.path.isfile(whisper_cpp_model):
+        return whisper_cpp_model
+
+    filename = os.path.basename(whisper_cpp_model)
+    dest_dir = os.path.dirname(os.path.abspath(whisper_cpp_model)) or model_location
+    os.makedirs(dest_dir, exist_ok=True)
+
+    # Repo priority: explicit env override > filename map > WHISPER_MODEL map > default
+    derived_repo = _WHISPER_MODEL_TO_GGUF.get(whisper_model, (None, None))[1]
+    repo_id = whisper_cpp_repo or _WHISPERCPP_REPO_BY_FILENAME.get(filename) or derived_repo or _WHISPERCPP_DEFAULT_REPO
+    logging.info(f"whisper.cpp model not found at {whisper_cpp_model}; downloading {filename} from {repo_id} on HuggingFace...")
+    try:
+        from huggingface_hub import hf_hub_download
+        downloaded = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            local_dir=dest_dir,
+        )
+        whisper_cpp_model = downloaded
+        logging.info(f"whisper.cpp model downloaded to {whisper_cpp_model}")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to download whisper.cpp model '{filename}' from {repo_id}: {exc}") from exc
+
+    return whisper_cpp_model
+
+
 def start_model():
     global model
+    if transcribe_backend == 'whispercpp':
+        _ensure_whispercpp_model()
+        return
     with model_load_lock:
         if model is None:
             logging.debug("Model was purged, need to re-create")
-            model = stable_whisper.load_faster_whisper(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+            _preload_cuda_libraries()
+            import faster_whisper
+            model = faster_whisper.WhisperModel(whisper_model, download_root=model_location, device=transcribe_device, cpu_threads=whisper_threads, num_workers=concurrent_transcriptions, compute_type=compute_type)
+
+def _fw_language(detected) -> str:
+    """Language code from faster-whisper's detect_language().
+
+    It returns (language, probability) in older releases and
+    (language, probability, all_language_probs) in 1.2+, so take the first item."""
+    return detected[0]
+
+
+def _preload_cuda_libraries() -> None:
+    """Load torch's bundled CUDA libraries before faster-whisper uses the GPU.
+
+    CTranslate2 dlopens libcublas.so.12 at the first CUDA call. In images where cuBLAS
+    only ships inside torch's pip wheels it isn't on the loader path, and faster-whisper
+    fails with "Library libcublas.so.12 is not found or cannot be loaded". main imported
+    torch at startup, which loaded them as a side effect; do the same, only when needed.
+    """
+    if transcribe_device.lower() not in ('cuda', 'gpu'):
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pass
+
 
 def schedule_model_cleanup():
     """Schedule model cleanup with a delay to allow concurrent requests.
@@ -1497,18 +2436,20 @@ def perform_model_cleanup():
                 except Exception as e:
                     logging.error(f"Error unloading model: {e}")
             
-            if transcribe_device.lower() == 'cuda' and torch.cuda.is_available():
+            if transcribe_backend != 'whispercpp' and transcribe_device.lower() == 'cuda':
                 try:
+                    import torch
                     torch.cuda.empty_cache()
                     logging.debug("CUDA cache cleared.")
-                except Exception as e: 
+                except Exception as e:
                     logging.error(f"Error clearing CUDA cache: {e}")
         else:
             logging.debug("Queue not idle or clear_vram disabled; skipping model cleanup")
         
         if os.name != 'nt': # don't garbage collect on Windows
             gc.collect()
-            ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(0)
+            if sys.platform == 'linux':  # malloc_trim is glibc-only
+                ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(0)
         
         model_cleanup_timer = None
 
@@ -1537,13 +2478,15 @@ def is_audio_file_extension(file_extension):
     return file_extension.casefold() in AUDIO_EXTENSIONS
 
 def write_lrc(result, file_path):
-    with open(file_path, "w") as file:
+    with open(file_path, "w", encoding="utf-8") as file:
         for segment in result.segments:
-            minutes, seconds = divmod(int(segment.start), 60)
-            fraction = int((segment.start - int(segment.start)) * 100)
-            # remove embedded newlines in text, since some players ignore text after newlines
-            text = segment.text[:].replace('\n', '')
-            file.write(f"[{minutes:02d}:{seconds:02d}.{fraction:02d}]{text}\n")
+            start = segment["start"]
+            minutes, secs = divmod(int(start), 60)
+            fraction = int((start - int(start)) * 100)
+            # One line per cue, since some players ignore text after a newline. Wrapped subtitle
+            # lines become a space, not nothing ("of\na pony" must not become "ofa pony").
+            text = " ".join(segment["text"].split())
+            file.write(f"[{minutes:02d}:{secs:02d}.{fraction:02d}]{text}\n")
 
 def send_completion_webhook(source_file_path: str, subtitle_file_path: str, language: LanguageCode, task_type: str):
     """Sends a JSON POST request to a configured webhook URL upon task completion."""
@@ -1585,22 +2528,47 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
         file_name, file_extension = os.path.splitext(file_path)
         is_audio_file = is_audio_file_extension(file_extension)
 
-        data = file_path
-        # Extract audio from the file if it has multiple audio tracks
         extracted_audio_file = handle_multiple_audio_tracks(file_path, force_language, audio_tracks=audio_tracks)
-        if extracted_audio_file:
-            data = extracted_audio_file
-        
-        args = {}
         display_name = os.path.basename(file_path)
-        args['progress_callback'] = ProgressHandler(display_name)
-            
-        if custom_regroup and custom_regroup.lower() != 'default':
-            args['regroup'] = custom_regroup
-            
-        args.update(kwargs)
-        
-        result = model.transcribe(data, language=force_language.to_iso_639_1(), task=transcription_type, verbose=None, **args)
+
+        if transcribe_backend == 'whispercpp':
+            # A chosen track arrives as WAV bytes; otherwise extract the default audio track.
+            audio_bytes = extracted_audio_file or _media_file_to_wav(file_path)
+            if not audio_bytes:
+                raise RuntimeError(f"could not extract audio from {display_name}")
+            result = _transcribe_whispercpp(
+                audio_bytes, transcription_type, force_language.to_iso_639_1() or '', display_name,
+            )
+        else:
+            data = file_path
+            if extracted_audio_file:
+                # handle_multiple_audio_tracks returns WAV bytes; wrap in BytesIO for faster-whisper
+                data = io.BytesIO(extracted_audio_file)
+
+            fw_kwargs = {k: v for k, v in kwargs.items() if k not in _STABLE_TS_KWARGS}
+            fw_call = {
+                "language": force_language.to_iso_639_1() or None,
+                "task": transcription_type,
+                "word_timestamps": True,
+                "vad_filter": vad_filter,
+                "condition_on_previous_text": False,
+                **fw_kwargs,
+            }
+
+            fw_segments_gen, info = model.transcribe(data, **fw_call)
+            fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
+            words = extract_words(fw_segments)
+            result = TranscriptionResult(
+                segments=split_segments(words, display_name),
+                language=info.language,
+            )
+
+        if not result.segments:
+            logging.info(f"No speech found in {display_name}; no subtitle written.")
+            with task_results_lock:
+                if file_path in task_results:
+                    task_results[file_path].set_result(result)
+            return
 
         appendLine(result)
 
@@ -1613,18 +2581,18 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             write_lrc(result, subtitle_file_path)
         else:
             subtitle_file_path = name_subtitle(file_path, output_language)
-            result.to_srt_vtt(subtitle_file_path, word_level=word_level_highlight)
-            
+            segments_to_srt(result.segments, filepath=subtitle_file_path)
+
         # Trigger the downstream webhook
         send_completion_webhook(file_path, subtitle_file_path, output_language, transcription_type)
 
-        # FIX: Provide the generated subtitle result to any waiting ASR endpoint requests
+        # Provide the generated subtitle result to any waiting ASR endpoint requests
         with task_results_lock:
             if file_path in task_results:
-                task_results[file_path].set_result(result.to_srt_vtt(filepath=None, word_level=word_level_highlight))
+                task_results[file_path].set_result(result)
 
     except Exception as e:
-        logging.info(f"Error processing or transcribing {file_path} in {force_language}: {e}")
+        logging.error(f"Error processing or transcribing {file_path} in {force_language}: {e}")
         # FIX: Inform waiting ASR endpoint requests of the error so they don't hang
         with task_results_lock:
             if file_path in task_results:
@@ -1709,8 +2677,11 @@ def handle_multiple_audio_tracks(file_path: str, language: LanguageCode | None =
         if language is not None:
             audio_track = get_audio_track_by_language(audio_tracks, language)
         if audio_track is None:
-            audio_track = audio_tracks[0]
-        
+            audio_track = next((t for t in audio_tracks if not t.get('commentary')), audio_tracks[0])
+        lang = audio_track['language']
+        logging.info(f"Using audio track {audio_track['index']} ({lang.to_name() if hasattr(lang, 'to_name') else lang}, "
+                     f"{audio_track.get('codec', '?')}) of {len(audio_tracks)} for {os.path.basename(file_path)}")
+
         audio_bytes = extract_audio_track_to_memory(file_path, audio_track["index"])
         if audio_bytes is None:
             logging.error(f"Failed to extract audio track {audio_track['index']} from {file_path}")
@@ -1736,18 +2707,23 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
         return None
 
     try:
-        # Use FFmpeg to extract the specific audio track and output to memory
+        output_args = dict(
+            map=f"0:{track_index}",  # Select the specific audio track
+            format="wav",
+            ac=1,
+            ar=16000,
+            loglevel="quiet",
+        )
+        # Mapping one track makes ffmpeg start the output at that track's first sample, so a
+        # track that starts after the rest of the file (common in WEB-DLs) loses its lead-in and
+        # every subtitle comes out early by that much. Pad it back with silence.
+        lead = _track_lead_seconds(input_video_path, track_index)
+        if lead > 0.02:
+            output_args["af"] = f"adelay={round(lead * 1000)}:all=1"
         out, _ = (
             ffmpeg.input(input_video_path)
-            .output(
-                "pipe:", # Direct output to a pipe
-                map=f"0:{track_index}", # Select the specific audio track
-                format="wav", # Output format
-                ac=1, # Mono audio (optional)
-                ar=16000, # Sample rate 16 kHz (recommended for speech models)
-                loglevel="quiet"
-            )
-            .run(capture_stdout=True, capture_stderr=True) # Capture output in memory
+            .output("pipe:", **output_args)
+            .run(capture_stdout=True, capture_stderr=True)
         )
         # Return bytes directly instead of BytesIO to prevent memory leak
         return out
@@ -1755,6 +2731,19 @@ def extract_audio_track_to_memory(input_video_path, track_index) -> bytes | None
     except ffmpeg.Error as e:
         logging.error(f"FFmpeg error: {e.stderr.decode()}")
         return None
+
+def _track_lead_seconds(path: str, track_index) -> float:
+    """How much later a stream starts than the file as a whole (stream start_time - format start_time)."""
+    try:
+        probe = ffmpeg.probe(path)
+        stream = next((st for st in probe.get("streams", []) if st.get("index") == int(track_index)), None)
+        if stream is None:
+            return 0.0
+        return max(0.0, float(stream.get("start_time") or 0) - float(probe.get("format", {}).get("start_time") or 0))
+    except Exception as e:
+        logging.debug(f"Could not read start times for {path}: {e}")
+        return 0.0
+
 
 def get_audio_track_by_language(audio_tracks, language):
     """
@@ -1767,10 +2756,9 @@ def get_audio_track_by_language(audio_tracks, language):
     Returns:
         dict: The first audio track with the given language, or None if no match is found.
     """
-    for track in audio_tracks: 
-        if track['language'] == language:
-            return track
-    return None
+    matches = [track for track in audio_tracks if track['language'] == language]
+    # Prefer the main track over a commentary track in the same language.
+    return next((t for t in matches if not t.get('commentary')), matches[0] if matches else None)
 
 def choose_transcribe_language(file_path, forced_language, audio_tracks=None):
     """
@@ -1845,7 +2833,8 @@ def get_audio_tracks(video_file):
                 "default": stream.get("disposition", {}).get("default", 0) == 1,
                 "forced": stream.get("disposition", {}).get("forced", 0) == 1,
                 "original": stream.get("disposition", {}).get("original", 0) == 1,
-                "commentary": "commentary" in stream.get("tags", {}).get("title", "").lower()
+                "commentary": ("commentary" in stream.get("tags", {}).get("title", "").lower()
+                               or stream.get("disposition", {}).get("comment", 0) == 1)
             }
             audio_tracks.append(audio_track) 
         return audio_tracks
@@ -2047,7 +3036,7 @@ def get_subtitle_languages(video_path):
         with av.open(video_path) as container:
             for stream in container.streams.subtitles:
                 if ignore_forced_subtitles and bool(stream.disposition & av.stream.Disposition.forced):
-                    logging.debug(f"get_subtitle_languages: skipping forced subtitle stream in {video_path}")
+                    logging.debug(f"Skipping forced subtitle stream (language={stream.metadata.get('language', 'unknown')}) in {video_path}")
                     continue
                 lang_code = stream.metadata.get('language')
                 if lang_code:
@@ -2594,7 +3583,19 @@ def transcribe_existing(transcribe_folders, forceLanguage: LanguageCode = Langua
 if __name__ == "__main__":
     import uvicorn
     logging.info(f"Subgen v{subgen_version}")
-    logging.info(f"Threads: {str(whisper_threads)}, Concurrent transcriptions: {str(concurrent_transcriptions)}")
-    logging.info(f"Transcribe device: {transcribe_device}, Model: {whisper_model}")
+    threads = whispercpp_threads() if transcribe_backend == 'whispercpp' else whisper_threads
+    logging.info(f"Threads: {threads}, Concurrent transcriptions: {concurrent_transcriptions}")
+    if vad_filter and transcribe_backend == 'whispercpp' and not _WHISPERCPP_VAD_SUPPORTED:
+        logging.warning("VAD_FILTER is ignored with whisper.cpp: its VAD breaks subtitle timing (all cues end up "
+                        "near the start). It still applies to faster-whisper.")
+    for removed in ('CUSTOM_REGROUP', 'WORD_LEVEL_HIGHLIGHT'):
+        if os.getenv(removed):
+            logging.warning(f"{removed} is set but no longer has any effect: it was a stable-ts option, and stable-ts has been removed.")
+    if transcribe_backend == 'whispercpp':
+        cli = shutil.which(whisper_cli_path) or whisper_cli_path
+        reason = "auto: whisper-cli found" if os.getenv('TRANSCRIBE_BACKEND', 'auto').strip().lower() in ('', 'auto') else "TRANSCRIBE_BACKEND"
+        logging.info(f"Backend: whisper.cpp ({reason}, {cli}), GPU: {whisper_cpp_device or 'auto'}, Model: {whisper_cpp_model or whisper_model}")
+    else:
+        logging.info(f"Backend: faster-whisper, Transcribe device: {transcribe_device}, Model: {whisper_model}")
     os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
     uvicorn.run("__main__:app", host="0.0.0.0", port=int(webhookport), reload=reload_script_on_change, use_colors=True)

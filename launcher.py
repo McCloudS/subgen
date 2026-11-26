@@ -92,7 +92,8 @@ def main():
     branch_name = args.branch if args.branch != 'main' else os.getenv('BRANCH', 'main')
     script_name_suffix = f"-{branch_name}.py" if branch_name != "main" else ".py"
     subgen_script_to_run = f"subgen{script_name_suffix}"
-    language_code_script_to_download = f"language_code{script_name_suffix}"
+    # Always language_code.py: subgen imports it as a module, so a "-dev" suffix would break the import.
+    language_code_script_to_download = "language_code.py"
 
 
     if args.launcher_update or convert_to_bool(os.getenv('LAUNCHER_UPDATE')):
@@ -137,7 +138,8 @@ def main():
     # --- End Environment Variable Handling ---
 
 
-    requirements_url = "https://raw.githubusercontent.com/McCloudS/subgen/main/requirements.txt"
+    # Install the requirements of the branch being run (dev no longer needs stable-ts, for example).
+    requirements_url = f"https://raw.githubusercontent.com/McCloudS/subgen/{branch_name}/requirements.txt"
     requirements_file = "requirements.txt"
 
     if args.install:

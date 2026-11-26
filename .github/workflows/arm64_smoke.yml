@@ -1,0 +1,93 @@
+name: ARM64 smoke test
+
+# Builds the whisper.cpp CPU image natively on an arm64 runner (no QEMU) from
+# the code in this commit, then transcribes a short clip through /asr.
+# Catches arm64-only build breaks and runtime problems that the QEMU
+# cross-build in build_GPU.yml cannot (it only checks that the image builds).
+
+on:
+  push:
+    branches: ["dev"]
+    paths:
+      - 'subgen.py'
+      - 'language_code.py'
+      - 'launcher.py'
+      - 'requirements.whispercpp.txt'
+      - 'entrypoint.sh'
+      - 'Dockerfile.whispercpp'
+      - '.github/workflows/arm64_smoke.yml'
+  pull_request:
+    branches: ["dev"]
+    paths:
+      - 'subgen.py'
+      - 'language_code.py'
+      - 'launcher.py'
+      - 'requirements.whispercpp.txt'
+      - 'entrypoint.sh'
+      - 'Dockerfile.whispercpp'
+      - '.github/workflows/arm64_smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: arm64-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build CPU image (native arm64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.whispercpp
+          build-args: |
+            GGML_BACKEND=cpu
+            SUBGEN_BRANCH=dev
+          platforms: linux/arm64
+          load: true
+          tags: subgen:arm64-ci
+          cache-from: type=gha,scope=arm64-cpu
+          cache-to: type=gha,scope=arm64-cpu,mode=max
+
+      - name: whisper-cli runs
+        run: docker run --rm --entrypoint /opt/whisper/bin/whisper-cli subgen:arm64-ci --help | head -3
+
+      - name: Get test clip
+        run: |
+          curl -fsSL -o jfk.wav https://raw.githubusercontent.com/ggml-org/whisper.cpp/v1.9.5/samples/jfk.wav
+          ls -l jfk.wav
+
+      - name: Start subgen (this commit's subgen.py, not the GitHub download)
+        run: |
+          docker run -d --name sg -p 9000:9000 \
+            -e WHISPER_MODEL=tiny -e TRANSCRIBE_DEVICE=cpu -e MODEL_PATH=/models -e PUID=0 \
+            subgen:arm64-ci python3 -u subgen.py
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:9000/status && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:9000/status
+
+      - name: Transcribe through /asr
+        run: |
+          curl -sf -m 600 -F "audio_file=@jfk.wav" \
+            "http://127.0.0.1:9000/asr?task=transcribe&language=en&output=srt" | tee out.srt
+          grep -qi "country" out.srt
+
+      - name: Detect language through /detect-language
+        run: |
+          curl -sf -m 300 -F "audio_file=@jfk.wav" http://127.0.0.1:9000/detect-language | tee lang.json
+          grep -q '"en"' lang.json
+
+      - name: Container log
+        if: always()
+        run: docker logs sg 2>&1 | tail -60

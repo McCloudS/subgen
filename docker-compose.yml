@@ -2,10 +2,10 @@ services:
    subgen:
       container_name: subgen
       tty: true
-      image: mccloud/subgen
+      # Pick the tag for your hardware: latest (or cuda) for NVIDIA, vulkan for Intel/AMD GPUs, cpu for no GPU.
+      image: mccloud/subgen:latest
       environment:
-         - "WHISPER_MODEL=medium"
-         - "WHISPER_THREADS=4"
+         - "WHISPER_MODEL=large-v3-turbo-q5_0"
          - "PROCADDEDMEDIA=True"
          - "PROCMEDIAONPLAY=False"
          - "NAMESUBLANG=aa"
@@ -15,29 +15,27 @@ services:
          - "JELLYFINTOKEN=token here"
          - "JELLYFINSERVER=http://jellyfin:8096"
          - "WEBHOOKPORT=9000"
+         # Each concurrent job loads its own copy of the model (about 1 GB for large-v3-turbo-q5_0).
          - "CONCURRENT_TRANSCRIPTIONS=2"
-         - "WORD_LEVEL_HIGHLIGHT=False"
          - "DEBUG=True"
          - "USE_PATH_MAPPING=False"
          - "PATH_MAPPING_FROM=/tv"
          - "PATH_MAPPING_TO=/Volumes/TV"
-         - "TRANSCRIBE_DEVICE=cpu"
          - "CLEAR_VRAM_ON_COMPLETE=True"
-         - "MODEL_PATH=./models"
+         - "MODEL_PATH=/subgen/models"
          - "UPDATE=False"
          - "APPEND=False"
          - "USE_MODEL_PROMPT=False"
          - "CUSTOM_MODEL_PROMPT="
          - "LRC_FOR_AUDIO_FILES=True"
-         - "CUSTOM_REGROUP=cm_sl=84_sl=42++++++1"
       volumes:
          - "${TV}:/tv"
          - "${MOVIES}:/movies"
          - "${APPDATA}/subgen/models:/subgen/models"
       ports:
          - "9000:9000"
-      # # ⚠️ FOR Nvidia GPU IMAGE ⚠️
-      # # uncomment folllowing lines to pass nvidia gpu to the container
+      # # ⚠️ NVIDIA GPU (image mccloud/subgen:latest or :cuda) ⚠️
+      # # uncomment the following lines to pass the NVIDIA GPU to the container
       # deploy:
       #    resources:
       #       reservations:
@@ -48,35 +46,10 @@ services:
       #                  - gpu
       #
       #
-      # # ⚠️ For Native Linux AMD GPU IMAGE ⚠️
-      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
-      # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
-      # # 
-      # # CT2_CUDA_ALLOCATOR fixes GPU page faults on RDNA3 (gfx1100/1101) — OpenNMT/CTranslate2#2021
-      # # HSA_OVERRIDE_GFX_VERSION may be needed for newer RDNA GPUs not yet in ROCm's default target list.
-      #    environment:
-      #       - "CT2_CUDA_ALLOCATOR=cub_caching"
-      #       - "HSA_OVERRIDE_GFX_VERSION=11.0.0"  # adjust to your gfx version (e.g. 11.0.0 for RX 7900 series)
-      #       - "TRANSCRIBE_DEVICE=cuda"
-      #    devices:
-      #       - /dev/kfd
-      #       - /dev/dri
-      #    group_add:
-      #       - video
-      #       - render
-      #
-      #
-      # # ⚠️ For WSL AMD GPU IMAGE ⚠️
-      # # Requirements
-      # # WSL ubuntu 22.04 matching the CTranslate2 container base os running via WSL 2.
-      # # Librocmdxg https://github.com/ROCm/librocdxg
-      # # Change image to mccloud/subgen:amd and TRANSCRIBE_DEVICE to cuda, then
-      # # uncomment the following lines to pass an AMD GPU (ROCm) to the container.
-      #    environment:
-      #       - "HSA_ENABLE_DXG_DETECTION=1"
-      #       - "TRANSCRIBE_DEVICE=cuda"
-      #    devices:
-      #       - /dev/dxg
-      #    volumes:
-      #       - /usr/lib/wsl/lib/libdxcore.so:/lib/libdxcore.so
-      #       - /opt/rocm/lib/librocdxg.so:/lib/librocdxg.so
+      # # ⚠️ Intel or AMD GPU, including integrated graphics (image mccloud/subgen:vulkan) ⚠️
+      # # uncomment the following lines to pass the GPU to the container
+      # devices:
+      #    - /dev/dri
+      # group_add:
+      #    - video
+      #    - render

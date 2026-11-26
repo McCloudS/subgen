@@ -1,5 +1,4 @@
 numpy
-stable-ts-whisperless
 fastapi
 requests
 faster-whisper

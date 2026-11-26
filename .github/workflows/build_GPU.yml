@@ -1,52 +1,161 @@
-name: Build GPU Docker image
+name: Build Docker images
+
+# Every image is whisper.cpp (faster-whisper and stable-ts images ended with the
+# stable-ts code, preserved on the legacy-stable-ts branch, which builds nothing).
+# Tags are named by GPU backend (what the user's hardware needs), the same on
+# main and dev with a dev- prefix: cuda, vulkan, cpu (and jetson in build_JETSON.yml).
+#
+#   main                                           dev
+#   :latest :cuda :<ver> :<ver>-cuda               :dev :dev-cuda          NVIDIA, CUDA 12.8 (Pascal → Blackwell), amd64
+#   :vulkan :<ver>-vulkan :amd :<ver>-amd          :dev-vulkan             Intel/AMD/any Vulkan GPU, amd64 + arm64
+#                                                  (:dev-whispercpp, :dev-amd: deprecated aliases)
+#   :cpu :<ver>-cpu                                :dev-cpu                no GPU, amd64 + arm64
+#
+# :amd is an alias of the Vulkan image: the faster-whisper ROCm image ended with stable-ts.
+#
+# Everything runs on GitHub-hosted runners (free for public repos). arm64 builds
+# natively on ubuntu-24.04-arm (no QEMU); each architecture is pushed as
+# <tag>-amd64 / <tag>-arm64 and merged into one multi-arch tag.
+# To build the CUDA image on a self-hosted runner instead, change its runs-on.
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths:
       - 'subgen.py'
       - 'language_code.py'
       - 'launcher.py'
-      - 'requirements.txt'
+      - 'requirements.whispercpp.txt'
       - 'entrypoint.sh'
-      - 'Dockerfile'
+      - 'Dockerfile.whispercpp'
       - '.github/workflows/build_GPU.yml'
   workflow_dispatch:
 
 concurrency:
-  group: docker-gpu-${{ github.ref }}
+  group: docker-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
-  build:
-    runs-on: [self-hosted]
-
+  # ── CUDA (amd64) ───────────────────────────────────────────────────────────
+  cuda:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Get version from subgen.py
+      # The CUDA devel image plus the build need more than the runner's free disk.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force >/dev/null
+          df -h /
+
+      - name: Tags
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
-          echo "version=$version" >> $GITHUB_ENV
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            { echo "tags<<EOF"; printf 'mccloud/subgen:latest\nmccloud/subgen:cuda\nmccloud/subgen:%s\nmccloud/subgen:%s-cuda\n' "$version" "$version"; echo "EOF"; } >> $GITHUB_ENV
+          else
+            { echo "tags<<EOF"; printf 'mccloud/subgen:dev\nmccloud/subgen:dev-cuda\n'; echo "EOF"; } >> $GITHUB_ENV
+          fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v5
+      # CUDA 12.x, not 13: CUDA 13 (upstream's main-cuda) drops Pascal/Volta.
+      - uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile.whispercpp
+          build-args: |
+            GGML_BACKEND=cuda
+            SUBGEN_BRANCH=${{ github.ref_name }}
+            BUILD_BASE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+            RUNTIME_BASE=nvidia/cuda:12.8.1-runtime-ubuntu24.04
+          platforms: linux/amd64
           push: true
-          tags: |
-            mccloud/subgen:latest
-            mccloud/subgen:${{ env.version }}
-          cache-from: type=registry,ref=mccloud/subgen:buildcache
-          cache-to: type=registry,ref=mccloud/subgen:buildcache,mode=max
+          tags: ${{ env.tags }}
+          cache-from: type=registry,ref=mccloud/subgen:buildcache-cuda${{ github.ref_name != 'main' && '-dev' || '' }}
+          cache-to: type=registry,ref=mccloud/subgen:buildcache-cuda${{ github.ref_name != 'main' && '-dev' || '' }},mode=max
+
+  # ── CPU and Vulkan, one native runner per architecture ─────────────────────
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [cpu, vulkan]
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag
+        run: |
+          prefix=${{ github.ref_name == 'main' && '' || 'dev-' }}
+          echo "tag=mccloud/subgen:${prefix}${{ matrix.backend }}-${{ matrix.arch }}" >> $GITHUB_ENV
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.whispercpp
+          build-args: |
+            GGML_BACKEND=${{ matrix.backend }}
+            SUBGEN_BRANCH=${{ github.ref_name }}
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ env.tag }}
+          cache-from: type=registry,ref=mccloud/subgen:buildcache-${{ matrix.backend }}-${{ matrix.arch }}
+          cache-to: type=registry,ref=mccloud/subgen:buildcache-${{ matrix.backend }}-${{ matrix.arch }},mode=max
+
+  merge:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [cpu, vulkan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tags
+        run: |
+          version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
+          b=${{ matrix.backend }}
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            src="mccloud/subgen:$b"
+            tags="mccloud/subgen:$b mccloud/subgen:${version}-$b"
+            [ "$b" = vulkan ] && tags="$tags mccloud/subgen:amd mccloud/subgen:${version}-amd"
+          else
+            src="mccloud/subgen:dev-$b"
+            tags="mccloud/subgen:dev-$b"
+            [ "$b" = vulkan ] && tags="$tags mccloud/subgen:dev-whispercpp mccloud/subgen:dev-amd"
+          fi
+          echo "src=$src" >> $GITHUB_ENV
+          echo "tags=$tags" >> $GITHUB_ENV
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Merge into multi-arch manifest
+        run: |
+          args=""
+          for t in $tags; do args="$args -t $t"; done
+          docker buildx imagetools create $args ${src}-amd64 ${src}-arm64
+          docker buildx imagetools inspect ${src}

@@ -10,7 +10,13 @@
 subgen.env
 
 models/
-# Python bytecode caches
+# Python
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
+
+# Local Claude Code files (kept out of the repo)
+CLAUDE.md
+.claude/
+*_PLAN.md

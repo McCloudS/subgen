@@ -4,14 +4,18 @@ conftest.py — patches heavy ML/AV dependencies before any test module imports 
 The mock setup must happen here, at collection time, before subgen.py is imported.
 subgen.py starts worker threads at import time; they're daemon threads and are harmless.
 """
+import os
 import sys
 from unittest.mock import MagicMock
+
+# Keep tests hermetic: with TRANSCRIBE_BACKEND=auto, a whisper-cli on PATH would select
+# whisper.cpp and download real models. Tests that need whisper.cpp set it explicitly.
+os.environ.setdefault("TRANSCRIBE_BACKEND", "faster-whisper")
 
 # ---------------------------------------------------------------------------
 # Mock heavy dependencies that are not installed in CI
 # ---------------------------------------------------------------------------
 _MOCKED_MODULES = [
-    "stable_whisper",
     "faster_whisper",
     "torch",
     "av",
@@ -27,13 +31,8 @@ for _mod in _MOCKED_MODULES:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
 
-# Give the version mocks a usable string so /status doesn't blow up
-sys.modules["stable_whisper"].__version__ = "1.0.0"
+# Give the version mock a usable string so /status doesn't blow up
 sys.modules["faster_whisper"].__version__ = "1.0.0"
-
-# Ensure sub-attribute imports work
-# e.g. `from stable_whisper import Segment`
-sys.modules["stable_whisper"].Segment = MagicMock()
 
 # Ensure watchdog attribute imports work
 # e.g. `from watchdog.observers.polling import PollingObserver as Observer`

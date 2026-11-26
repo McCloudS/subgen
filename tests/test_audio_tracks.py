@@ -76,3 +76,35 @@ class TestMultipleAudioTracks:
             result = handle_multiple_audio_tracks("/fake/movie.mkv", language=None)
 
         assert result is None
+
+
+class TestTrackLeadIn:
+    """A chosen track that starts after the rest of the file keeps its lead-in (else subtitles run early)."""
+
+    def _run(self, probe, monkeypatch):
+        seen = {}
+
+        class Stream:
+            def __init__(self, kwargs):
+                seen.update(kwargs)
+
+            def run(self, **k):
+                return b"RIFF", b""
+
+        class Inp:
+            def output(self, *a, **kwargs):
+                return Stream(kwargs)
+        import types
+        fake = types.SimpleNamespace(input=lambda *a, **k: Inp(), probe=lambda *a, **k: probe, Error=Exception)
+        monkeypatch.setattr(subgen, "ffmpeg", fake)
+        subgen.extract_audio_track_to_memory("/fake/movie.mkv", 1)
+        return seen
+
+    def test_late_track_is_padded(self, monkeypatch):
+        probe = {"format": {"start_time": "0.016"}, "streams": [{"index": 0, "start_time": "0.016"}, {"index": 1, "start_time": "1.001"}]}
+        seen = self._run(probe, monkeypatch)
+        assert seen["map"] == "0:1" and seen["af"] == "adelay=985:all=1"
+
+    def test_track_starting_with_file_is_not_padded(self, monkeypatch):
+        probe = {"format": {"start_time": "0.000"}, "streams": [{"index": 1, "start_time": "0.000"}]}
+        assert "af" not in self._run(probe, monkeypatch)

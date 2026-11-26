@@ -1,0 +1,129 @@
+# syntax=docker/dockerfile:1.6
+# subgen + whisper.cpp, built from a pinned whisper.cpp release for one GPU backend.
+#
+#   GGML_BACKEND=vulkan (default)  Intel iGPU/Arc, AMD (dGPU + APU), NVIDIA, any Vulkan GPU
+#   GGML_BACKEND=cuda              NVIDIA, CUDA 12.x so Pascal/Volta (GTX 10xx, Tesla P4/P40) still work
+#   GGML_BACKEND=cpu               no GPU
+#
+#   docker build -f Dockerfile.whispercpp --build-arg GGML_BACKEND=cuda -t subgen:cuda .
+#
+# BUILD_BASE / RUNTIME_BASE must match the backend (the CI workflow sets them):
+#   cpu, vulkan: ubuntu:24.04 / ubuntu:24.04
+#   cuda:        nvidia/cuda:12.8.1-devel-ubuntu24.04 / nvidia/cuda:12.8.1-runtime-ubuntu24.04
+#   Jetson:      GGML_BACKEND=cuda, BUILD_BASE=nvidia/cuda:12.6.3-devel-ubuntu24.04, RUNTIME_BASE=ubuntu:24.04,
+#                CUDA_ARCHITECTURES=87, BUNDLE_CUDA_LIBS=1 (built on arm64; see docs/JETSON.md).
+#                Jetson needs a plain OS runtime: nvidia/cuda runtime images bake in cuda-compat driver
+#                libraries that break on Jetson, so cudart/cuBLAS are copied in and the driver comes
+#                from the host via nvidia-container-toolkit.
+
+ARG BUILD_BASE=ubuntu:24.04
+ARG RUNTIME_BASE=ubuntu:24.04
+
+# ── Stage 1: build whisper-cli ───────────────────────────────────────────────
+FROM ${BUILD_BASE} AS build
+
+ARG GGML_BACKEND=vulkan
+ARG WHISPER_CPP_REF=v1.9.5
+ARG TARGETARCH
+# Pascal (61), Volta (70), Turing (75), Ampere (80/86), Ada (89), Hopper (90), Blackwell (120).
+# CUDA 13 cannot target 61/70, which is why this image stays on CUDA 12.x.
+ARG CUDA_ARCHITECTURES="61;70;75;80;86;89;90;120"
+# 1: copy cudart and cuBLAS from the build image next to whisper-cli (for a plain RUNTIME_BASE, e.g. Jetson)
+ARG BUNDLE_CUDA_LIBS=0
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends build-essential ca-certificates cmake && \
+    if [ "$GGML_BACKEND" = "vulkan" ]; then \
+        apt-get install -y --no-install-recommends glslc libvulkan-dev spirv-headers; \
+    fi
+
+ADD --keep-git-dir=false https://github.com/ggml-org/whisper.cpp.git#${WHISPER_CPP_REF} /src
+
+WORKDIR /src
+RUN set -eux; \
+    case "$GGML_BACKEND" in \
+      cpu)    flags="" ;; \
+      vulkan) flags="-DGGML_VULKAN=ON" ;; \
+      cuda)   flags="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" ; \
+              # Plain runtime (Jetson): no NCCL there, and it only helps multi-GPU servers
+              if [ "$BUNDLE_CUDA_LIBS" = "1" ]; then flags="$flags -DGGML_CUDA_NCCL=OFF"; fi; \
+              # No driver in the build container: link against the CUDA stub libcuda.
+              export LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" ;; \
+      *)      echo "unknown GGML_BACKEND=$GGML_BACKEND" >&2; exit 1 ;; \
+    esac; \
+    # x86-64: CPU_ALL_VARIANTS builds AVX2/AVX512/etc. variants and picks one at runtime.
+    # arm64: its variant list includes ARMv9.2+SME, which Ubuntu 24.04's GCC 13 can't compile,
+    # so build a single portable armv8.2-a CPU backend instead.
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cpu_flags="-DGGML_CPU_ALL_VARIANTS=OFF -DGGML_CPU_ARM_ARCH=armv8.2-a"; \
+    else \
+        cpu_flags="-DGGML_CPU_ALL_VARIANTS=ON"; \
+    fi; \
+    cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
+          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CCACHE=OFF $cpu_flags $flags; \
+    cmake --build build -j"$(nproc)" --target whisper-cli; \
+    # With GGML_BACKEND_DL the CPU/GPU backends are .so files loaded from the executable's directory
+    mkdir -p /out; \
+    cp build/bin/whisper-cli /out/; \
+    find build -name '*.so*' -exec cp -a {} /out/ \;; \
+    if [ "$GGML_BACKEND" = "cuda" ] && [ "$BUNDLE_CUDA_LIBS" = "1" ]; then \
+        cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* \
+              /usr/local/cuda/lib64/libcublasLt.so.12* /out/; \
+    fi
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM ${RUNTIME_BASE}
+
+ARG GGML_BACKEND=vulkan
+# launcher.py downloads subgen.py from this branch when UPDATE=True (dev images must not pull main's)
+ARG SUBGEN_BRANCH=main
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Ubuntu 24.04 images ship a 'ubuntu' user with uid 1000. entrypoint.sh would then skip creating its
+# user, and PUID=1000 would run without the render group (no /dev/dri access) and ignore PGID.
+RUN userdel -r ubuntu 2>/dev/null || true
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-venv ffmpeg curl gosu tzdata ca-certificates && \
+    if [ "$GGML_BACKEND" = "vulkan" ]; then \
+        # Mesa provides the Intel (ANV), AMD (RADV) and NVIDIA (NVK) Vulkan drivers; vulkan-tools gives vulkaninfo for support
+        apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers libegl1 vulkan-tools; \
+    fi && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/ /opt/whisper/
+RUN echo /opt/whisper > /etc/ld.so.conf.d/whisper.conf && ldconfig && \
+    ln -s /opt/whisper/whisper-cli /usr/local/bin/whisper-cli && \
+    whisper-cli --help >/dev/null 2>&1
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+COPY requirements.whispercpp.txt /
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -U -r /requirements.whispercpp.txt
+
+WORKDIR /subgen
+COPY launcher.py subgen.py language_code.py /subgen/
+
+RUN mkdir -p /cache/models && chmod 777 /cache
+
+# NVIDIA: the Vulkan image also needs the graphics capability so the toolkit mounts the Vulkan ICD
+ENV XDG_CACHE_HOME=/cache \
+    HF_HOME=/cache/huggingface \
+    PYTHONUNBUFFERED=1 \
+    TRANSCRIBE_BACKEND=whispercpp \
+    MODEL_PATH=/cache/models \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics \
+    GGML_BACKEND=${GGML_BACKEND} \
+    BRANCH=${SUBGEN_BRANCH}
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "launcher.py"]

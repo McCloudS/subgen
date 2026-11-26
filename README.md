@@ -6,6 +6,10 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
+Nov 2026: **Subgen now uses whisper.cpp.** Every image runs whisper.cpp, on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64, plus a new whisper.cpp image for NVIDIA Jetson. On NVIDIA it is about twice as fast as faster-whisper with less VRAM. Models download again on first start; see [Upgrading from stable-ts](#-upgrading-from-stable-ts) for everything that changes. `:amd` now points to the Vulkan image (the ROCm image is retired). The images no longer include faster-whisper; standalone installs still use it unless `whisper-cli` is installed. The previous stable-ts version is preserved, unsupported, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch. Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. New `HALLUCINATION_FILTER` (on by default) removes phrases Whisper loops over music and invented credits like "Transcription by CastingWords". See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions).
+
+8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
+
 7 Jun 2026: Fixed a bug where files containing only a **forced** embedded subtitle track were incorrectly treated as having full subtitle coverage and skipped. Forced tracks cover only a small fraction of dialogue (typically foreign-language inserts) and should not count as full coverage. Added `IGNORE_FORCED_SUBTITLES` (default `True`) to control this behaviour.
 
 11 Apr 2026: Fixed subtitle timing on files with audio stream offsets (common in Amazon WEB-DL). Whisper ignores silence padding, causing subtitles to be early by the offset amount. Subgen now detects this via ffprobe and compensates automatically when the source video file is accessible. See [Audio Start-Time Offset Fix](#-audio-start-time-offset-fix) for details.
@@ -43,23 +47,17 @@ There will be some minor hiccups, so please identify them as we work through thi
 
 14 Aug 2024: Cleaned up usage of kwargs across the board a bit. Added ability for /asr to encode or not, so you don't need to worry about what files/formats you upload.
 
-3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from whisper, faster-whisper, or stable-ts. This won't be exposed via the webui, it's best to set directly.
+3 Aug 2024: Added SUBGEN_KWARGS environment variable which allows you to override the model.transcribe with most options you'd like from faster-whisper. This won't be exposed via the webui, it's best to set directly.
 
 21 Apr 2024: Fixed queuing with thanks to https://github.com/xhzhu0628 @ https://github.com/McCloudS/subgen/pull/85. Bazarr intentionally doesn't follow `CONCURRENT_TRANSCRIPTIONS` because it needs a time sensitive response.
 
 31 Mar 2024: Removed `/subsync` endpoint and general refactoring. Open an issue if you were using it!
-
-24 Mar 2024: ~~Added a 'webui' to configure environment variables. You can use this instead of manually editing the script or using Environment Variables in your OS or Docker (if you want). The config will prioritize OS Env Variables, then the .env file, then the defaults. You can access it at `http://subgen:9000/`~~
-
-23 Mar 2024: Added `CUSTOM_REGROUP` to try to 'clean up' subtitles a bit.  
 
 22 Mar 2024: Added LRC capability via see: `LRC_FOR_AUDIO_FILES | True | Will generate LRC (instead of SRT) files for filetypes: '.mp3', '.flac', '.wav', '.alac', '.ape', '.ogg', '.wma', '.m4a', '.m4b', '.aac', '.aiff'`
 
 21 Mar 2024: Added a 'wizard' into the launcher that will help standalone users get common Bazarr variables configured. See below in Launcher section. Removed 'Transformers' as an option. While I usually don't like to remove features, I don't think anyone is using this and the results are wildly unpredictable and often cause out of memory errors. Added two new environment variables called `USE_MODEL_PROMPT` and `CUSTOM_MODEL_PROMPT`. If `USE_MODEL_PROMPT` is `True` it will use `CUSTOM_MODEL_PROMPT` if set, otherwise will default to using the pre-configured language pairings. These pre-configurated translations are geared towards fixing some audio that may not have punctionation. We can prompt it to try to force the use of punctuation during transcription.
 
 19 Mar 2024: Added a `MONITOR` environment variable. Will 'watch' or 'monitor' your `TRANSCRIBE_FOLDERS` for changes and run on them. Useful if you just want to paste files into a folder and get subtitles.   
-
-6 Mar 2024: Added a `/subsync` endpoint that can attempt to align/synchronize subtitles to a file. Takes audio_file, subtitle_file, language (2 letter code), and outputs an srt.
 
 5 Mar 2024: Cleaned up logging. Added timestamps option (if Debug = True, timestamps will print in logs).
 
@@ -87,9 +85,7 @@ There will be some minor hiccups, so please identify them as we work through thi
 
 22 Oct 2023: The script should have backwards compability with previous envirionment settings, but just to be sure, look at the new options below. If you don't want to manually edit your environment variables, just edit the script manually. While I have added GPU support, I haven't tested it yet.
 
-19 Oct 2023: And we're back! Uses faster-whisper and stable-ts. Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time. As of now, this is not a docker image on dockerhub. The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts. Quick and dirty to meet dependencies: pip or `pip3 install flask requests stable-ts faster-whisper`
-
-This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one set up yet. Tesla T4 is in the mail!
+19 Oct 2023: And we're back! Uses faster-whisper. Shouldn't break anything from previous settings, but adds a couple new options that aren't documented at this point in time. As of now, this is not a docker image on dockerhub. The potential intent is to move this eventually to a pure python script, primarily to simplify my efforts. Quick and dirty to meet dependencies: pip or `pip3 install flask requests faster-whisper`
 
 2 Feb 2023: Added Tautulli webhooks back in. Didn't realize Plex webhooks was PlexPass only. See below for instructions to add it back in.
 
@@ -101,7 +97,7 @@ This potentially has the ability to use CUDA/Nvidia GPU's, but I don't have one 
 ## 🎬 What is this?
 Subgen transcribes your personal media to create subtitles (`.srt` or `.lrc`) from audio/video files. It can transcribe non-English languages to themselves, or translate foreign languages into English. 
 
-It is designed to integrate perfectly with **Bazarr** (as a Whisper Provider), or run via webhooks triggered directly by your **Plex, Emby, Jellyfin, or Tautulli** servers whenever media is added or played. Under the hood, it uses `stable-ts` and `faster-whisper`, fully supporting both CPU and Nvidia GPU (CUDA) transcoding.
+It is designed to integrate perfectly with **Bazarr** (as a Whisper Provider), or run via webhooks triggered directly by your **Plex, Emby, Jellyfin, or Tautulli** servers whenever media is added or played. Under the hood, it uses [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (or `faster-whisper`) for AI transcription and a built-in Netflix-style subtitle segmenter for clean, readable output. CPU, NVIDIA (CUDA), and Intel or AMD GPUs (Vulkan) are supported.
 
 ## 🤔 Why?
 Some shows just won't have subtitles available, or embedded H265 subtitles might be wildly out of sync. This gap-fills everything else by generating highly accurate subtitles locally on your own hardware. 
@@ -112,9 +108,9 @@ Some shows just won't have subtitles available, or embedded H265 subtitles might
 If you just want to plug Subgen into Bazarr and get going, here is the absolute minimum you need to configure in your Subgen Docker container. **No path mapping or media mounts are needed!**
 
 **1. Set your Environment Variables in Subgen:**
-* `TRANSCRIBE_DEVICE`: Set to `cuda` if you have an Nvidia GPU (highly recommended for speed), otherwise leave as `cpu`.
-* `WHISPER_MODEL`: Default is `medium`. Try `large-v3-turbo` if you have a GPU with 8GB+ VRAM for faster transcription. **Note:** `large-v3-turbo` only supports transcription — if you need translation (e.g. `TRANSCRIBE_OR_TRANSLATE=translate`), use `large-v3` instead.
-* `CONCURRENT_TRANSCRIPTIONS`: Default is `2`. Lower to `1` if you are running out of RAM/VRAM.
+* Pick the image for your hardware (see [Docker](#1-docker-recommended)) and give the container the GPU: `--gpus all` for NVIDIA, `--device /dev/dri` for Intel or AMD. whisper.cpp uses the GPU automatically. (`TRANSCRIBE_DEVICE=cuda` is only needed for faster-whisper.)
+* `WHISPER_MODEL`: Default is `medium`. `large-v3-turbo` is faster and more accurate on any GPU; its quantized version `large-v3-turbo-q5_0` needs about 1 GB of video memory. **Note:** `large-v3-turbo` only supports transcription. If you need translation (e.g. `TRANSCRIBE_OR_TRANSLATE=translate`), use `large-v3` instead.
+* `CONCURRENT_TRANSCRIPTIONS`: Default is `2`. Each concurrent job holds its own copy of the model with whisper.cpp; see [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions).
 
 **2. Configure Bazarr:**
 * In Bazarr, go to **Settings > Whisper Provider**.
@@ -155,28 +151,34 @@ That's it. No new environment variables are required. Files without an audio off
 ## 🛠 Installation & Setup
 
 ### 1. Docker (Recommended)
-The easiest way to run Subgen is via Docker. We maintain an image on Docker Hub (`mccloud/subgen`).
-* `mccloud/subgen:latest` (Supports both CPU and GPU/CUDA)
-* `mccloud/subgen:cpu` (Smaller image, CPU only)
+The easiest way to run Subgen is via Docker. We maintain images on Docker Hub (`mccloud/subgen`), all using whisper.cpp. Tags are named by GPU backend, so pick the one your hardware needs:
+
+| Tag | Hardware | How to pass the GPU |
+|---|---|---|
+| `mccloud/subgen:latest` (also `:cuda`) | NVIDIA, GTX 10xx / Tesla P4 (Pascal) and newer, CUDA 12.8 | `--gpus all` (or `--runtime=nvidia`) |
+| `mccloud/subgen:vulkan` (also `:amd`) | Intel iGPU/Arc, AMD GPUs and APUs, any other Vulkan GPU (amd64 and arm64) | `--device /dev/dri` |
+| `mccloud/subgen:cpu` | No GPU (amd64 and arm64) | |
+| `mccloud/subgen:jetson` | NVIDIA Jetson Orin / Thor | see below |
+
+Each tag also has a version-pinned copy (e.g. `:2026.11.4-cuda`). Development builds use the same names with a `dev-` prefix (`:dev-cuda`, `:dev-vulkan`, `:dev-cpu`, `:dev-jetson`; `:dev` is `:dev-cuda`) and may be unstable.
 
 **Crucial Note on Volume Mapping:** If you are using Plex/Emby/Jellyfin/Tautulli webhooks, **Subgen must see your media paths exactly identically to how your media server sees them.** For example, if Plex uses `/Share/media/TV:/tv`, Subgen needs that exact same volume mount. *(Note: This does not apply to Bazarr, which sends audio over HTTP).*
 
 ### 1b. NVIDIA Jetson (Orin / Thor, arm64)
 
-The images above are amd64, and pip's `ctranslate2` aarch64 wheels are CPU-only, so Jetson containers silently fall back to CPU. `Dockerfile.jetson` provides a Jetson-specific build with real CUDA acceleration:
-
-> `docker build -f Dockerfile.jetson -t subgen:jetson-cuda .`
-> `docker compose -f docker-compose.jetson.yml up -d`
-
-Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`, and build on the Jetson itself or any other arm64 machine (no GPU needed to build). Set `TRANSCRIBE_DEVICE=gpu`. See [docs/JETSON.md](docs/JETSON.md) for the full explanation of how CUDA is wired up (and why the usual `nvidia/cuda` base images break on Jetson).
+`mccloud/subgen:jetson` is whisper.cpp built with CUDA for Jetson (Orin natively; newer chips such as Thor compile it on first use). Requirements: JetPack 6+ (L4T r36+) with `nvidia-container-toolkit`. Run it with `--runtime nvidia` and `PUID=0` (Jetson's GPU memory device is root-only); see `docker-compose.jetson.yml`. Check the log for `whisper.cpp is using GPU device: ...`. See [docs/JETSON.md](docs/JETSON.md) for how CUDA is wired up and why the usual `nvidia/cuda` images break on Jetson. *This image is built and tested by CI without a GPU; reports from Jetson owners are welcome.*
 
 ### 2. Standalone (Without Docker)
-1. Install Python 3.9–3.11 and `ffmpeg`.
+1. Install Python 3.11 or 3.12 and `ffmpeg`.
 2. Ensure you have the proper NVIDIA drivers/CUDA toolkit installed (if using GPU).
 3. Download `launcher.py` from this repository and run:
    > `python3 launcher.py -u -i -s`
 
+   For the dev branch, add `-b dev`. The launcher installs the requirements of the branch you choose.
+
 *(Launcher includes a wizard to help standalone users easily configure common variables).*
+
+A standalone install transcribes with faster-whisper. To use whisper.cpp instead (for example on an AMD or Intel GPU), build or install `whisper-cli` from [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and put it on your `PATH` or set `WHISPER_CLI_PATH`; subgen then picks it automatically (see `TRANSCRIBE_BACKEND`).
 
 ### 3. Unraid
 While Unraid doesn't have an app or template for quick install, with minor manual work, you can easily install it. See [this discussion thread](https://github.com/McCloudS/subgen/discussions/137) for pictures and steps.
@@ -229,20 +231,34 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 
 ## ⚙️ Configuration (Environment Variables)
 
-*Note: Subgen recently standardized environment variables (e.g., `PLEX_TOKEN`). Legacy names (e.g., `PLEXTOKEN`) are still fully supported for backwards compatibility!*
+*Note: Subgen recently standardized environment variable names (e.g., `PLEX_TOKEN`). Legacy names (e.g., `PLEXTOKEN`) are still fully supported for backwards compatibility!*
 
 ### 🧠 Core Whisper & AI Settings
 | Variable | Default | Description |
 |---|---|---|
-| `TRANSCRIBE_DEVICE` | `cpu` | Device to transcribe on: `cpu`, `gpu`, or `cuda`. |
-| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, etc. **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
-| `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. |
-| `WHISPER_THREADS` | `4` | Number of CPU threads to use during computation. |
-| `COMPUTE_TYPE` | `auto` | Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). |
+| `TRANSCRIBE_DEVICE` | `cpu` | faster-whisper only (standalone installs): `cpu`, `gpu`, or `cuda`. whisper.cpp uses a GPU automatically; see `WHISPER_CPP_DEVICE`. |
+| `WHISPER_MODEL` | `medium` | Model to use: `tiny`, `base`, `small`, `medium`, `large-v3`, `distil-large-v3`, `large-v3-turbo`, quantized versions like `large-v3-turbo-q5_0`, etc. See [Choosing a model](#-choosing-a-model). **`large-v3-turbo` does not support translation** (fine-tuned on transcription only) — use `large-v3` if `TRANSCRIBE_OR_TRANSLATE=translate`. |
+| `CONCURRENT_TRANSCRIPTIONS` | `2` | Number of files to process in parallel. With whisper.cpp each one loads its own copy of the model, so memory grows with this number. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions). |
+| `WHISPER_THREADS` | *auto* / `4` | CPU threads per transcription. whisper.cpp: unset means the CPU cores are shared between `CONCURRENT_TRANSCRIPTIONS` (between 4 and 16 each). faster-whisper: `4`. |
+| `COMPUTE_TYPE` | `auto` | faster-whisper only. Precision quantization mapping (e.g., `float16`, `int8`). See [CTranslate2 docs](https://github.com/OpenNMT/CTranslate2/blob/master/docs/quantization.md). With whisper.cpp, pick a quantized model instead (e.g. `large-v3-turbo-q5_0`). |
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
-| `SUBGEN_KWARGS` | `{}` | JSON dict to pass pure kwargs to Whisper (e.g. `{'vad': True}`). For advanced users. |
+| `HALLUCINATION_FILTER` | `True` | Removes two common Whisper hallucinations: a phrase of 3 or more words looped back to back 3 or more times keeps only its first copy, and cues that are only an invented credit ("Transcription by CastingWords", "Subtitles by the Amara.org community", "Thanks for watching!") are dropped. Short repeats such as "No! No! No!" and phrases said twice are never touched. A line really repeated 3 or more times in a row (a chant, a song chorus) keeps only one copy; set to `False` to keep everything. |
+| `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. **faster-whisper only for now:** whisper.cpp's VAD breaks subtitle timing, so subgen ignores this setting with whisper.cpp and logs a warning. |
+| `SUBGEN_KWARGS` | `{}` | faster-whisper only. JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
+
+### 🖥️ Backend & GPU (whisper.cpp)
+whisper.cpp runs on NVIDIA (CUDA), AMD and Intel GPUs including integrated graphics (Vulkan), and CPU. It is what every Docker image uses, and the default whenever the `whisper-cli` binary is present.
+| Variable | Default | Description |
+|---|---|---|
+| `TRANSCRIBE_BACKEND` | `auto` | `auto` uses whisper.cpp when `whisper-cli` is installed, otherwise faster-whisper. Force one with `whispercpp` or `faster-whisper`. The whisper.cpp images don't include faster-whisper, so asking for it there logs a warning and uses whisper.cpp. |
+| `WHISPER_CPP_MODEL` | *(derived)* | Path to a GGML model file. If unset, it is derived from `WHISPER_MODEL` (e.g. `large-v3-turbo` → `ggml-large-v3-turbo.bin`) and downloaded to `MODEL_PATH`. |
+| `WHISPER_CPP_REPO` | *(derived)* | Hugging Face repo to download `WHISPER_CPP_MODEL` from. |
+| `WHISPER_CLI_PATH` | `whisper-cli` | Path to the `whisper-cli` binary. |
+| `WHISPER_CPP_DEVICE` | *(auto)* | whisper.cpp uses a GPU automatically when it can see one. Set a GPU index (`0`, `1`, ...) to pick one, or `cpu` to force CPU. `TRANSCRIBE_DEVICE` only applies to faster-whisper. Check the log for `whisper.cpp is using GPU device: ...`. |
+| `WHISPER_CPP_VAD_MODEL` | *(auto)* | Silero VAD model for whisper.cpp. Currently unused: whisper.cpp VAD is disabled (see `VAD_FILTER`). |
+| `VAD_THRESHOLD` | `0.5` | Speech probability threshold for whisper.cpp VAD (currently disabled). |
 
 ### ⚡ Processing Triggers & Queuing
 *(Not relevant for Bazarr users)*
@@ -278,7 +294,7 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | `LIMIT_TO_PREFERRED_AUDIO_LANGUAGE`| `False` | If True, skips files that do not have any audio tracks matching your preferred list. |
 | `FORCE_DETECTED_LANGUAGE_TO` | `''` | Force model to this 2-letter language code if it keeps incorrectly detecting audio. |
 | `DETECT_LANGUAGE_LENGTH` | `30` | Number of seconds to analyze audio to determine the language. |
-| `DETECT_LANGUAGE_OFFSET` | `0` | Number of seconds to skip forward before detecting language (good for avoiding theme songs). |
+| `DETECT_LANGUAGE_OFFSET` | `0` | Number of seconds to skip forward before detecting language. If episodes are detected as the wrong language, the opening theme is usually why: Whisper can mistake intro music for another language. Set `60` to `90` to skip it. |
 | `SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE` | `False` | Should Whisper detect language if there is no audio language tagged in the media file. |
 | `SKIP_UNKNOWN_LANGUAGE` | `False` | Skip processing if Whisper cannot detect the audio language. |
 | `SKIP_ONLY_SUBGEN_SUBTITLES` | `False` | Skips generation only if the file has "subgen" somewhere in the existing subtitle filename. |
@@ -291,14 +307,14 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | Variable | Default | Description |
 |---|---|---|
 | `TRANSCRIBE_OR_TRANSLATE` | `transcribe` | `transcribe` (matches input language) or `translate` (outputs English). |
-| `SUBTITLE_LANGUAGE_NAME` | `aa` | Subtitle file name language code (e.g. `en`). Defaults to `aa` so it floats to the top of Plex's list. |
+| `SUBTITLE_LANGUAGE_NAME` | *(detected language)* | Language code to put in the subtitle file name instead of the detected one (e.g. `en`). Many people set `aa` so subgen's file floats to the top of Plex's list. |
 | `SUBTITLE_LANGUAGE_NAMING_TYPE`| `ISO_639_2_B` | Format to name files (`ISO_639_1`, `ISO_639_2_T`, `NAME`, `NATIVE`). |
 | `LRC_FOR_AUDIO_FILES` | `True` | Generates `.lrc` instead of `.srt` if processing pure audio files (e.g., mp3, flac). |
-| `WORD_LEVEL_HIGHLIGHT` | `False` | Highlights words dynamically as they are spoken in the subtitle. |
+| `MAX_LINE_LENGTH` | `42` | Maximum characters per subtitle line. Lines are balanced across two rows where possible. |
+| `GAP_SPLIT_SECS` | `0.4` | Silence gap in seconds between words that forces a new subtitle card. |
 | `APPEND` | `False` | Appends a "Transcribed by whisperAI..." watermark at the very end of the `.srt`. |
 | `SHOW_IN_SUBNAME_SUBGEN` | `True` | Adds `.subgen` to the output file name. |
 | `SHOW_IN_SUBNAME_MODEL` | `True` | Adds the model used (e.g., `.medium`) to the output file name. |
-| `CUSTOM_REGROUP` | `cm_sl=84_sl=42++++++1` | Stable-TS grouping. Try to 'clean up' subtitles a bit. Set to `default` to use base Stable-TS. |
 
 ### 📂 System, Paths & Network Settings
 | Variable | Default | Description |
@@ -321,6 +337,67 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | `PLEX_TOKEN` | *(None)* | Your Plex Token for API access. |
 | `JELLYFIN_SERVER` | *(None)* | Local Jellyfin address (e.g., `http://192.168.1.100:8096`). |
 | `JELLYFIN_TOKEN` | *(None)* | Generated API token from Jellyfin UI. |
+
+---
+
+## 🧩 Choosing a model
+
+Set `WHISPER_MODEL` to one of these names. With whisper.cpp, subgen downloads the matching GGML file to `MODEL_PATH` on first use (or set `WHISPER_CPP_MODEL` to a `.bin` file of your own). Memory use is about the file size plus 0.3 to 0.5 GB per concurrent transcription; `large-v3-turbo-q5_0` measured 1.0 GB of video memory.
+
+| `WHISPER_MODEL` | File size | Translate to English? | Notes |
+|---|---|---|---|
+| `large-v3-turbo` | 1.5 GB | No | Best speed/accuracy balance on a GPU. |
+| `large-v3-turbo-q8_0` / `-q5_0` | 833 / 547 MB | No | Quantized turbo: about a third of the memory. `q5_0` is what the benchmarks in this README used. |
+| `large-v3` | 2.9 GB | Yes | Most accurate. Use this (or a quantized version) for `TRANSCRIBE_OR_TRANSLATE=translate`. |
+| `large-v3-q5_0` | 1.0 GB | Yes | Quantized `large-v3`, good for translation on smaller GPUs. |
+| `large-v2`, `large-v2-q8_0`, `large-v2-q5_0`, `large-v1` | 1.0 to 2.9 GB | Yes | Older large models. |
+| `distil-large-v3.5`, `distil-large-v3` | 1.4 GB | No | Distilled, English only, fast. `distil-large-v3.fp32` is a 2.9 GB full-precision version. |
+| `medium` (default), `medium-q8_0`, `medium-q5_0` | 1.5 GB / 785 MB / 514 MB | Yes | Good on CPU. |
+| `small`, `small-q8_0`, `small-q5_1` | 465 / 252 / 181 MB | Yes | Low-power machines. |
+| `base`, `base-q8_0`, `base-q5_1` | 141 / 77 / 56 MB | Yes | Low-power hardware; less accurate. |
+| `tiny`, `tiny-q8_0`, `tiny-q5_1` | 74 / 41 / 30 MB | Yes | Testing only. |
+
+* Add `.en` for English-only versions of `medium`, `small`, `base` and `tiny` (e.g. `small.en`, `base.en-q5_1`). They are slightly better at English but can't detect or transcribe other languages.
+* Quantized names (`-q5_0`, `-q8_0`, `-q5_1`) are whisper.cpp only. faster-whisper accepts the plain names (`large-v3`, `large-v3-turbo`, `distil-large-v3`, `medium`, ...) and sets precision with `COMPUTE_TYPE` instead.
+* An unknown name stops subgen with an error that tells you to set `WHISPER_CPP_MODEL`.
+
+---
+
+## 🚀 Speed, memory and concurrent transcriptions
+
+Subgen loads the model once per transcription slot, and `CONCURRENT_TRANSCRIPTIONS` is the number of slots. Extra files wait in the queue; they never start another copy of the model.
+
+* **faster-whisper** loads one model and shares it between the slots.
+* **whisper.cpp** runs each transcription as its own `whisper-cli` process with its own copy of the model. Loading takes under a second, but memory grows with every slot. Language detection (used by Bazarr) can briefly add one more copy.
+
+Running two files at once is **not** twice as fast on a GPU: one transcription already keeps the GPU busy. Measured with `large-v3-turbo-q5_0`, 5-minute clips:
+
+| Hardware | Concurrent jobs | Throughput | Memory |
+|---|---|---|---|
+| Tesla P4 (CUDA) | 1 | 21x real time | 1.0 GB VRAM |
+| Tesla P4 (CUDA) | 2 | 24x (+15%) | 2.0 GB VRAM |
+| Tesla P4 (CUDA) | 3 | 25x (+19%) | 3.0 GB VRAM |
+| 24-core CPU | 1 job, 4 threads | 2.5x | 0.8 GB RAM |
+| 24-core CPU | 1 job, 16 threads | 6.0x | 0.8 GB RAM |
+| 24-core CPU | 2 jobs, 8 threads each | 6.6x | 1.6 GB RAM |
+
+**Recommendations**
+* **GPU:** `CONCURRENT_TRANSCRIPTIONS=1` gives nearly the same throughput with half the memory. Use `2` if you have spare video memory and want a Bazarr request to start while a webhook job is still running (Bazarr requests already jump ahead of queued webhook jobs).
+* **CPU:** leave `WHISPER_THREADS` unset. Subgen shares the cores between the slots, which is close to the best you can get.
+* **Running out of memory:** lower `CONCURRENT_TRANSCRIPTIONS` first, then use a smaller or quantized model (`large-v3-turbo-q5_0`, `medium`). Memory per slot is roughly the model file size plus a few hundred MB.
+
+---
+
+## 🔄 Upgrading from stable-ts
+
+Subgen used faster-whisper with stable-ts until November 2026. That version is preserved, unsupported and without new images, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch (standalone: `python3 launcher.py -b legacy-stable-ts`). Existing version-pinned images such as `:2026.11.3` stay on Docker Hub. What changes when you update:
+
+* **Your image tag:** NVIDIA stays on `:latest` / `:cuda`. `:cpu` stays `:cpu`. AMD (`:amd`) now gets the Vulkan image: pass `/dev/dri` instead of the ROCm devices (`/dev/kfd`), and drop `HSA_OVERRIDE_GFX_VERSION` and `CT2_CUDA_ALLOCATOR`.
+* **If you mapped a folder over `/subgen` itself** (the old Unraid template did) **and set `UPDATE=False`**, your old copy of `subgen.py` in that folder would run and fail, because the new images don't include stable-ts. Map the folder to `/subgen/models` instead and set `MODEL_PATH=/subgen/models` (the updated Unraid template does this), or set `UPDATE=True` once to download the new code.
+* **Models are downloaded again on first start.** whisper.cpp uses GGML model files (`ggml-*.bin`), not faster-whisper's. They are derived from `WHISPER_MODEL` and saved to `MODEL_PATH`. Point `WHISPER_CPP_MODEL` at a file to use your own. Old faster-whisper model folders (`models--Systran--...` and similar) can be deleted afterwards.
+* **`CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` were removed** with stable-ts. Subgen logs a warning if they are still set. Line length and cue splitting are controlled by `MAX_LINE_LENGTH` and `GAP_SPLIT_SECS`.
+* **`TRANSCRIBE_DEVICE` only applies to faster-whisper.** whisper.cpp picks the GPU it can see; use `WHISPER_CPP_DEVICE` to choose one or force `cpu`.
+* **Subtitle layout changed:** two-line cues of up to 42 characters per line, at most two sentences per cue, no one-word flashes. Expect fewer, longer cues than stable-ts produced.
 
 ---
 
@@ -357,16 +434,20 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 # {"text": "..."}
 ```
 
-`verbose_json` returns segments with start/end timestamps and word-level timestamps.
+`verbose_json` returns segments with start/end timestamps.
+
+**Bazarr / whisper-asr-webservice endpoint (`POST /asr`):** query parameters `task` (`transcribe` or `translate`), `language`, `output` (`srt` default, `vtt`, `txt`, `tsv`, `json`), `encode` (`false` for raw 16 kHz mono PCM, which is what Bazarr sends) and `video_file`. `POST /detect-language` returns `{"detected_language": ..., "language_code": ...}`.
 
 ---
 
 ## 🪲 Known Issues
-* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations based on background noise.
+* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations, mostly over music and background noise (e.g. "Thank you.", "For more information", "Transcribed by ..."). With whisper.cpp, subgen drops cues that fall on silence and writes no subtitle for a file with no speech. Over music it can still invent text; `HALLUCINATION_FILTER` (on by default) removes looped phrases and known invented credits, but not every invented line.
+* The queue is kept in memory: files queued but not yet transcribed when the container stops are dropped. A webhook sent again, `/batch`, or the `TRANSCRIBE_FOLDERS` scan on the next start queues them again.
+* If a Bazarr request and a webhook arrive for the same file at once, subgen transcribes it once and returns the result to Bazarr, which saves the subtitle; subgen doesn't write a second copy.
 
 ## ❤️ Credits
-* [Whisper.cpp](https://github.com/ggerganov/whisper.cpp) for original implementation
+* [whisper.cpp](https://github.com/ggml-org/whisper.cpp), the transcription engine
 * Google & FFmpeg
-* [stable-ts](https://github.com/jianfch/stable-ts) & [faster-whisper](https://github.com/guillaumekln/faster-whisper)
+* [faster-whisper](https://github.com/guillaumekln/faster-whisper)
 * [Whisper ASR Webservice](https://github.com/ahmetoner/whisper-asr-webservice) for Bazarr HTTP webhook logic.
 * Community Contributors
