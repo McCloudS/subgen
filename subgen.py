@@ -159,6 +159,7 @@ max_line_length = int(os.getenv('MAX_LINE_LENGTH', '42'))
 gap_split_secs = float(os.getenv('GAP_SPLIT_SECS', '0.4'))
 max_segment_secs = float(os.getenv('MAX_SEGMENT_SECS', '5.0'))
 vad_filter = convert_to_bool(os.getenv('VAD_FILTER', False))
+hallucination_filter = convert_to_bool(os.getenv('HALLUCINATION_FILTER', True))
 whisper_cpp_model = os.getenv('WHISPER_CPP_MODEL', '')
 whisper_cpp_repo = os.getenv('WHISPER_CPP_REPO', '')
 whisper_cli_path = os.getenv('WHISPER_CLI_PATH', 'whisper-cli')
@@ -841,16 +842,96 @@ def _extend_short_cues(segments: list) -> None:
         if new_end > seg["end"]:
             seg["end"] = new_end
 
-def split_segments(words: list) -> list:
+# Whisper hallucination filter (HALLUCINATION_FILTER, on by default).
+# Over music or non-speech Whisper can loop one phrase ("I'm sorry, I can't help it." 16 times in
+# 30 s) or emit credits from its training subtitles ("Transcription by CastingWords").
+_REPEAT_MIN_WORDS  = 3    # shorter phrases ("No! No! No!") are often real speech, never collapsed
+_REPEAT_MAX_WORDS  = 25
+_REPEAT_MIN_COPIES = 3    # a phrase said twice is left alone
+_REPEAT_MAX_GAP    = 2.0  # copies must follow each other without a real pause (seconds)
+# Matched against the whole cue (lowercase, punctuation removed), never a part of it.
+_CREDIT_PATTERNS = [re.compile(p) for p in (
+    r'(?:transcription|transcribed|subtitles|captions?) by castingwords(?: com)?',
+    r'.{0,50}\bamara ?org\b.{0,20}',
+    r'(?:sub(?:title)?s|captions?) by .{1,40}',
+    r'thanks? (?:you )?for watching',
+    r'please (?:like and )?subscribe.{0,40}',
+    r'untertitel (?:im auftrag des zdf|der amara|von)\b.{0,40}',
+)]
+
+
+def _norm_word(word: str) -> str:
+    return re.sub(r"[^\w]", "", word.lower())
+
+
+def _collapse_repeated_phrases(words: list) -> tuple:
+    """Keep the first copy of a phrase repeated back to back 3+ times. Returns (words, phrases_removed)."""
+    norm = [_norm_word(w["word"]) for w in words]
+    out, removed, i, n = [], 0, 0, len(words)
+    while i < n:
+        best_p, best_k = 0, 1
+        for p in range(_REPEAT_MIN_WORDS, min(_REPEAT_MAX_WORDS, (n - i) // _REPEAT_MIN_COPIES) + 1):
+            phrase = norm[i:i + p]
+            if not all(phrase):
+                continue
+            k = 1
+            while (i + (k + 1) * p <= n and norm[i + k * p:i + (k + 1) * p] == phrase
+                   and words[i + k * p]["start"] - words[i + k * p - 1]["end"] <= _REPEAT_MAX_GAP):
+                k += 1
+            if k >= _REPEAT_MIN_COPIES and k * p > best_k * best_p:
+                best_p, best_k = p, k
+        if best_p:
+            out.extend(words[i:i + best_p])
+            removed += best_k - 1
+            i += best_p * best_k
+        else:
+            out.append(words[i])
+            i += 1
+    return out, removed
+
+
+def _is_credit(text: str) -> bool:
+    t = " ".join(re.sub(r"[^\w\s]", " ", text.lower()).split())
+    return any(p.fullmatch(t) for p in _CREDIT_PATTERNS)
+
+
+def _drop_credit_cues(segments: list) -> tuple:
+    """Drop cues that are only a known invented credit, also when it is split over two cues."""
+    keep, removed, i = [], 0, 0
+    while i < len(segments):
+        if _is_credit(segments[i]["text"]):
+            removed, i = removed + 1, i + 1
+        elif (i + 1 < len(segments) and len(segments[i]["text"].split()) <= 3
+              and not _is_credit(segments[i + 1]["text"])
+              and _is_credit(segments[i]["text"] + " " + segments[i + 1]["text"])):
+            removed, i = removed + 2, i + 2
+        else:
+            keep.append(segments[i])
+            i += 1
+    return keep, removed
+
+
+def _log_hallucinations(repeats: int, credits: int, display_name: str) -> None:
+    if repeats or credits:
+        parts = ([f"{repeats} repeated phrase(s)"] if repeats else []) + ([f"{credits} credit cue(s)"] if credits else [])
+        where = f" in {display_name}" if display_name else ""
+        logging.info(f"Removed {' and '.join(parts)}{where} (Whisper hallucinations; HALLUCINATION_FILTER=False keeps them)")
+
+
+def split_segments(words: list, display_name: str = "") -> list:
     """Convert flat word list → subtitle segment dicts (Netflix-style guidelines).
 
     1. Split into units at sentence ends and pauses.
     2. Cut units too long for one cue (two lines of max_line_length, max_segment_secs).
     3. Pack consecutive pieces into cues while they fit, so short sentences share a
        two-line cue and stray fragments join their sentence.
-    4. Extend cues that would flash by too quickly."""
+    4. Extend cues that would flash by too quickly.
+    With HALLUCINATION_FILTER, phrases looped 3+ times keep one copy and invented credits are dropped."""
     if not words:
         return []
+    repeats = credits = 0
+    if hallucination_filter:
+        words, repeats = _collapse_repeated_phrases(words)
     cues, cur = [], []
     for unit in _split_units(words):
         for piece in _split_long_unit(unit):
@@ -863,6 +944,9 @@ def split_segments(words: list) -> list:
     if cur:
         cues.append(cur)
     segments = [_format_subtitle(c) for c in cues]
+    if hallucination_filter:
+        segments, credits = _drop_credit_cues(segments)
+    _log_hallucinations(repeats, credits, display_name)
     _extend_short_cues(segments)
     return segments
 
@@ -1458,7 +1542,7 @@ def asr_task_worker(task_data: dict) -> None:
             fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
             words = extract_words(fw_segments)
             result = TranscriptionResult(
-                segments=split_segments(words),
+                segments=split_segments(words, display_name),
                 language=info.language,
             )
 
@@ -2143,7 +2227,7 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
         words = _wcp_tokens_to_words(transcription)
 
         if words:
-            segments = split_segments(words)
+            segments = split_segments(words, display_name)
             logging.info(f"whisper.cpp: {len(transcription)} raw segments → {len(segments)} after Netflix split for {display_name}")
         else:
             # Fallback: raw segment text (no word timestamps available)
@@ -2158,6 +2242,9 @@ def _transcribe_whispercpp(audio_bytes: bytes, task: str, language: str, display
                         'text':  text,
                     })
             logging.info(f"whisper.cpp: {len(segments)} segments (no token data) for {display_name}")
+            if hallucination_filter:
+                segments, credits = _drop_credit_cues(segments)
+                _log_hallucinations(0, credits, display_name)
 
         segments = _drop_silent_segments(segments, audio_bytes, display_name)
         return TranscriptionResult(segments=segments, language=detected_language)
@@ -2472,7 +2559,7 @@ def gen_subtitles(file_path: str, transcription_type: str, force_language: Langu
             fw_segments = _consume_segments_with_progress(fw_segments_gen, info, display_name)
             words = extract_words(fw_segments)
             result = TranscriptionResult(
-                segments=split_segments(words),
+                segments=split_segments(words, display_name),
                 language=info.language,
             )
 

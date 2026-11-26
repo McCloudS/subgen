@@ -6,7 +6,7 @@
 <details>
 <summary><strong>Updates:</strong></summary>
 
-24 Nov 2026 (dev): The `dev` images now use **whisper.cpp**, which runs on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64. The whisper.cpp images don't include faster-whisper; it is still supported for standalone installs (`TRANSCRIBE_BACKEND=faster-whisper`). Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions) and [Upgrading from stable-ts](#-upgrading-from-stable-ts-main).
+24 Nov 2026 (dev): The `dev` images now use **whisper.cpp**, which runs on NVIDIA (CUDA), Intel and AMD GPUs including integrated graphics (Vulkan), and CPU, on amd64 and arm64. The whisper.cpp images don't include faster-whisper; it is still supported for standalone installs (`TRANSCRIBE_BACKEND=faster-whisper`). Fixes found by end-to-end testing: whisper.cpp couldn't read video files from webhooks, `/batch` or folder scans; `/asr` ignored its `output` parameter and always returned SRT (now `txt`, `vtt`, `tsv` and `json` work); Bazarr's raw audio (`encode=false`) failed on whisper.cpp. Subtitles keep hyphens, wrap every line at 42 characters and pace cues like professional subtitles. `WHISPER_THREADS` now sizes itself for whisper.cpp. New `HALLUCINATION_FILTER` (on by default) removes phrases Whisper loops over music and invented credits like "Transcription by CastingWords". See [Speed, memory and concurrent transcriptions](#-speed-memory-and-concurrent-transcriptions) and [Upgrading from stable-ts](#-upgrading-from-stable-ts-main).
 
 8 Jun 2026: Dropped `stable-ts-whisperless` (archived upstream). Subgen now drives `faster-whisper` directly with a built-in Netflix-style subtitle segmenter. New tuning variables: `MAX_LINE_LENGTH`, `GAP_SPLIT_SECS`, `VAD_FILTER`. Removed `CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` — these were stable-ts-specific and no longer have any effect.
 
@@ -248,6 +248,7 @@ Create two separate Webhooks in Tautulli pointing to `http://<your-ip>:9000/taut
 | `CLEAR_VRAM_ON_COMPLETE` | `True` | Do garbage collection and clear the model from VRAM when the queue is empty. |
 | `MODEL_CLEANUP_DELAY` | `30` | Seconds to wait before clearing the Whisper model from memory. |
 | `ASR_TIMEOUT` | `18000` | Seconds to wait before timing out a transcription request (default 5 hours). |
+| `HALLUCINATION_FILTER` | `True` | Removes two common Whisper hallucinations: a phrase of 3 or more words looped back to back 3 or more times keeps only its first copy, and cues that are only an invented credit ("Transcription by CastingWords", "Subtitles by the Amara.org community", "Thanks for watching!") are dropped. Short repeats such as "No! No! No!" and phrases said twice are never touched. A line really repeated 3 or more times in a row (a chant, a song chorus) keeps only one copy; set to `False` to keep everything. |
 | `VAD_FILTER` | `False` | Run Silero VAD before transcription to strip silence. Can reduce hallucinations on quiet segments, but may also drop dialogue. Set to `True` to enable. **faster-whisper only for now:** whisper.cpp's VAD breaks subtitle timing, so subgen ignores this setting with whisper.cpp and logs a warning. |
 | `SUBGEN_KWARGS` | `{}` | JSON dict of extra kwargs passed directly to `faster-whisper`'s `model.transcribe()` (e.g. `{"beam_size": 10}`). For advanced users. |
 
@@ -440,7 +441,7 @@ curl -X POST http://<your-ip>:9000/v1/audio/transcriptions \
 ---
 
 ## 🪲 Known Issues
-* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations, mostly over music and background noise (e.g. "Thank you.", "For more information", "Transcribed by ..."). With whisper.cpp, subgen drops cues that fall on silence and writes no subtitle for a file with no speech, but it can't catch text invented over music.
+* It uses trained AI models; there *will* occasionally be mistranslations or hallucinations, mostly over music and background noise (e.g. "Thank you.", "For more information", "Transcribed by ..."). With whisper.cpp, subgen drops cues that fall on silence and writes no subtitle for a file with no speech. Over music it can still invent text; `HALLUCINATION_FILTER` (on by default) removes looped phrases and known invented credits, but not every invented line.
 * The queue is kept in memory: files queued but not yet transcribed when the container stops are dropped. A webhook sent again, `/batch`, or the `TRANSCRIBE_FOLDERS` scan on the next start queues them again.
 * If a Bazarr request and a webhook arrive for the same file at once, subgen transcribes it once and returns the result to Bazarr, which saves the subtitle; subgen doesn't write a second copy.
 
