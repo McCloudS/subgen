@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write   # to start the image builds after the bump
 
     steps:
       - uses: actions/checkout@v4
@@ -53,3 +54,13 @@ jobs:
           git add subgen.py
           git commit -m "Bump version to ${{ steps.ver.outputs.new }}"
           git push
+
+      # The build workflows skip main pushes that change subgen.py and wait for this, so the
+      # images are built from the bumped commit. (A push made with GITHUB_TOKEN doesn't trigger
+      # workflows itself; workflow_dispatch is the exception.)
+      - name: Build images from the bumped version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build_GPU.yml --ref main
+          gh workflow run build_JETSON.yml --ref main
