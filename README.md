@@ -294,7 +294,7 @@ touch "/tv/Some Show/Season 1/.subgen_skip"  # skips just that season
 | `LIMIT_TO_PREFERRED_AUDIO_LANGUAGE`| `False` | If True, skips files that do not have any audio tracks matching your preferred list. |
 | `FORCE_DETECTED_LANGUAGE_TO` | `''` | Force model to this 2-letter language code if it keeps incorrectly detecting audio. |
 | `DETECT_LANGUAGE_LENGTH` | `30` | Number of seconds to analyze audio to determine the language. |
-| `DETECT_LANGUAGE_OFFSET` | `0` | Number of seconds to skip forward before detecting language (good for avoiding theme songs). |
+| `DETECT_LANGUAGE_OFFSET` | `0` | Number of seconds to skip forward before detecting language. If episodes are detected as the wrong language, the opening theme is usually why: Whisper can mistake intro music for another language. Set `60` to `90` to skip it. |
 | `SHOULD_WHISPER_DETECT_AUDIO_LANGUAGE` | `False` | Should Whisper detect language if there is no audio language tagged in the media file. |
 | `SKIP_UNKNOWN_LANGUAGE` | `False` | Skip processing if Whisper cannot detect the audio language. |
 | `SKIP_ONLY_SUBGEN_SUBTITLES` | `False` | Skips generation only if the file has "subgen" somewhere in the existing subtitle filename. |
@@ -393,7 +393,8 @@ Running two files at once is **not** twice as fast on a GPU: one transcription a
 Subgen used faster-whisper with stable-ts until November 2026. That version is preserved, unsupported and without new images, on the [`legacy-stable-ts`](https://github.com/McCloudS/subgen/tree/legacy-stable-ts) branch (standalone: `python3 launcher.py -b legacy-stable-ts`). Existing version-pinned images such as `:2026.11.3` stay on Docker Hub. What changes when you update:
 
 * **Your image tag:** NVIDIA stays on `:latest` / `:cuda`. `:cpu` stays `:cpu`. AMD (`:amd`) now gets the Vulkan image: pass `/dev/dri` instead of the ROCm devices (`/dev/kfd`), and drop `HSA_OVERRIDE_GFX_VERSION` and `CT2_CUDA_ALLOCATOR`.
-* **Models are downloaded again on first start.** whisper.cpp uses GGML model files (`ggml-*.bin`), not faster-whisper's. They are derived from `WHISPER_MODEL` and saved to `MODEL_PATH`. Point `WHISPER_CPP_MODEL` at a file to use your own.
+* **If you mapped a folder over `/subgen` itself** (the old Unraid template did) **and set `UPDATE=False`**, your old copy of `subgen.py` in that folder would run and fail, because the new images don't include stable-ts. Map the folder to `/subgen/models` instead and set `MODEL_PATH=/subgen/models` (the updated Unraid template does this), or set `UPDATE=True` once to download the new code.
+* **Models are downloaded again on first start.** whisper.cpp uses GGML model files (`ggml-*.bin`), not faster-whisper's. They are derived from `WHISPER_MODEL` and saved to `MODEL_PATH`. Point `WHISPER_CPP_MODEL` at a file to use your own. Old faster-whisper model folders (`models--Systran--...` and similar) can be deleted afterwards.
 * **`CUSTOM_REGROUP` and `WORD_LEVEL_HIGHLIGHT` were removed** with stable-ts. Subgen logs a warning if they are still set. Line length and cue splitting are controlled by `MAX_LINE_LENGTH` and `GAP_SPLIT_SECS`.
 * **`TRANSCRIBE_DEVICE` only applies to faster-whisper.** whisper.cpp picks the GPU it can see; use `WHISPER_CPP_DEVICE` to choose one or force `cpu`.
 * **Subtitle layout changed:** two-line cues of up to 42 characters per line, at most two sentences per cue, no one-word flashes. Expect fewer, longer cues than stable-ts produced.
