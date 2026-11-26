@@ -99,7 +99,9 @@ jobs:
 
       - name: Tag
         run: |
-          prefix=${{ github.ref_name == 'main' && '' || 'dev-' }}
+          # Shell, not a GitHub expression: in expressions an empty string is falsy, so the
+          # "main and empty, else dev-" idiom returned dev- on main as well.
+          if [ "${{ github.ref_name }}" = "main" ]; then prefix=""; else prefix="dev-"; fi
           echo "tag=mccloud/subgen:${prefix}${{ matrix.backend }}-${{ matrix.arch }}" >> $GITHUB_ENV
 
       - uses: docker/setup-buildx-action@v3
