@@ -207,7 +207,9 @@ def _module_available(name: str) -> bool:
 
 transcribe_backend = resolve_transcribe_backend(os.getenv('TRANSCRIBE_BACKEND', 'auto'), whisper_cli_path)
 detect_language_length = int(os.getenv('DETECT_LANGUAGE_LENGTH', 30))
-detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 0))
+# 90 s skips most opening themes, which Whisper can mistake for another language;
+# audio shorter than offset + length falls back to its last DETECT_LANGUAGE_LENGTH seconds.
+detect_language_offset = int(os.getenv('DETECT_LANGUAGE_OFFSET', 90))
 model_cleanup_delay = int(os.getenv('MODEL_CLEANUP_DELAY', 30))
 asr_timeout = int(os.getenv('ASR_TIMEOUT', 18000))
 webhook_url_completed = os.getenv('WEBHOOK_URL_COMPLETED', '')
@@ -1564,38 +1566,30 @@ def asr_task_worker(task_data: dict) -> None:
     finally:
         delete_model()
 
-async def get_audio_chunk(audio_file, offset=detect_language_offset, length=detect_language_length, sample_rate=16000, audio_format=np.int16):
-    """
-    Extract a chunk of audio from a file, starting at the given offset and of the given length.
-    
-    :param audio_file: The audio file (UploadFile or file-like object).
-    :param offset: The offset in seconds to start the extraction.
-    :param length: The length in seconds for the chunk to be extracted.
-    :param sample_rate: The sample rate of the audio (default 16000).
-    :param audio_format: The audio format to interpret (default int16, 2 bytes per sample).
-    
-    :return: A numpy array containing the extracted audio chunk.
-    """
+def detect_start(total_secs, offset, length) -> float:
+    """Where language detection starts. The offset (default 90 s) skips intro music, but a clip
+    shorter than offset + length uses its last `length` seconds instead (or all of it from the
+    start), so short uploads such as Bazarr samples still get detected."""
+    offset = max(0, offset or 0)
+    if total_secs is None or total_secs >= offset + length:
+        return offset
+    return max(0.0, total_secs - length)
 
-    # Number of bytes per sample (for int16, 2 bytes per sample)
-    bytes_per_sample = np.dtype(audio_format).itemsize
 
-    # Calculate the start byte based on offset and sample rate
-    start_byte = offset * sample_rate * bytes_per_sample
+def _pcm_window(content: bytes, offset, length) -> bytes:
+    """The detection window of raw 16 kHz mono s16le PCM (offset and length in seconds)."""
+    start = detect_start(len(content) / 32000, offset, length)
+    first = int(start * 16000) * 2
+    return content[first:first + int(length * 16000) * 2]
 
-    # Calculate the length in bytes based on the length in seconds
-    length_in_bytes = length * sample_rate * bytes_per_sample
 
-    # Seek to the start position (this assumes the audio_file is a file-like object)
-    await audio_file.seek(start_byte)
+def _media_duration(path):
+    """Duration in seconds from ffprobe, or None if it can't be read."""
+    try:
+        return float(ffmpeg.probe(path)["format"]["duration"])
+    except Exception:
+        return None
 
-    # Read the required chunk of audio (length_in_bytes)
-    chunk = await audio_file.read(length_in_bytes)
-
-    # Convert the chunk into a numpy array (normalized to float32)
-    audio_data = np.frombuffer(chunk, dtype=audio_format).flatten().astype(np.float32) / 32768.0
-
-    return audio_data
 
 # ============================================================================
 # REFACTORED /DETECT-LANGUAGE ENDPOINT WITH HASH-BASED DEDUPLICATION AND BLOCKING
@@ -1645,14 +1639,14 @@ async def detect_language(
         # Offload the heavy AI inference to a background thread
         if transcribe_backend == 'whispercpp':
             if audio_bytes is None:
-                start = detect_lang_offset * 16000 * 2
-                audio_bytes = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+                audio_bytes = pcm16_to_wav_bytes(_pcm_window(file_content, detect_lang_offset, detect_lang_length))
             lang_code = await asyncio.to_thread(detect_language_whispercpp, audio_bytes)
         else:
             if audio_bytes is not None:
                 audio_data = wav_bytes_to_numpy(audio_bytes)
             else:
-                audio_data = await get_audio_chunk(audio_file, detect_lang_offset, detect_lang_length)
+                audio_data = np.frombuffer(_pcm_window(file_content, detect_lang_offset, detect_lang_length),
+                                           np.int16).astype(np.float32) / 32768.0
             lang_code = _fw_language(await asyncio.to_thread(model.detect_language, audio_data))
 
         detected = LanguageCode.from_string(lang_code)
@@ -1707,8 +1701,7 @@ def detect_language_from_upload(task_data: dict) -> None:
             if encode:
                 wav = extract_audio_segment_from_content(file_content, detect_lang_offset, detect_lang_length)
             else:
-                start = detect_lang_offset * 16000 * 2
-                wav = pcm16_to_wav_bytes(file_content[start:start + detect_lang_length * 16000 * 2])
+                wav = pcm16_to_wav_bytes(_pcm_window(file_content, detect_lang_offset, detect_lang_length))
             lang_code = detect_language_whispercpp(wav)
         else:
             # Prepare audio as numpy float32 for detect_language
@@ -1720,7 +1713,8 @@ def detect_language_from_upload(task_data: dict) -> None:
                 )
                 audio = wav_bytes_to_numpy(audio_bytes)
             else:
-                audio = np.frombuffer(file_content, np.int16).flatten().astype(np.float32) / 32768.0
+                audio = np.frombuffer(_pcm_window(file_content, detect_lang_offset, detect_lang_length),
+                                      np.int16).astype(np.float32) / 32768.0
             lang_code = _fw_language(model.detect_language(audio))
         detected_language = LanguageCode.from_string(lang_code)
         language_code = detected_language.to_iso_639_1()
@@ -1764,13 +1758,13 @@ def extract_audio_segment_from_content(audio_content: bytes, start_time: int, du
         Audio bytes of the extracted segment
     """
     try: 
-        logging.info(f"Extracting audio segment: start_time={start_time}s, duration={duration}s")
-        
         # Read from a temp file, not stdin: from a pipe ffmpeg returned ~25 s of a 30 s
         # request, and MP4/MOV with the index at the end can't be decoded from a pipe at all.
         with tempfile.NamedTemporaryFile(prefix='subgen_detect_') as tmp:
             tmp.write(audio_content)
             tmp.flush()
+            start_time = detect_start(_media_duration(tmp.name), start_time, duration)
+            logging.info(f"Extracting audio segment: start_time={start_time:g}s, duration={duration}s")
             out, _ = (
                 ffmpeg
                 .input(tmp.name, ss=start_time, t=duration)
@@ -1862,6 +1856,7 @@ def extract_audio_segment_to_memory(input_file, start_time, duration):
         elif isinstance(input_file, str): # Handling local file path
             input_stream = input_file
             input_kwargs = {}
+            start_time = detect_start(_media_duration(input_file), start_time, duration)
         else:
             raise ValueError("Invalid input: input_file must be a file path or an UploadFile object.")
 
