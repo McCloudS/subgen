@@ -39,8 +39,33 @@ permissions:
   contents: read
 
 jobs:
+  # On main, a push that changes subgen.py is built by "Bump version" after it commits the new
+  # version (it starts this workflow with workflow_dispatch), so images carry the bumped version.
+  # Without this, builds started from the merge commit and the version tags trailed by one.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_NAME" = "main" ] && [ -n "$BEFORE" ] \
+             && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            if gh api "repos/$GITHUB_REPOSITORY/compare/${BEFORE}...${GITHUB_SHA}" --jq '.files[].filename' | grep -qx 'subgen.py'; then
+              run=false
+              echo "subgen.py changed on main: Bump version starts this build after bumping the version."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   # ── CUDA (amd64) ───────────────────────────────────────────────────────────
   cuda:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -87,6 +112,8 @@ jobs:
 
   # ── CPU and Vulkan, one native runner per architecture ─────────────────────
   build:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +126,9 @@ jobs:
 
       - name: Tag
         run: |
-          prefix=${{ github.ref_name == 'main' && '' || 'dev-' }}
+          # Shell, not a GitHub expression: in expressions an empty string is falsy, so the
+          # "main and empty, else dev-" idiom returned dev- on main as well.
+          if [ "${{ github.ref_name }}" = "main" ]; then prefix=""; else prefix="dev-"; fi
           echo "tag=mccloud/subgen:${prefix}${{ matrix.backend }}-${{ matrix.arch }}" >> $GITHUB_ENV
 
       - uses: docker/setup-buildx-action@v3
