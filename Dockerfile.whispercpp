@@ -63,7 +63,7 @@ RUN set -eux; \
         cpu_flags="-DGGML_CPU_ALL_VARIANTS=ON"; \
     fi; \
     cmake -B build -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
-          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON $cpu_flags $flags; \
+          -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CCACHE=OFF $cpu_flags $flags; \
     cmake --build build -j"$(nproc)" --target whisper-cli; \
     # With GGML_BACKEND_DL the CPU/GPU backends are .so files loaded from the executable's directory
     mkdir -p /out; \
