@@ -48,6 +48,8 @@ RUN set -eux; \
       cpu)    flags="" ;; \
       vulkan) flags="-DGGML_VULKAN=ON" ;; \
       cuda)   flags="-DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}" ; \
+              # Plain runtime (Jetson): no NCCL there, and it only helps multi-GPU servers
+              if [ "$BUNDLE_CUDA_LIBS" = "1" ]; then flags="$flags -DGGML_CUDA_NCCL=OFF"; fi; \
               # No driver in the build container: link against the CUDA stub libcuda.
               export LIBRARY_PATH="/usr/local/cuda/lib64/stubs:${LIBRARY_PATH:-}" ;; \
       *)      echo "unknown GGML_BACKEND=$GGML_BACKEND" >&2; exit 1 ;; \
