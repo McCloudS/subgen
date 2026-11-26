@@ -9,7 +9,8 @@ name: Build Jetson Docker image
 # check on a real Jetson.
 #
 # Pull requests: build and test only.
-# Pushes to main: also publish mccloud/subgen:jetson and :<version>-jetson.
+# main: also publish mccloud/subgen:jetson and :<version>-jetson (started by Bump version
+# when subgen.py changes, so the version tag matches).
 # Pushes to dev:  also publish mccloud/subgen:dev-jetson.
 
 on:
@@ -42,7 +43,32 @@ permissions:
   contents: read
 
 jobs:
+  # On main, a push that changes subgen.py is built by "Bump version" after it commits the new
+  # version (it starts this workflow with workflow_dispatch), so images carry the bumped version.
+  # Without this, builds started from the merge commit and the version tags trailed by one.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF_NAME" = "main" ] && [ -n "$BEFORE" ] \
+             && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            if gh api "repos/$GITHUB_REPOSITORY/compare/${BEFORE}...${GITHUB_SHA}" --jq '.files[].filename' | grep -qx 'subgen.py'; then
+              run=false
+              echo "subgen.py changed on main: Bump version starts this build after bumping the version."
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
 
@@ -54,10 +80,10 @@ jobs:
         run: |
           version=$(grep -oP "subgen_version\s*=\s*'\K[^']+" subgen.py)
           echo "version=$version" >> $GITHUB_ENV
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref_name }}" = "main" ]; then
             { echo "tags<<EOF"; printf 'mccloud/subgen:jetson\nmccloud/subgen:%s-jetson\n' "$version"; echo "EOF"; } >> $GITHUB_ENV
             echo "branch=main" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_name }}" = "dev" ]; then
+          elif [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref_name }}" = "dev" ]; then
             echo "tags=mccloud/subgen:dev-jetson" >> $GITHUB_ENV
             echo "branch=dev" >> $GITHUB_ENV
           else
