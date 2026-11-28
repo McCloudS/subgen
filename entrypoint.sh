@@ -45,16 +45,27 @@ echo "Fixing permissions on /cache..."
 chown -R "$PUID":"$PGID" /cache
 chown -R "$PUID":"$PGID" /tmp 2>/dev/null || true
 
-# fix group for dri devices
-if [ -e "/dev/dri/renderD128" ]; then
-  echo "Adding group for /dev/dri/renderD128"
-  GID=`stat -c "%g" /dev/dri/renderD128`
-  groupadd -g $GID render2
-  GROUP=`getent group $GID | cut -d: -f1`
-  # The PUID user may already exist under another name, so add that user rather than assuming 'subgen'
-  USERNAME=`getent passwd "$PUID" | cut -d: -f1`
-  usermod -aG $GROUP "$USERNAME"
-fi
+# GPU device access for the unprivileged user. gosu resets supplementary groups (so docker
+# group_add is lost), so add the user to the group of every GPU device node it can't otherwise
+# open: /dev/dri (Intel/AMD Vulkan) and /dev/nvidia* (some distros, e.g. Gentoo, create these
+# 0660 root:video instead of 0666). Without access whisper.cpp silently falls back to the CPU.
+USERNAME=`getent passwd "$PUID" | cut -d: -f1`
+for DEV in /dev/dri/renderD* /dev/nvidia[0-9]* /dev/nvidiactl /dev/nvidia-uvm; do
+  [ -e "$DEV" ] || continue
+  MODE=`stat -c "%a" "$DEV"`
+  case "${MODE: -1}" in 6|7) continue ;; esac   # already read/write for everyone
+  GID=`stat -c "%g" "$DEV"`
+  if [ "$GID" = "0" ]; then
+    echo "Warning: $DEV is only accessible to root (mode $MODE). If the GPU isn't used, set PUID=0 and PGID=0."
+    continue
+  fi
+  getent group "$GID" >/dev/null || groupadd -g "$GID" "gpu$GID"
+  GROUP=`getent group "$GID" | cut -d: -f1`
+  if ! id -nG "$USERNAME" | tr ' ' '\n' | grep -qx "$GROUP"; then
+    echo "Adding $USERNAME to group $GROUP ($GID) for $DEV"
+    usermod -aG "$GROUP" "$USERNAME"
+  fi
+done
 
 echo "Dropping root privileges and starting application..."
 exec gosu "$PUID" "$@"
